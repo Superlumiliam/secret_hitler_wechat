@@ -1,0 +1,1436 @@
+# 《揭秘希特勒面杀助手》前后端交互 API 详细设计
+
+## 1. 文档目标
+
+本文档用于统一《揭秘希特勒面杀助手》微信小程序的前后端交互协议，覆盖：
+
+- 云函数 action 划分
+- 请求与响应 envelope
+- 大厅 / 对局 / 结果快照 DTO
+- 游戏命令结构与幂等规则
+- 快照订阅方式
+- 错误码与联调边界
+
+后续所有前后端实现都必须以本文档为准；若请求字段、响应字段、命令类型、错误码发生变化，必须先更新本文档，再更新实现。
+
+本文档解决的问题不是“数据库怎么存”，而是“前端以什么协议读写、后端以什么协议返回，以及双方如何避免口头约定漂移”。
+
+## 2. 总体交互原则
+
+## 2.1 统一交互通道
+
+前后端交互只允许两类通道：
+
+### 通道 A：云函数调用
+
+统一使用 `wx.cloud.callFunction`，用于：
+
+- 创建房间
+- 加入房间
+- 修改大厅状态
+- 发起游戏命令
+- 主动拉取快照
+
+### 通道 B：只读快照读取 / 订阅
+
+只允许读取或监听安全投影视图，用于：
+
+- 获取大厅快照
+- 获取游戏公共快照
+- 获取当前玩家私密快照
+- 监听状态变更
+
+## 2.2 命令与快照分离
+
+本项目必须采用“命令写入，快照读取”的模式：
+
+- 前端提交的是意图
+- 后端返回的是已确认状态
+- 前端不能用本地按钮点击直接推断状态已推进
+
+## 2.3 前端禁止直接写核心集合
+
+前端不得直接写入以下任何集合：
+
+- `rooms`
+- `room_members`
+- `game_core`
+- `game_events`
+- `command_records`
+
+所有状态变更必须通过云函数完成。
+
+## 2.4 公共视图与私密视图分离
+
+后端对前端暴露的数据必须分为：
+
+- 公共快照
+- 当前玩家私密快照
+
+前端不允许拿到完整真相后自行隐藏字段。
+
+## 3. 统一协议基础
+
+## 3.1 云函数划分
+
+MVP 阶段固定为以下三类对外云函数：
+
+| 云函数 | 职责 | 允许 action |
+| --- | --- | --- |
+| `bootstrapService` | 会话初始化与活跃房间恢复 | `ensureSession`、`recoverActiveRoom` |
+| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`updateDisplayName`、`updateSeatOrder`、`setReady`、`startGame` |
+| `gameService` | 对局快照、命令处理、结果快照 | `getGameSnapshot`、`submitCommand`、`getResultSnapshot` |
+
+说明：
+
+- 游戏内所有可变更状态操作统一走 `gameService.submitCommand`
+- 不为每个游戏动作拆分独立云函数
+- `maintenanceService` 仅供定时任务使用，不对前端暴露
+
+## 3.2 统一请求结构
+
+所有云函数请求统一采用：
+
+```json
+{
+  "action": "actionName",
+  "payload": {}
+}
+```
+
+约束：
+
+- `action` 必须显式声明
+- `payload` 永远存在，读接口传空对象 `{}` 即可
+- 所有写操作都必须携带 `commandId`
+- 所有游戏内写操作都必须额外携带 `expectedVersion`
+
+## 3.3 统一响应 envelope
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {}
+}
+```
+
+失败响应：
+
+```json
+{
+  "success": false,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "error": {
+    "code": "PHASE_MISMATCH",
+    "message": "当前阶段不允许该操作",
+    "retryable": false
+  }
+}
+```
+
+字段约束：
+
+- `requestId` 由后端生成，用于日志串联
+- `serverTime` 统一使用 ISO 字符串
+- `message` 面向调试与兜底提示，前端正式文案应基于 `code` 本地映射
+
+## 3.4 `commandId` 规则
+
+所有会改变状态的请求都必须带 `commandId`：
+
+- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`updateDisplayName`、`updateSeatOrder`、`setReady`、`startGame`
+- 游戏写操作：`submitCommand`
+
+用途：
+
+- 幂等保护
+- 重试请求去重
+- 日志链路追踪
+
+约束：
+
+- `commandId` 由前端生成
+- 同一逻辑动作重试时必须复用同一个 `commandId`
+- 同一玩家的不同动作不得复用同一个 `commandId`
+
+## 3.5 `expectedVersion` 规则
+
+只有游戏内命令需要携带 `expectedVersion`。
+
+用途：
+
+- 后端识别前端是否基于旧快照发起请求
+- 阻止基于过期状态的误操作
+
+规则：
+
+- `expectedVersion` 必须等于当前 `game_core.version`
+- 不相等时直接返回 `VERSION_CONFLICT`
+- 前端收到 `VERSION_CONFLICT` 后应立即刷新 `getGameSnapshot`
+
+## 3.6 会话与身份规则
+
+后端识别操作者时必须优先使用微信云函数上下文身份。
+
+禁止：
+
+- 仅信任前端传入的 `memberId`
+- 仅信任前端传入的 `playerId`
+- 仅根据 `roomCode` 判定权限
+
+前端可以持有但不能视为最终权限依据的字段：
+
+- `roomId`
+- `roomCode`
+- `memberId`
+- `displayName`
+
+## 3.7 API 版本
+
+当前协议版本固定为 `v1`。
+
+MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发生不兼容变更，必须通过以下任一方式升级：
+
+- 增加显式版本字段
+- 新增 action
+- 新增云函数
+
+禁止静默修改既有结构。
+
+## 4. DTO 详细设计
+
+## 4.1 `ActiveRoomSummary`
+
+用于会话恢复与路由跳转判断。
+
+```json
+{
+  "roomId": "room_xxx",
+  "roomCode": "482615",
+  "roomStatus": "in_game",
+  "memberId": "mem_xxx",
+  "routeHint": "board",
+  "version": 18,
+  "updatedAt": "2026-04-12T12:00:00.000Z"
+}
+```
+
+字段约束：
+
+- `routeHint` 只允许为 `lobby`、`identity`、`board`、`result`
+- `version` 为当前房间对应快照版本；大厅时对应大厅快照版本，对局时对应游戏版本
+
+## 4.2 `LobbySnapshot`
+
+`roomService.getLobbySnapshot` 返回的 `data`、以及 `createRoom` / `joinRoom` / 大厅写操作返回中的 `lobbySnapshot`，都必须使用以下结构：
+
+```json
+{
+  "roomId": "room_xxx",
+  "roomCode": "482615",
+  "roomStatus": "lobby",
+  "hostMemberId": "mem_host",
+  "playerCount": 6,
+  "minPlayerCount": 5,
+  "maxPlayerCount": 10,
+  "seatOrder": [
+    {
+      "memberId": "mem_host",
+      "displayName": "玩家A",
+      "seatIndex": 1,
+      "isHost": true,
+      "isReady": true
+    }
+  ],
+  "myMemberId": "mem_host",
+  "canStart": true,
+  "version": 3,
+  "updatedAt": "2026-04-12T12:00:00.000Z"
+}
+```
+
+字段约束：
+
+- `seatOrder` 只包含当前有效大厅成员，顺序即实际座位顺序
+- `canStart` 仅表示“从当前查看者视角是否满足开始条件”，不额外授予权限
+- 大厅快照绝不包含角色、党派、牌堆、投票等游戏真相
+
+## 4.3 `GameSnapshot`
+
+`gameService.getGameSnapshot` 返回结构固定如下：
+
+```json
+{
+  "roomId": "room_xxx",
+  "roomCode": "482615",
+  "roomStatus": "in_game",
+  "myMemberId": "mem_2",
+  "version": 18,
+  "round": 3,
+  "currentPhase": "voting",
+  "publicState": {},
+  "privateState": {},
+  "pendingTask": null,
+  "serverHints": [],
+  "updatedAt": "2026-04-12T12:10:00.000Z"
+}
+```
+
+字段约束：
+
+- `roomStatus` 在结果页前仍为 `in_game`
+- `myMemberId` 由后端根据当前身份定位，不接受前端指定
+- `publicState` 和 `privateState` 必须按本节定义生成
+- `pendingTask` 为当前玩家待办；无待办时返回 `null`
+
+## 4.4 `publicState`
+
+`publicState` 必须只包含全体玩家可见信息，推荐固定如下：
+
+```json
+{
+  "seatOrder": [
+    {
+      "memberId": "mem_1",
+      "displayName": "玩家A",
+      "seatIndex": 1,
+      "isAlive": true,
+      "isOffline": false,
+      "confirmedNotHitler": false
+    }
+  ],
+  "currentPresidentCandidateId": "mem_1",
+  "currentChancellorCandidateId": "mem_4",
+  "currentPresidentId": null,
+  "currentChancellorId": null,
+  "previousElectedPresidentId": "mem_5",
+  "previousElectedChancellorId": "mem_2",
+  "electionTracker": 1,
+  "liberalPolicyCount": 2,
+  "fascistPolicyCount": 3,
+  "vetoUnlocked": false,
+  "executiveActionType": null,
+  "voteProgress": {
+    "submittedCount": 3,
+    "requiredCount": 7
+  },
+  "revealedVotes": null,
+  "publicHistory": [
+    {
+      "eventId": "evt_game_xxx_18",
+      "round": 3,
+      "phase": "voting",
+      "type": "GOVERNMENT_NOMINATED",
+      "title": "总统提名总理",
+      "summary": "玩家A 提名 玩家D 为总理候选人",
+      "createdAt": "2026-04-12T12:09:50.000Z"
+    }
+  ]
+}
+```
+
+字段说明：
+
+- `seatOrder` 是游戏内座位主数据，前端所有目标选择与头像展示都应基于它
+- `currentPresidentCandidateId` / `currentChancellorCandidateId` 表示“正在提名或正在投票的候选政府”
+- `currentPresidentId` / `currentChancellorId` 表示“已当选并正在执政的政府”
+- `previousElectedPresidentId` / `previousElectedChancellorId` 用于前端展示任期限制提示
+- `revealedVotes` 在投票未公开前必须为 `null`；公开后为完整数组
+- `publicHistory` 只写公共事实摘要，不写私密结果
+
+禁止包含：
+
+- 角色映射
+- 牌堆顺序
+- 玩家手牌
+- 调查结果
+- 牌顶预览内容
+- 未公开投票
+
+## 4.5 `privateState`
+
+`privateState` 只允许包含当前玩家个人视角所需信息，固定结构如下：
+
+```json
+{
+  "identity": {
+    "role": "FASCIST",
+    "party": "FASCIST",
+    "knownMembers": [
+      {
+        "memberId": "mem_3",
+        "displayName": "玩家C"
+      }
+    ],
+    "acknowledged": true
+  },
+  "voting": {
+    "submitted": true,
+    "myVote": "JA"
+  },
+  "legislative": {
+    "hand": ["FASCIST", "LIBERAL"],
+    "action": "enact_one",
+    "canRequestVeto": false
+  },
+  "investigationResult": null,
+  "policyPeek": null
+}
+```
+
+字段说明：
+
+- `identity` 在整局有效，用于身份页和私密身份展示
+- `knownMembers` 只包含按规则可见的队友信息
+- `voting.myVote` 仅当前玩家可见
+- `legislative.hand` 只在当前玩家持牌阶段出现，否则为 `null`
+- `investigationResult` 在总统调查后对该总统个人可见
+- `policyPeek` 在总统预览牌顶后对该总统个人可见
+
+推荐子结构：
+
+```json
+{
+  "investigationResult": {
+    "targetMemberId": "mem_5",
+    "targetDisplayName": "玩家E",
+    "party": "LIBERAL",
+    "revealedAt": "2026-04-12T12:11:10.000Z"
+  },
+  "policyPeek": {
+    "cards": ["FASCIST", "FASCIST", "LIBERAL"],
+    "viewedAt": "2026-04-12T12:12:30.000Z"
+  }
+}
+```
+
+## 4.6 `pendingTask`
+
+`pendingTask` 用于告诉前端当前玩家是否必须操作。结构固定为：
+
+```json
+{
+  "taskId": "game_xxx:20:SUBMIT_VOTE:mem_2",
+  "taskType": "SUBMIT_VOTE",
+  "required": true,
+  "deadline": null,
+  "allowedTargets": [],
+  "meta": {}
+}
+```
+
+字段约束：
+
+- `taskId` 由后端生成，前端只能回传不能伪造语义
+- `taskType` 必须与命令类型一一对应；唯一例外是 `CHANCELLOR_REQUEST_VETO` 作为 `CHANCELLOR_ENACT_POLICY` 阶段的可选子动作，不单独生成任务卡
+- `allowedTargets` 是权威目标列表；前端不得自行扩大
+- `meta` 只放“无法从快照其他字段可靠推导”的附加信息
+
+正式 `meta` 契约如下：
+
+| `taskType` | `meta` 字段 |
+| --- | --- |
+| `ACK_ROLE_REVEAL` | 可为空，允许补充 `confirmText` |
+| `NOMINATE_CHANCELLOR` | `ruleHint` |
+| `SUBMIT_VOTE` | `options = ["JA", "NEIN"]` |
+| `PRESIDENT_DISCARD_POLICY` | `selectionMode = "discard_one"` |
+| `CHANCELLOR_ENACT_POLICY` | `selectionMode = "enact_one"`、`canRequestVeto` |
+| `PRESIDENT_RESPOND_VETO` | `options = [true, false]`、`requestedByMemberId` |
+| `EXEC_INVESTIGATE` | `actionTitle`、`actionHint` |
+| `EXEC_SPECIAL_ELECTION` | `actionTitle`、`actionHint` |
+| `EXEC_POLICY_PEEK_ACK` | 可为空，允许补充 `confirmText` |
+| `EXECUTE_PLAYER` | `actionTitle`、`actionHint`、`dangerConfirmText` |
+
+## 4.7 `ResultSnapshot`
+
+`gameService.getResultSnapshot` 返回结构固定如下：
+
+```json
+{
+  "roomId": "room_xxx",
+  "roomCode": "482615",
+  "roomStatus": "ended",
+  "myMemberId": "mem_2",
+  "version": 32,
+  "winner": "LIBERAL",
+  "winReason": "HITLER_EXECUTED",
+  "endedAt": "2026-04-12T13:30:00.000Z",
+  "policySummary": {
+    "liberal": 3,
+    "fascist": 5
+  },
+  "finalPlayers": [
+    {
+      "memberId": "mem_1",
+      "displayName": "玩家A",
+      "seatIndex": 1,
+      "role": "LIBERAL",
+      "party": "LIBERAL",
+      "isAlive": true
+    }
+  ],
+  "timeline": [
+    {
+      "eventId": "evt_game_xxx_32",
+      "round": 6,
+      "phase": "executive_action",
+      "type": "PLAYER_EXECUTED",
+      "title": "总统处决玩家",
+      "summary": "玩家A 处决了 玩家E，系统判定希特勒被处决，自由派获胜",
+      "createdAt": "2026-04-12T13:29:58.000Z"
+    }
+  ]
+}
+```
+
+字段约束：
+
+- `winner` 只允许为 `LIBERAL` 或 `FASCIST`
+- `winReason` 必须使用枚举，不能直接返回展示文案
+- `timeline` 只记录复盘所需关键节点
+
+## 5. `bootstrapService` 详细接口
+
+## 5.1 `ensureSession`
+
+用途：
+
+- 确认当前用户身份
+- 初始化或读取 `user_profiles`
+- 返回默认展示名与当前活跃房间摘要
+
+请求：
+
+```json
+{
+  "action": "ensureSession",
+  "payload": {}
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "user": {
+      "defaultDisplayName": "玩家A"
+    },
+    "activeRoom": {
+      "roomId": "room_xxx",
+      "roomCode": "482615",
+      "roomStatus": "lobby",
+      "memberId": "mem_xxx",
+      "routeHint": "lobby",
+      "version": 3,
+      "updatedAt": "2026-04-12T11:59:58.000Z"
+    }
+  }
+}
+```
+
+说明：
+
+- 若无活跃房间，则 `activeRoom = null`
+- 不向前端暴露 `openid`
+
+主要失败错误码：
+
+- `INTERNAL_ERROR`
+
+## 5.2 `recoverActiveRoom`
+
+用途：
+
+- 在小程序回前台时恢复活跃房间上下文
+- 对已失效的 `activeRoomId` 做清理
+
+请求：
+
+```json
+{
+  "action": "recoverActiveRoom",
+  "payload": {}
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "activeRoom": {
+      "roomId": "room_xxx",
+      "roomCode": "482615",
+      "roomStatus": "in_game",
+      "memberId": "mem_xxx",
+      "routeHint": "board",
+      "version": 18,
+      "updatedAt": "2026-04-12T12:00:00.000Z"
+    }
+  }
+}
+```
+
+说明：
+
+- 若活跃房间无效，返回 `activeRoom = null`
+- `routeHint` 由后端根据房间状态与阶段决定
+
+主要失败错误码：
+
+- `INTERNAL_ERROR`
+
+## 6. `roomService` 详细接口
+
+说明：
+
+- 本节除 `getLobbySnapshot` 外，其余 action 都属于写操作，必须带 `commandId`
+- 大厅写操作不需要 `expectedVersion`
+- 同一 `commandId` 的合法重试必须返回幂等成功，而不是重复写入
+
+## 6.1 `createRoom`
+
+请求：
+
+```json
+{
+  "action": "createRoom",
+  "payload": {
+    "commandId": "cmd_create_room_xxx",
+    "displayName": "玩家A"
+  }
+}
+```
+
+字段校验：
+
+- `displayName` 去首尾空格后长度必须在 `1-20`
+- 同一用户存在未失效活跃房间时拒绝创建新房间
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "roomId": "room_xxx",
+    "roomCode": "482615",
+    "roomStatus": "lobby",
+    "memberId": "mem_host",
+    "lobbySnapshot": {}
+  }
+}
+```
+
+主要失败错误码：
+
+- `INVALID_PAYLOAD`
+- `ACTION_NOT_ALLOWED`
+- `INTERNAL_ERROR`
+
+## 6.2 `joinRoom`
+
+请求：
+
+```json
+{
+  "action": "joinRoom",
+  "payload": {
+    "commandId": "cmd_join_room_xxx",
+    "roomCode": "482615",
+    "displayName": "玩家B"
+  }
+}
+```
+
+字段校验：
+
+- `roomCode` 必须是 6 位房号字符串
+- `displayName` 校验同 `createRoom`
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "roomId": "room_xxx",
+    "roomCode": "482615",
+    "roomStatus": "lobby",
+    "memberId": "mem_2",
+    "lobbySnapshot": {}
+  }
+}
+```
+
+行为约束：
+
+- 同一 `openid` 已在该房间有有效成员时必须复用原 `memberId`
+- 开局后不允许新 `openid` 加入
+- 若房间已满返回 `ROOM_FULL`
+
+主要失败错误码：
+
+- `INVALID_PAYLOAD`
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `ROOM_FULL`
+- `ROOM_NOT_JOINABLE`
+- `ACTION_NOT_ALLOWED`
+- `INTERNAL_ERROR`
+
+## 6.3 `leaveRoom`
+
+请求：
+
+```json
+{
+  "action": "leaveRoom",
+  "payload": {
+    "commandId": "cmd_leave_room_xxx",
+    "roomId": "room_xxx"
+  }
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "roomId": "room_xxx",
+    "roomStatus": "lobby",
+    "memberId": "mem_2",
+    "leaveMode": "removed_from_lobby",
+    "roomExpired": false,
+    "routeHint": "home"
+  }
+}
+```
+
+字段说明：
+
+- `leaveMode` 只允许为 `removed_from_lobby` 或 `marked_offline`
+- `roomExpired` 表示该房间是否在本次操作后变为无效房间
+- 对局阶段离开只会标记离线，不会移除成员
+
+主要失败错误码：
+
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `INTERNAL_ERROR`
+
+## 6.4 `getLobbySnapshot`
+
+请求：
+
+```json
+{
+  "action": "getLobbySnapshot",
+  "payload": {
+    "roomId": "room_xxx"
+  }
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {}
+}
+```
+
+其中 `data` 必须完整符合 `LobbySnapshot` 结构。
+
+主要失败错误码：
+
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `GAME_ALREADY_STARTED`
+- `INTERNAL_ERROR`
+
+## 6.5 `updateDisplayName`
+
+请求：
+
+```json
+{
+  "action": "updateDisplayName",
+  "payload": {
+    "commandId": "cmd_update_name_xxx",
+    "roomId": "room_xxx",
+    "displayName": "新名字"
+  }
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "roomId": "room_xxx",
+    "roomStatus": "lobby",
+    "newVersion": 4,
+    "lobbySnapshot": {}
+  }
+}
+```
+
+约束：
+
+- 仅大厅允许修改
+- 仅本人可修改自己的展示名
+- 成功后必须同步刷新大厅快照
+
+主要失败错误码：
+
+- `INVALID_PAYLOAD`
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `ACTION_NOT_ALLOWED`
+- `INTERNAL_ERROR`
+
+## 6.6 `updateSeatOrder`
+
+请求：
+
+```json
+{
+  "action": "updateSeatOrder",
+  "payload": {
+    "commandId": "cmd_update_seat_xxx",
+    "roomId": "room_xxx",
+    "orderedMemberIds": ["mem_1", "mem_2", "mem_3"]
+  }
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "roomId": "room_xxx",
+    "roomStatus": "lobby",
+    "newVersion": 5,
+    "lobbySnapshot": {}
+  }
+}
+```
+
+约束：
+
+- 仅房主可调用
+- 仅大厅可调用
+- `orderedMemberIds` 必须与当前全部有效成员完全一致，不能缺、不能多、不能重复
+
+主要失败错误码：
+
+- `INVALID_PAYLOAD`
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `NOT_ROOM_HOST`
+- `ACTION_NOT_ALLOWED`
+- `INTERNAL_ERROR`
+
+## 6.7 `setReady`
+
+请求：
+
+```json
+{
+  "action": "setReady",
+  "payload": {
+    "commandId": "cmd_set_ready_xxx",
+    "roomId": "room_xxx",
+    "ready": true
+  }
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "roomId": "room_xxx",
+    "roomStatus": "lobby",
+    "newVersion": 6,
+    "lobbySnapshot": {}
+  }
+}
+```
+
+约束：
+
+- 仅大厅允许
+- 仅本人可修改自己的准备状态
+
+主要失败错误码：
+
+- `INVALID_PAYLOAD`
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `ACTION_NOT_ALLOWED`
+- `INTERNAL_ERROR`
+
+## 6.8 `startGame`
+
+请求：
+
+```json
+{
+  "action": "startGame",
+  "payload": {
+    "commandId": "cmd_start_game_xxx",
+    "roomId": "room_xxx"
+  }
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "roomId": "room_xxx",
+    "roomCode": "482615",
+    "roomStatus": "in_game",
+    "version": 1,
+    "routeHint": "identity",
+    "needsRefresh": true
+  }
+}
+```
+
+约束：
+
+- 仅房主可调用
+- 房间状态必须是 `lobby`
+- 玩家数必须在 `5-10`
+- 全员 `isReady === true`
+- 成功后前端应立即调用 `getGameSnapshot` 或进入快照监听流程
+
+主要失败错误码：
+
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `NOT_ROOM_HOST`
+- `INVALID_PLAYER_COUNT`
+- `NOT_ALL_READY`
+- `GAME_ALREADY_STARTED`
+- `ACTION_NOT_ALLOWED`
+- `INTERNAL_ERROR`
+
+## 7. `gameService` 详细接口
+
+## 7.1 `getGameSnapshot`
+
+请求：
+
+```json
+{
+  "action": "getGameSnapshot",
+  "payload": {
+    "roomId": "room_xxx"
+  }
+}
+```
+
+成功响应中的 `data` 必须完整符合 `GameSnapshot` 结构。
+
+实现要求：
+
+- 通过当前微信身份定位成员
+- 读取公共快照投影和当前成员私密快照投影
+- 合并后返回统一 DTO
+
+禁止：
+
+- 允许前端传入任意 `memberId` 读取他人私密快照
+- 现场从核心状态拼装一套临时结构绕开文档
+
+主要失败错误码：
+
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `GAME_NOT_STARTED`
+- `GAME_ALREADY_ENDED`
+- `INTERNAL_ERROR`
+
+## 7.2 `submitCommand`
+
+这是游戏内唯一写入口。
+
+请求结构固定如下：
+
+```json
+{
+  "action": "submitCommand",
+  "payload": {
+    "roomId": "room_xxx",
+    "commandId": "cmd_vote_xxx",
+    "expectedVersion": 18,
+    "taskId": "game_xxx:20:SUBMIT_VOTE:mem_2",
+    "type": "SUBMIT_VOTE",
+    "body": {
+      "vote": "JA"
+    }
+  }
+}
+```
+
+字段说明：
+
+- `taskId` 推荐在由 `pendingTask` 驱动的操作中回传，便于后端做更严格校验
+- `taskId` 缺失时后端仍可根据 `type + actor + phase` 判定，但优先校验回传值
+- 后端绝不信任前端提供的 `memberId`、`seatIndex`、`role`
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "accepted": true,
+    "roomId": "room_xxx",
+    "roomStatus": "in_game",
+    "previousVersion": 18,
+    "newVersion": 19,
+    "currentPhase": "round_result",
+    "phaseChanged": true,
+    "deduplicated": false,
+    "needsRefresh": true
+  }
+}
+```
+
+约束：
+
+- 成功响应不直接返回完整游戏真相
+- 前端收到成功响应后必须以新快照为准更新页面
+- 幂等重试命中时仍返回成功 envelope，但 `deduplicated = true`
+
+主要失败错误码：
+
+- `INVALID_PAYLOAD`
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `GAME_NOT_STARTED`
+- `GAME_ALREADY_ENDED`
+- `VERSION_CONFLICT`
+- `PHASE_MISMATCH`
+- `NOT_CURRENT_ACTOR`
+- `INVALID_TARGET`
+- `TARGET_ALREADY_DEAD`
+- `TARGET_ALREADY_INVESTIGATED`
+- `ACTION_NOT_ALLOWED`
+- `DUPLICATE_COMMAND`
+- `INTERNAL_ERROR`
+
+## 7.3 `getResultSnapshot`
+
+请求：
+
+```json
+{
+  "action": "getResultSnapshot",
+  "payload": {
+    "roomId": "room_xxx"
+  }
+}
+```
+
+成功响应中的 `data` 必须完整符合 `ResultSnapshot` 结构。
+
+约束：
+
+- 仅 `roomStatus === ended` 时允许读取
+- 当前微信身份必须是本局成员
+
+主要失败错误码：
+
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `GAME_NOT_STARTED`
+- `ACTION_NOT_ALLOWED`
+- `INTERNAL_ERROR`
+
+## 8. 游戏命令模型详细设计
+
+## 8.1 统一命令结构
+
+`submitCommand.payload` 固定结构如下：
+
+```json
+{
+  "roomId": "string",
+  "commandId": "string",
+  "expectedVersion": 18,
+  "taskId": "string",
+  "type": "SUBMIT_VOTE",
+  "body": {}
+}
+```
+
+约束：
+
+- `commandId` 必填
+- `expectedVersion` 必填
+- `taskId` 推荐必带；若某阶段无任务卡但有命令，也可传 `null`
+- `body` 必须严格匹配对应命令类型定义
+
+## 8.2 命令类型与 body 契约
+
+| `type` | 允许阶段 | 操作者 | `body` |
+| --- | --- | --- | --- |
+| `ACK_ROLE_REVEAL` | `role_reveal` | 所有未确认身份的存活玩家 | `{ "acknowledged": true }` |
+| `NOMINATE_CHANCELLOR` | `nomination` | 当前总统候选人 | `{ "targetMemberId": "mem_xxx" }` |
+| `SUBMIT_VOTE` | `voting` | 所有存活玩家 | `{ "vote": "JA" }` 或 `{ "vote": "NEIN" }` |
+| `PRESIDENT_DISCARD_POLICY` | `legislative_president` | 当前总统 | `{ "discardPolicyIndex": 0 }` |
+| `CHANCELLOR_ENACT_POLICY` | `legislative_chancellor` | 当前总理 | `{ "enactPolicyIndex": 1 }` |
+| `CHANCELLOR_REQUEST_VETO` | `legislative_chancellor` | 当前总理 | `{ "request": true }` |
+| `PRESIDENT_RESPOND_VETO` | `veto_response` | 当前总统 | `{ "accepted": true }` 或 `{ "accepted": false }` |
+| `EXEC_INVESTIGATE` | `executive_action` | 当前总统 | `{ "targetMemberId": "mem_xxx" }` |
+| `EXEC_SPECIAL_ELECTION` | `executive_action` | 当前总统 | `{ "targetMemberId": "mem_xxx" }` |
+| `EXEC_POLICY_PEEK_ACK` | `executive_action` | 当前总统 | `{ "acknowledged": true }` |
+| `EXECUTE_PLAYER` | `executive_action` | 当前总统 | `{ "targetMemberId": "mem_xxx" }` |
+
+校验补充：
+
+- `CHANCELLOR_REQUEST_VETO` 仅在 `vetoUnlocked === true` 时允许
+- `PRESIDENT_DISCARD_POLICY.discardPolicyIndex` 必须是当前 3 张手牌中的有效下标
+- `CHANCELLOR_ENACT_POLICY.enactPolicyIndex` 必须是当前 2 张手牌中的有效下标
+- `EXEC_POLICY_PEEK_ACK` 仅用于确认查看，不修改公共真相
+
+## 8.3 `pendingTask` 与命令映射
+
+正式映射如下：
+
+| `pendingTask.taskType` | 提交命令 |
+| --- | --- |
+| `ACK_ROLE_REVEAL` | `ACK_ROLE_REVEAL` |
+| `NOMINATE_CHANCELLOR` | `NOMINATE_CHANCELLOR` |
+| `SUBMIT_VOTE` | `SUBMIT_VOTE` |
+| `PRESIDENT_DISCARD_POLICY` | `PRESIDENT_DISCARD_POLICY` |
+| `CHANCELLOR_ENACT_POLICY` | `CHANCELLOR_ENACT_POLICY` 或 `CHANCELLOR_REQUEST_VETO` |
+| `PRESIDENT_RESPOND_VETO` | `PRESIDENT_RESPOND_VETO` |
+| `EXEC_INVESTIGATE` | `EXEC_INVESTIGATE` |
+| `EXEC_SPECIAL_ELECTION` | `EXEC_SPECIAL_ELECTION` |
+| `EXEC_POLICY_PEEK_ACK` | `EXEC_POLICY_PEEK_ACK` |
+| `EXECUTE_PLAYER` | `EXECUTE_PLAYER` |
+
+说明：
+
+- `CHANCELLOR_REQUEST_VETO` 不单独生成任务类型，作为总理行动面板里的次级操作出现
+- 前端根据 `taskType` 渲染 UI，但最终以后端校验结果为准
+
+## 8.4 命令幂等语义
+
+后端处理规则固定如下：
+
+1. 若相同 `roomId + commandId` 不存在，则正常处理
+2. 若存在且 `requesterOpenId` 与原请求不同，返回 `ACTION_NOT_ALLOWED`
+3. 若存在且 `payloadHash` 完全一致，返回幂等成功，`deduplicated = true`
+4. 若存在但 `payloadHash` 不一致，返回 `DUPLICATE_COMMAND`
+
+## 9. 快照订阅与投影文档约束
+
+## 9.1 允许订阅的集合
+
+如果采用数据库监听模式，前端只允许监听以下投影视图文档：
+
+- `room_public_snapshots/{roomId}`
+- `player_private_snapshots/{memberId}`
+
+禁止监听：
+
+- `game_core`
+- `game_events`
+- `command_records`
+- 任何包含完整真相的集合
+
+## 9.2 `room_public_snapshots` 文档结构
+
+大厅阶段：
+
+```json
+{
+  "_id": "room_xxx",
+  "roomId": "room_xxx",
+  "roomCode": "482615",
+  "roomStatus": "lobby",
+  "snapshotType": "lobby",
+  "version": 3,
+  "payload": {},
+  "updatedAt": "2026-04-12T12:00:00.000Z",
+  "expireAt": "2026-04-12T14:00:00.000Z"
+}
+```
+
+对局阶段：
+
+```json
+{
+  "_id": "room_xxx",
+  "roomId": "room_xxx",
+  "roomCode": "482615",
+  "roomStatus": "in_game",
+  "snapshotType": "game_public",
+  "version": 18,
+  "payload": {
+    "roomId": "room_xxx",
+    "roomCode": "482615",
+    "roomStatus": "in_game",
+    "version": 18,
+    "round": 3,
+    "currentPhase": "voting",
+    "publicState": {},
+    "updatedAt": "2026-04-12T12:10:00.000Z"
+  },
+  "updatedAt": "2026-04-12T12:10:00.000Z",
+  "expireAt": "2026-04-13T00:10:00.000Z"
+}
+```
+
+约束：
+
+- 大厅时 `payload` 必须是 `LobbySnapshot`
+- 对局时 `payload` 必须是“公共部分的游戏快照”，不包含 `privateState` 和 `pendingTask`
+
+## 9.3 `player_private_snapshots` 文档结构
+
+```json
+{
+  "_id": "mem_xxx",
+  "memberId": "mem_xxx",
+  "roomId": "room_xxx",
+  "roomStatus": "in_game",
+  "version": 18,
+  "payload": {
+    "memberId": "mem_xxx",
+    "privateState": {},
+    "pendingTask": null,
+    "updatedAt": "2026-04-12T12:10:00.000Z"
+  },
+  "updatedAt": "2026-04-12T12:10:00.000Z",
+  "expireAt": "2026-04-13T00:10:00.000Z"
+}
+```
+
+约束：
+
+- 一名成员只对应一份私密快照文档
+- `_id` 直接使用 `memberId`
+- `payload.privateState` 与 `payload.pendingTask` 共同构成私密视图
+
+## 9.4 监听失败降级策略
+
+监听不可用时必须退化为轮询：
+
+- 大厅页轮询 `getLobbySnapshot`
+- 对局页轮询 `getGameSnapshot`
+
+降级后要求：
+
+- 返回结构不得变化
+- 前端 mapper 不得因读取来源不同而分叉
+
+## 9.5 版本消费规则
+
+前端消费快照时必须遵循：
+
+1. 只接受版本号大于等于本地版本的快照
+2. 版本号回退时丢弃该快照并记录日志
+3. 写操作成功后仍要以新快照为准，而不是以响应内局部字段为准
+
+## 10. 错误码详细约束
+
+MVP 阶段统一使用以下错误码：
+
+| 错误码 | `retryable` | 语义 |
+| --- | --- | --- |
+| `INVALID_PAYLOAD` | `false` | 请求字段缺失、类型错误、枚举值非法、长度非法 |
+| `ROOM_NOT_FOUND` | `false` | 房间不存在 |
+| `ROOM_EXPIRED` | `false` | 房间已过期或已被清理 |
+| `ROOM_FULL` | `false` | 房间人数已满 |
+| `ROOM_NOT_JOINABLE` | `false` | 房间当前状态不允许加入 |
+| `NOT_ROOM_MEMBER` | `false` | 当前用户不是该房间有效成员 |
+| `NOT_ROOM_HOST` | `false` | 当前用户不是房主 |
+| `INVALID_PLAYER_COUNT` | `false` | 玩家人数不符合开局条件 |
+| `NOT_ALL_READY` | `false` | 大厅成员未全部准备 |
+| `GAME_NOT_STARTED` | `false` | 房间尚未开局 |
+| `GAME_ALREADY_STARTED` | `false` | 房间已经开局，不能做大厅操作 |
+| `GAME_ALREADY_ENDED` | `false` | 对局已结束，不能继续提交命令 |
+| `PHASE_MISMATCH` | `false` | 当前阶段与命令类型不匹配 |
+| `VERSION_CONFLICT` | `true` | 前端基于旧版本快照发起命令 |
+| `DUPLICATE_COMMAND` | `false` | `commandId` 已存在但请求内容不一致 |
+| `NOT_CURRENT_ACTOR` | `false` | 当前用户不是本阶段合法操作者 |
+| `INVALID_TARGET` | `false` | 目标不合法，例如不在允许列表内 |
+| `TARGET_ALREADY_DEAD` | `false` | 目标已死亡 |
+| `TARGET_ALREADY_INVESTIGATED` | `false` | 目标已被调查过 |
+| `ACTION_NOT_ALLOWED` | `false` | 当前房间状态或业务规则不允许执行该操作 |
+| `INTERNAL_ERROR` | `true` | 服务端未预期异常 |
+
+前端联调约束：
+
+- 以 `code` 为主做逻辑分支
+- `message` 只用于日志与兜底 toast
+- `retryable = true` 时前端可优先选择刷新重试，而不是保留旧操作态
+
+## 11. 字段命名与枚举约束
+
+## 11.1 命名风格
+
+统一使用 `camelCase`。
+
+例如：
+
+- `roomId`
+- `roomCode`
+- `memberId`
+- `expectedVersion`
+- `currentPhase`
+
+## 11.2 枚举
+
+### `roomStatus`
+
+- `lobby`
+- `in_game`
+- `ended`
+- `expired`
+
+### `routeHint`
+
+- `lobby`
+- `identity`
+- `board`
+- `result`
+
+### `vote`
+
+- `JA`
+- `NEIN`
+
+### `policyType`
+
+- `LIBERAL`
+- `FASCIST`
+
+### `phase`
+
+- `role_reveal`
+- `nomination`
+- `voting`
+- `hitler_check`
+- `legislative_president`
+- `legislative_chancellor`
+- `veto_response`
+- `executive_action`
+- `round_result`
+- `game_ended`
+
+### `executiveActionType`
+
+- `INVESTIGATE`
+- `SPECIAL_ELECTION`
+- `POLICY_PEEK`
+- `EXECUTION`
+
+### `winReason`
+
+- `LIBERAL_FIVE_POLICIES`
+- `FASCIST_SIX_POLICIES`
+- `HITLER_ELECTED_CHANCELLOR`
+- `HITLER_EXECUTED`
+
+## 12. 前后端协作强约束
+
+## 12.1 前端不得绕开快照
+
+前端页面显示必须以快照为准，不能用本地命令结果直接拼出下一状态。
+
+## 12.2 后端不得绕开文档新增字段
+
+新增请求字段、新增返回字段、新增命令类型、新增错误码，都必须先更新本文档。
+
+## 12.3 联调阶段必须锁定结构
+
+前后端并行开发阶段优先冻结以下内容：
+
+- 云函数名
+- action 名
+- DTO 主结构
+- 命令类型名
+- 错误码
+
+禁止口头约定新增字段后再补文档。
+
+## 12.4 `pendingTask` 优先于 `allowedActions`
+
+MVP 前端交互以 `pendingTask` 为唯一强约束任务来源：
+
+- `pendingTask = null` 表示当前无需主动操作
+- `allowedActions` 不作为必需字段
+- 若后续需要更细粒度的禁用态，再单独扩展并更新本文档
+
+## 13. 交付结论
+
+后续所有实现都必须遵守以下结论：
+
+- 前端只通过云函数提交命令，不直接写核心状态
+- 所有写操作都必须带 `commandId`
+- 所有游戏内写操作都必须带 `expectedVersion`
+- 游戏内所有状态变更统一走 `gameService.submitCommand`
+- 前端只消费大厅快照、游戏公共快照和当前玩家私密快照
+- 快照订阅只允许监听 `room_public_snapshots/{roomId}` 与 `player_private_snapshots/{memberId}`
+- 结果页只能通过 `getResultSnapshot` 获取正式复盘数据
+- 所有接口统一使用标准 envelope 和统一错误码
