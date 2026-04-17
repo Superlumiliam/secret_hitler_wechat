@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "身份确认",
+  "usingComponents": {
+    "secret-panel": "../../../components/secret-panel/index",
+    "privacy-mask": "../../../components/privacy-mask/index",
+    "state-feedback": "../../../components/state-feedback/index",
+    "room-code-card": "../../../components/room-code-card/index"
+  }
+}

@@ -1,0 +1,54 @@
+<view class="page-root">
+  <view class="page-inner identity">
+    <room-code-card
+      roomCode="{{identityVm.roomCode}}"
+      statusText="{{identityVm.acknowledged ? '已确认' : '待确认'}}"
+      subtitle="请确认周围安全后查看身份"
+      bind:copy="handleCopyRoom"
+    />
+
+    <view class="section">
+      <secret-panel
+        visible="{{true}}"
+        masked="{{!revealed}}"
+        title="你的秘密身份"
+        hint="为保护隐私，请在安全环境下查看"
+        bind:reveal="handleReveal"
+        bind:close="handleCloseIdentity"
+      >
+        <view class="identity__panel-content">
+          <view class="identity__role">{{identityVm.title}}</view>
+          <view class="identity__desc">{{identityVm.description}}</view>
+          <view class="identity__grid">
+            <view class="identity__cell">
+              <view class="identity__label">角色</view>
+              <view class="identity__value">{{identityVm.role}}</view>
+            </view>
+            <view class="identity__cell">
+              <view class="identity__label">党派</view>
+              <view class="identity__value">{{identityVm.party}}</view>
+            </view>
+          </view>
+          <view class="identity__known">
+            <view class="identity__label">可见同阵营成员</view>
+            <view class="identity__known-list">
+              <view wx:for="{{identityVm.knownMembers}}" wx:key="memberId" class="chip chip--liberal">{{item.displayName}}</view>
+              <text wx:if="{{!identityVm.knownMembers || !identityVm.knownMembers.length}}" class="muted">当前没有可见队友信息</text>
+            </view>
+          </view>
+          <button class="button-solid identity__confirm {{ackSubmitting ? 'button-disabled' : ''}}" catchtap="handleAckIdentity" loading="{{ackSubmitting}}">
+            {{ackSubmitting ? '提交中...' : '我已查看'}}
+          </button>
+        </view>
+      </secret-panel>
+    </view>
+
+    <view class="section">
+      <privacy-mask visible="{{privacyShieldVisible}}" text="{{safeModeText}}" />
+    </view>
+
+    <view class="section">
+      <state-feedback status="{{errorText ? 'error' : 'idle'}}" text="{{errorText}}" retryText="重试" bind:retry="refreshGame" />
+    </view>
+  </view>
+</view>

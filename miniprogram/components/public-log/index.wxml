@@ -1,0 +1,21 @@
+<view class="public-log shell-card">
+  <view class="public-log__head">
+    <view>
+      <view class="card-title">{{title}}</view>
+      <view class="card-subtitle">仅展示后端已公开的事实摘要。</view>
+    </view>
+    <button class="public-log__toggle" wx:if="{{items && items.length}}" catchtap="toggleExpand">{{expanded ? '收起' : '展开'}}</button>
+  </view>
+
+  <view wx:if="{{items && items.length}}" class="public-log__list">
+    <view wx:for="{{displayItems}}" wx:key="eventId" class="public-log__item">
+      <view class="public-log__item-title">{{item.title}}</view>
+      <view class="public-log__item-summary">{{item.summary}}</view>
+      <view class="public-log__item-meta mono">R{{item.round}} · {{item.phase}} · {{item.createdAt}}</view>
+    </view>
+  </view>
+
+  <view wx:else class="public-log__empty">
+    <text class="muted">{{emptyText}}</text>
+  </view>
+</view>

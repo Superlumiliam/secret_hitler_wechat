@@ -1,0 +1,28 @@
+.election-track {
+  padding: 24rpx;
+}
+
+.election-track__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.election-track__dots {
+  margin-top: 18rpx;
+  display: flex;
+  gap: 14rpx;
+}
+
+.election-track__dot {
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 999rpx;
+  background: rgba(29, 22, 18, 0.12);
+}
+
+.election-track__dot--active {
+  background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+}
+

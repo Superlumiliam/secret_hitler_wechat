@@ -1,0 +1,7 @@
+<view class="phase-banner shell-card {{danger ? 'phase-banner--danger' : ''}}">
+  <view class="phase-banner__eyebrow">
+    <text class="chip {{danger ? 'chip--danger' : 'chip--brand'}}">{{phase}}</text>
+  </view>
+  <view class="phase-banner__title">{{title}}</view>
+  <view class="phase-banner__desc">{{description}}</view>
+</view>

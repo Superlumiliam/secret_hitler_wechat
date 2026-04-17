@@ -1,0 +1,20 @@
+<view class="seat-item {{selected ? 'seat-item--selected' : ''}} {{danger ? 'seat-item--danger' : ''}} {{player && player.isAlive === false ? 'seat-item--dead' : ''}}" bindtap="onSelect">
+  <view class="seat-item__seat mono">#{{player.seatIndex}}</view>
+  <view class="seat-item__body">
+    <view class="seat-item__name-row">
+      <text class="seat-item__name">{{player.displayName}}</text>
+      <text wx:if="{{player.isSelf}}" class="chip chip--brand">你</text>
+      <text wx:if="{{player.isHost}}" class="chip chip--liberal">房主</text>
+    </view>
+    <view class="seat-item__meta">
+      <text wx:if="{{player.isReady}}" class="chip chip--liberal">已准备</text>
+      <text wx:else class="chip">未准备</text>
+      <text wx:if="{{player.isAlive === false}}" class="chip chip--danger">已出局</text>
+      <text wx:if="{{player.isOffline}}" class="chip">离线</text>
+    </view>
+  </view>
+  <view class="seat-item__actions" wx:if="{{canMoveUp || canMoveDown}}">
+    <button wx:if="{{canMoveUp}}" class="seat-item__action" catchtap="onMoveUp">上移</button>
+    <button wx:if="{{canMoveDown}}" class="seat-item__action" catchtap="onMoveDown">下移</button>
+  </view>
+</view>

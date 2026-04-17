@@ -1,0 +1,64 @@
+.vote-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.vote-panel__mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 13, 11, 0.5);
+}
+
+.vote-panel__sheet {
+  position: absolute;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: 24rpx;
+  padding: 26rpx;
+}
+
+.vote-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.vote-panel__close {
+  min-height: 56rpx;
+  padding: 0 18rpx;
+  border-radius: 16rpx;
+  background: rgba(29, 22, 18, 0.06);
+  font-size: 22rpx;
+}
+
+.vote-panel__choices {
+  margin-top: 20rpx;
+  display: flex;
+  gap: 14rpx;
+}
+
+.vote-panel__choice {
+  flex: 1;
+  min-height: 96rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, var(--liberal), #15447d);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.vote-panel__choice--dark {
+  background: linear-gradient(135deg, var(--fascist), #792516);
+}
+
+.vote-panel__choice--active {
+  outline: 3rpx solid rgba(0, 0, 0, 0.18);
+}
+
+.vote-panel__confirm {
+  margin-top: 18rpx;
+  width: 100%;
+}
+

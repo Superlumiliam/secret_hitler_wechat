@@ -1,0 +1,26 @@
+.seat-list {
+  padding: 24rpx;
+}
+
+.seat-list__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.seat-list__body {
+  margin-top: 18rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.seat-list__empty {
+  margin-top: 18rpx;
+  padding: 28rpx 20rpx;
+  text-align: center;
+  border-radius: 22rpx;
+  background: rgba(29, 22, 18, 0.04);
+}
+

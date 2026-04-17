@@ -1,0 +1,24 @@
+.room-code-card {
+  padding: 28rpx;
+}
+
+.room-code-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+  align-items: flex-start;
+}
+
+.room-code-card__code {
+  margin-top: 18rpx;
+  font-size: 60rpx;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  color: var(--brand-deep);
+}
+
+.room-code-card__button {
+  margin-top: 18rpx;
+  width: 100%;
+}
+

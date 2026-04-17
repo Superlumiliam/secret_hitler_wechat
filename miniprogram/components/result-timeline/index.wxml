@@ -1,0 +1,24 @@
+<view class="result-timeline shell-card">
+  <view class="result-timeline__head">
+    <view>
+      <view class="card-title">{{title}}</view>
+      <view class="card-subtitle">本局关键事件按时间排序展示。</view>
+    </view>
+    <view class="chip chip--brand">{{items.length}} 条</view>
+  </view>
+
+  <view wx:if="{{items && items.length}}" class="result-timeline__list">
+    <view wx:for="{{items}}" wx:key="eventId" class="result-timeline__item">
+      <view class="result-timeline__dot"></view>
+      <view class="result-timeline__body">
+        <view class="result-timeline__title">{{item.title}}</view>
+        <view class="result-timeline__summary">{{item.summary}}</view>
+        <view class="result-timeline__meta mono">R{{item.round}} · {{item.phase}} · {{item.createdAt}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="result-timeline__empty">
+    <text class="muted">{{emptyText}}</text>
+  </view>
+</view>

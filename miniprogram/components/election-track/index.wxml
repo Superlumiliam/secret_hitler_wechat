@@ -1,0 +1,12 @@
+<view class="election-track shell-card">
+  <view class="election-track__head">
+    <view>
+      <view class="card-title">选举轨</view>
+      <view class="card-subtitle">失败 3 次后会自动颁布牌库顶牌。</view>
+    </view>
+    <view class="chip chip--brand">{{count}} / 3</view>
+  </view>
+  <view class="election-track__dots">
+    <view class="election-track__dot {{item.index < count ? 'election-track__dot--active' : ''}}" wx:for="{{dots}}" wx:key="index"></view>
+  </view>
+</view>

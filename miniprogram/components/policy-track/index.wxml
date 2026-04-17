@@ -1,0 +1,19 @@
+<view class="policy-track shell-card">
+  <view class="policy-track__head">
+    <view>
+      <view class="card-title">政策轨</view>
+      <view class="card-subtitle">自由派 5 张获胜，法西斯 6 张获胜。</view>
+    </view>
+    <view class="chip {{vetoUnlocked ? 'chip--danger' : ''}}">{{vetoUnlocked ? '否决已解锁' : '否决未解锁'}}</view>
+  </view>
+  <view class="policy-track__bars">
+    <view class="policy-track__bar policy-track__bar--liberal">
+      <view class="policy-track__fill policy-track__fill--liberal" style="width: {{liberalCount * 20}}%;"></view>
+      <text class="policy-track__label">自由派 {{liberalCount}} / 5</text>
+    </view>
+    <view class="policy-track__bar policy-track__bar--fascist">
+      <view class="policy-track__fill policy-track__fill--fascist" style="width: {{fascistCount * 16.6667}}%;"></view>
+      <text class="policy-track__label">法西斯 {{fascistCount}} / 6</text>
+    </view>
+  </view>
+</view>

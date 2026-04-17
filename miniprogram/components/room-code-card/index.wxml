@@ -1,0 +1,11 @@
+<view class="room-code-card shell-card shell-card--strong">
+  <view class="room-code-card__top">
+    <view>
+      <view class="card-title">房间号</view>
+      <view wx:if="{{subtitle}}" class="card-subtitle">{{subtitle}}</view>
+    </view>
+    <view class="chip chip--brand">{{statusText}}</view>
+  </view>
+  <view class="room-code-card__code mono">{{roomCode || '------'}}</view>
+  <button class="button-secondary room-code-card__button" catchtap="onCopy">{{copyText}}</button>
+</view>

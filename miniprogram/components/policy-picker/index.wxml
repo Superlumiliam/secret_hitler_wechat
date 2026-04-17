@@ -1,0 +1,33 @@
+<view wx:if="{{visible}}" class="policy-picker">
+  <view class="policy-picker__mask" catchtap="cancel"></view>
+  <view class="policy-picker__sheet shell-card shell-card--strong">
+    <view class="policy-picker__head">
+      <view>
+        <view class="card-title">{{title}}</view>
+        <view class="card-subtitle">{{mode === 'discard_one' ? '请选择要弃掉的 1 张' : '请选择要颁布的 1 张'}}</view>
+      </view>
+      <button class="policy-picker__close" catchtap="cancel">关闭</button>
+    </view>
+
+    <view class="policy-picker__cards">
+      <button
+        class="policy-picker__card {{selectedIndex === index ? 'policy-picker__card--active' : ''}} {{item.type === 'FASCIST' ? 'policy-picker__card--fascist' : 'policy-picker__card--liberal'}}"
+        wx:for="{{cards}}"
+        wx:key="index"
+        data-index="{{index}}"
+        catchtap="selectCard"
+      >
+        <text class="policy-picker__card-type">{{item.label}}</text>
+        <text class="policy-picker__card-index">#{{index + 1}}</text>
+      </button>
+    </view>
+
+    <view wx:if="{{canRequestVeto}}" class="policy-picker__extra">
+      <button class="button-danger policy-picker__veto" catchtap="requestVeto">请求否决</button>
+    </view>
+
+    <button class="button-solid policy-picker__confirm {{selectedIndex < 0 || submitting ? 'button-disabled' : ''}}" catchtap="confirmPick" disabled="{{selectedIndex < 0 || submitting}}">
+      {{submitting ? '提交中...' : '确认提交'}}
+    </button>
+  </view>
+</view>

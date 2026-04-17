@@ -1,0 +1,21 @@
+<view class="pending-task-card shell-card shell-card--strong">
+  <view class="pending-task-card__head">
+    <view>
+      <view class="card-title">你的待办</view>
+      <view class="card-subtitle">{{task ? task.description : '当前无需操作，等待其他玩家。'}}</view>
+    </view>
+    <view class="chip {{task ? 'chip--brand' : ''}}">{{task ? task.actionMode : 'wait'}}</view>
+  </view>
+
+  <view wx:if="{{task}}" class="pending-task-card__content">
+    <view class="pending-task-card__title">{{task.title}}</view>
+    <view class="pending-task-card__desc">{{task.description}}</view>
+    <button class="button-solid pending-task-card__button {{submitting ? 'button-disabled' : ''}}" catchtap="openTask" disabled="{{submitting}}">
+      {{submitting ? '提交中...' : '打开操作'}}
+    </button>
+  </view>
+
+  <view wx:else class="pending-task-card__idle">
+    <text class="muted">当前无需操作，等待其他玩家。</text>
+  </view>
+</view>

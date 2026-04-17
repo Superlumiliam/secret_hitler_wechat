@@ -1,0 +1,53 @@
+.secret-panel {
+  padding: 24rpx;
+}
+
+.secret-panel--masked {
+  border-color: rgba(177, 34, 43, 0.18);
+}
+
+.secret-panel__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+  align-items: flex-start;
+}
+
+.secret-panel__close {
+  min-height: 56rpx;
+  padding: 0 18rpx;
+  border-radius: 16rpx;
+  background: rgba(29, 22, 18, 0.06);
+  font-size: 22rpx;
+}
+
+.secret-panel__mask {
+  margin-top: 18rpx;
+  padding: 28rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(135deg, rgba(177, 34, 43, 0.14), rgba(31, 90, 168, 0.12));
+  overflow: hidden;
+}
+
+.secret-panel__cover {
+  height: 180rpx;
+  border-radius: 18rpx;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.2) 0,
+      rgba(255, 255, 255, 0.2) 16rpx,
+      rgba(255, 255, 255, 0.08) 16rpx,
+      rgba(255, 255, 255, 0.08) 32rpx
+    );
+}
+
+.secret-panel__reveal {
+  margin-top: 18rpx;
+  width: 100%;
+}
+
+.secret-panel__content {
+  margin-top: 18rpx;
+}
+

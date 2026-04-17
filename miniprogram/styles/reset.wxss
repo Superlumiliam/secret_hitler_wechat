@@ -1,0 +1,66 @@
+page,
+view,
+text,
+button,
+input,
+textarea,
+scroll-view {
+  box-sizing: border-box;
+}
+
+page {
+  min-height: 100%;
+  background: var(--page-bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+button {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  line-height: inherit;
+}
+
+button::after {
+  border: none;
+}
+
+.page-root {
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.page-root::before,
+.page-root::after {
+  content: "";
+  position: fixed;
+  inset: auto;
+  width: 34rem;
+  height: 34rem;
+  border-radius: 999rem;
+  pointer-events: none;
+  opacity: 0.28;
+  filter: blur(16px);
+  z-index: 0;
+}
+
+.page-root::before {
+  top: -10rem;
+  right: -12rem;
+  background: radial-gradient(circle, rgba(176, 34, 43, 0.26), rgba(176, 34, 43, 0));
+}
+
+.page-root::after {
+  bottom: -12rem;
+  left: -14rem;
+  background: radial-gradient(circle, rgba(30, 84, 166, 0.18), rgba(30, 84, 166, 0));
+}
+
+.page-inner {
+  position: relative;
+  z-index: 1;
+  padding: 32rpx;
+}
+

@@ -1,0 +1,11 @@
+<view wx:if="{{status !== 'idle'}}" class="state-feedback shell-card">
+  <view class="state-feedback__body">
+    <view class="state-feedback__title">
+      <text wx:if="{{status === 'loading'}}">加载中</text>
+      <text wx:elif="{{status === 'error'}}">出现问题</text>
+      <text wx:else>提示</text>
+    </view>
+    <view class="state-feedback__text">{{text}}</view>
+  </view>
+  <button wx:if="{{status === 'error'}}" class="button-secondary state-feedback__retry" catchtap="retry">{{retryText}}</button>
+</view>

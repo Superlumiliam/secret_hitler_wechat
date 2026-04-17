@@ -1,0 +1,41 @@
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  padding-bottom: 40rpx;
+}
+
+.rules__hero {
+  padding: 32rpx;
+}
+
+.rules__title {
+  margin-top: 16rpx;
+  font-size: 40rpx;
+  font-weight: 900;
+}
+
+.rules__subtitle {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.rules__section {
+  padding: 28rpx;
+}
+
+.rules__items {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.rules__item {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+

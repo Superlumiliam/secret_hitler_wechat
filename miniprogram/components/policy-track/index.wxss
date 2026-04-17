@@ -1,0 +1,51 @@
+.policy-track {
+  padding: 24rpx;
+}
+
+.policy-track__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.policy-track__bars {
+  margin-top: 18rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.policy-track__bar {
+  position: relative;
+  height: 60rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+  background: rgba(29, 22, 18, 0.05);
+}
+
+.policy-track__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+
+.policy-track__fill--liberal {
+  background: linear-gradient(135deg, rgba(31, 90, 168, 0.88), rgba(31, 90, 168, 0.5));
+}
+
+.policy-track__fill--fascist {
+  background: linear-gradient(135deg, rgba(177, 59, 36, 0.9), rgba(177, 59, 36, 0.5));
+}
+
+.policy-track__label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 18rpx;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+

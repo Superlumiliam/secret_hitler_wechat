@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "commonjs",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "baseUrl": "."
+  },
+  "include": [
+    "miniprogram/**/*.js",
+    "miniprogram/**/*.d.ts"
+  ]
+}
