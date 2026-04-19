@@ -1,8 +1,0 @@
-{
-  "name": "secret-hitler-mini-program",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "test:backend": "node --test backend/src/tests/**/*.test.js"
-  }
-}

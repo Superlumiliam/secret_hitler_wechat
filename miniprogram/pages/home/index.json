@@ -1,7 +1,0 @@
-{
-  "navigationBarTitleText": "首页",
-  "usingComponents": {
-    "state-feedback": "../../components/state-feedback/index",
-    "room-code-card": "../../components/room-code-card/index"
-  }
-}

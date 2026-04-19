@@ -1,8 +1,0 @@
-{
-  "navigationBarTitleText": "结果",
-  "usingComponents": {
-    "result-timeline": "../../../components/result-timeline/index",
-    "room-code-card": "../../../components/room-code-card/index",
-    "state-feedback": "../../../components/state-feedback/index"
-  }
-}

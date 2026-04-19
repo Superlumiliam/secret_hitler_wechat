@@ -1,8 +1,0 @@
-{
-  "navigationBarTitleText": "大厅",
-  "usingComponents": {
-    "room-code-card": "../../../components/room-code-card/index",
-    "seat-list": "../../../components/seat-list/index",
-    "state-feedback": "../../../components/state-feedback/index"
-  }
-}

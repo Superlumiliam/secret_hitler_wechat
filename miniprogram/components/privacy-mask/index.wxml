@@ -1,7 +1,0 @@
-<view wx:if="{{visible}}" class="privacy-mask">
-  <view class="privacy-mask__sheet shell-card shell-card--strong">
-    <view class="privacy-mask__icon">安全模式</view>
-    <view class="privacy-mask__title">请确认周围环境</view>
-    <view class="privacy-mask__text">{{text}}</view>
-  </view>
-</view>

@@ -1,6 +1,0 @@
-{
-  "navigationBarTitleText": "规则",
-  "usingComponents": {
-    "state-feedback": "../../../components/state-feedback/index"
-  }
-}

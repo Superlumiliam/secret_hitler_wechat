@@ -1,46 +1,16 @@
 {
   "pages": [
-    "pages/home/index"
+    "pages/index/index",
+    "pages/example/index"
   ],
-  "subpackages": [
-    {
-      "root": "packageRoom",
-      "pages": [
-        "pages/lobby/index",
-        "pages/identity/index",
-        "pages/board/index",
-        "pages/rules/index"
-      ]
-    },
-    {
-      "root": "packageResult",
-      "pages": [
-        "pages/result/index"
-      ]
-    }
-  ],
-  "preloadRule": {
-    "pages/home/index": {
-      "network": "all",
-      "packages": [
-        "packageRoom"
-      ]
-    },
-    "packageRoom/pages/board/index": {
-      "network": "all",
-      "packages": [
-        "packageResult"
-      ]
-    }
-  },
   "window": {
-    "navigationBarTitleText": "揭秘希特勒面杀助手",
-    "navigationBarBackgroundColor": "#f5efe6",
-    "navigationBarTextStyle": "black",
-    "backgroundColor": "#f5efe6",
-    "backgroundTextStyle": "light"
+    "backgroundColor": "#F6F6F6",
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#F6F6F6",
+    "navigationBarTitleText": "云开发 QuickStart",
+    "navigationBarTextStyle": "black"
   },
+  "sitemapLocation": "sitemap.json",
   "style": "v2",
-  "lazyCodeLoading": "requiredComponents",
-  "sitemapLocation": "sitemap.json"
+  "lazyCodeLoading": "requiredComponents"
 }
