@@ -8,7 +8,7 @@
 - 请求与响应 envelope
 - 大厅 / 对局 / 结果快照 DTO
 - 游戏命令结构与幂等规则
-- 快照订阅方式
+- 快照轮询读取方式
 - 错误码与联调边界
 
 后续所有前后端实现都必须以本文档为准；若请求字段、响应字段、命令类型、错误码发生变化，必须先更新本文档，再更新实现。
@@ -19,9 +19,7 @@
 
 ## 2.1 统一交互通道
 
-前后端交互只允许两类通道：
-
-### 通道 A：云函数调用
+前后端交互只允许统一云函数通道。
 
 统一使用 `wx.cloud.callFunction`，用于：
 
@@ -31,14 +29,7 @@
 - 发起游戏命令
 - 主动拉取快照
 
-### 通道 B：只读快照读取 / 订阅
-
-只允许读取或监听安全投影视图，用于：
-
-- 获取大厅快照
-- 获取游戏公共快照
-- 获取当前玩家私密快照
-- 监听状态变更
+MVP 阶段前端不直接读取或监听任何数据库集合，包括已裁剪的投影视图集合。所有快照读取都必须通过云函数 action 完成。
 
 ## 2.2 命令与快照分离
 
@@ -950,7 +941,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - 房间状态必须是 `lobby`
 - 玩家数必须在 `5-10`
 - 全员 `isReady === true`
-- 成功后前端应立即调用 `getGameSnapshot` 或进入快照监听流程
+- 成功后前端应立即调用 `getGameSnapshot`，并进入轮询刷新流程
 
 主要失败错误码：
 
@@ -1181,21 +1172,24 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 3. 若存在且 `payloadHash` 完全一致，返回幂等成功，`deduplicated = true`
 4. 若存在但 `payloadHash` 不一致，返回 `DUPLICATE_COMMAND`
 
-## 9. 快照订阅与投影文档约束
+## 9. 快照轮询读取与投影文档约束
 
-## 9.1 允许订阅的集合
+## 9.1 快照读取准则
 
-如果采用数据库监听模式，前端只允许监听以下投影视图文档：
+MVP 阶段前端只能通过云函数读取快照：
 
-- `room_public_snapshots/{roomId}`
-- `player_private_snapshots/{memberId}`
+- 大厅页轮询 `roomService.getLobbySnapshot`
+- 对局页轮询 `gameService.getGameSnapshot`
+- 结果页读取 `gameService.getResultSnapshot`
 
-禁止监听：
+前端禁止直接读取或监听：
 
+- `room_public_snapshots`
+- `player_private_snapshots`
 - `game_core`
 - `game_events`
 - `command_records`
-- 任何包含完整真相的集合
+- 任何后端数据库集合
 
 ## 9.2 `room_public_snapshots` 文档结构
 
@@ -1271,17 +1265,18 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `_id` 直接使用 `memberId`
 - `payload.privateState` 与 `payload.pendingTask` 共同构成私密视图
 
-## 9.4 监听失败降级策略
+## 9.4 轮询读取策略
 
-监听不可用时必须退化为轮询：
+前端进入相关页面后必须按固定频率轮询对应快照：
 
 - 大厅页轮询 `getLobbySnapshot`
 - 对局页轮询 `getGameSnapshot`
 
-降级后要求：
+轮询要求：
 
 - 返回结构不得变化
-- 前端 mapper 不得因读取来源不同而分叉
+- 前端 mapper 不得绕开 API DTO 直接消费投影文档结构
+- 页面隐藏时应停止轮询，回到前台后立即补拉一次
 
 ## 9.5 版本消费规则
 
@@ -1431,6 +1426,6 @@ MVP 前端交互以 `pendingTask` 为唯一强约束任务来源：
 - 所有游戏内写操作都必须带 `expectedVersion`
 - 游戏内所有状态变更统一走 `gameService.submitCommand`
 - 前端只消费大厅快照、游戏公共快照和当前玩家私密快照
-- 快照订阅只允许监听 `room_public_snapshots/{roomId}` 与 `player_private_snapshots/{memberId}`
+- 快照只允许通过 `getLobbySnapshot`、`getGameSnapshot`、`getResultSnapshot` 等云函数 action 读取
 - 结果页只能通过 `getResultSnapshot` 获取正式复盘数据
 - 所有接口统一使用标准 envelope 和统一错误码

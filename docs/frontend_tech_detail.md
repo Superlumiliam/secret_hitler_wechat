@@ -33,7 +33,7 @@
 2. 所有写操作只能通过 `wx.cloud.callFunction` 发起命令。
 3. 页面只能渲染大厅快照、游戏公共快照、当前玩家私密快照，不能持有完整真相。
 4. 隐私信息必须默认遮罩，切后台后要立即回到安全态。
-5. 前端不能直接写核心集合，也不能监听核心真相集合。
+5. 前端不能直接读写或监听任何后端数据库集合。
 6. 所有写操作都必须携带 `commandId`，其中游戏内写操作还必须携带 `expectedVersion`。
 7. 所有渲染都以快照为准，不能用“按钮已点击”推断状态已推进。
 8. MVP 必须支持 `5-10` 人标准局、完整流程、断线恢复、结果复盘。
@@ -54,7 +54,7 @@
 - 语言：TypeScript
 - 样式：WXSS
 - 云能力：`wx.cloud`
-- 数据同步：`云函数命令 + 快照监听/轮询降级`
+- 数据同步：`云函数命令 + 云函数轮询读取快照`
 
 ### 3.2 依赖策略
 
@@ -462,7 +462,7 @@ interface SessionState {
 interface RoomState {
   lobbySnapshot: LobbySnapshot | null
   lobbyVm: LobbyViewModel | null
-  watchMode: 'watch' | 'polling' | 'idle'
+  syncMode: 'polling' | 'idle'
   loading: boolean
   refreshing: boolean
   lastVersion: number | null
@@ -479,7 +479,7 @@ interface GameState {
   boardVm: GameBoardViewModel | null
   taskVm: PendingTaskViewModel | null
   resultVm: ResultViewModel | null
-  watchMode: 'watch' | 'polling' | 'idle'
+  syncMode: 'polling' | 'idle'
   loading: boolean
   refreshing: boolean
   commandLocks: Record<string, boolean>
@@ -589,9 +589,9 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 
 职责是管理“读”：
 
-- 启动大厅监听
-- 启动游戏监听
-- 监听失败降级为轮询
+- 启动大厅轮询
+- 启动游戏轮询
+- 管理页面可见性与轮询频率
 - 页面隐藏时停止同步
 - 命令成功后主动 refresh
 
@@ -617,27 +617,28 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 
 ## 10.1 同步策略结论
 
-采用“监听优先，轮询兜底”的混合方案。
+采用“轮询优先”的单一方案。MVP 阶段不直接读取或监听数据库投影文档，所有快照都通过云函数 action 拉取。
 
-### 10.2 监听对象
+### 10.2 轮询读取入口
 
-前端只监听两个投影视图文档：
+前端只通过以下 service 方法读取快照：
 
-- `room_public_snapshots/{roomId}`
-- `player_private_snapshots/{memberId}`
+- 大厅：`roomService.getLobbySnapshot(roomId)`
+- 对局：`gameService.getGameSnapshot(roomId)`
+- 结果：`gameService.getResultSnapshot(roomId)`
 
 这样做的原因：
 
-1. 监听单文档比监听列表集合更稳定。
-2. 数据量更小。
-3. 与“只读快照，不读核心真相”原则一致。
+1. 不需要向前端开放数据库集合读取或监听权限。
+2. 私密快照始终由云函数按当前微信身份合并返回。
+3. 前端读取来源单一，mapper 不需要为监听数据和接口数据分叉。
 
 ### 10.3 大厅同步流程
 
 1. 进入大厅页先主动调用一次 `getLobbySnapshot`
-2. 再尝试监听大厅快照文档
-3. 监听成功则进入 `watch` 模式
-4. 监听失败则降级为 `polling`
+2. 页面可见时启动大厅轮询
+3. 页面隐藏时停止大厅轮询
+4. 命令提交成功后立即补拉一次最新快照
 
 轮询间隔建议：
 
@@ -647,8 +648,9 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 ### 10.4 对局同步流程
 
 1. 进入身份页 / 桌面页先主动 `getGameSnapshot`
-2. 再尝试监听公共快照文档与个人私密文档
-3. 任一监听失败则整体切换到轮询
+2. 页面可见时启动对局轮询
+3. 页面隐藏时停止对局轮询
+4. 命令提交成功、版本冲突或阶段变化时立即补拉一次最新快照
 
 轮询间隔建议：
 
@@ -1541,7 +1543,7 @@ MVP 尽量少图化：
 1. 原生微信小程序 + TypeScript。
 2. 页面只消费快照 view-model，不操作核心真相。
 3. 命令统一走 `submitGameCommand`，强制带 `commandId` 和 `expectedVersion`。
-4. 数据同步采用“监听优先、轮询兜底”。
+4. 数据同步采用“云函数轮询读取快照”。
 5. 大厅与对局页面分包，规则与结果独立分包。
 6. 私密信息统一遮罩，切后台立刻进入安全态。
 7. MVP 先保证流程正确、状态清晰、恢复稳定，再做视觉增强。
