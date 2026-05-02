@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/create-room/index"
+  ],
+  "window": {
+    "backgroundColor": "#061016",
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#061016",
+    "navigationBarTextStyle": "white",
+    "navigationStyle": "custom"
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
+}

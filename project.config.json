@@ -1,5 +1,5 @@
 {
-  "miniprogramRoot": "miniprogram/",
+  "miniprogramRoot": "frontend/",
   "cloudfunctionRoot": "cloudfunctions/",
   "setting": {
     "urlCheck": true,
@@ -45,7 +45,7 @@
     "disableSWC": true
   },
   "appid": "wx6a43359ffd957827",
-  "projectname": "quickstart-wx-cloud",
+  "projectname": "secret-hitler",
   "libVersion": "2.20.1",
   "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
   "condition": {
@@ -72,7 +72,7 @@
     }
   },
   "compileType": "miniprogram",
-  "srcMiniprogramRoot": "miniprogram/",
+  "srcMiniprogramRoot": "frontend/",
   "packOptions": {
     "ignore": [],
     "include": []

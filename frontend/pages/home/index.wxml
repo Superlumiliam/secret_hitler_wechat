@@ -1,0 +1,26 @@
+<view class="home-page">
+  <image
+    wx:if="{{homeBackgroundVisible}}"
+    class="home-background"
+    src="{{homeBackgroundSrc}}"
+    mode="aspectFill"
+    binderror="onBackgroundError"
+  />
+
+  <view class="actions">
+    <button
+      class="create-button"
+      bindtap="onCreateRoom"
+      hover-class="create-button-hover"
+      aria-label="创建房间"
+    >
+      创建房间
+      <text class="join-arrow">›</text>
+    </button>
+
+    <button class="join-button" bindtap="onJoinRoom" hover-class="join-button-hover">
+      加入房间
+      <text class="join-arrow">›</text>
+    </button>
+  </view>
+</view>

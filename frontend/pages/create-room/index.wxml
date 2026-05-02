@@ -1,0 +1,8 @@
+<view class="create-room-page">
+  <view class="panel">
+    <view class="eyebrow">创建房间</view>
+    <view class="title">选择对局人数</view>
+    <view class="placeholder">页面骨架已接入，人数选择与创建逻辑将在后续模块实现。</view>
+    <button class="back-button" bindtap="onBackHome" hover-class="back-button-hover">返回首页</button>
+  </view>
+</view>

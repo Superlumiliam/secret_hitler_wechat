@@ -1,0 +1,54 @@
+page {
+  min-height: 100vh;
+  background: #071016;
+}
+
+.create-room-page {
+  min-height: 100vh;
+  padding: calc(104rpx + env(safe-area-inset-top)) 48rpx 64rpx;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(207, 161, 93, 0.25), transparent 32%),
+    linear-gradient(180deg, #10242a 0%, #080d11 100%);
+  color: #f4dca9;
+}
+
+.panel {
+  padding-top: 120rpx;
+}
+
+.eyebrow {
+  font-size: 26rpx;
+  color: rgba(244, 220, 169, 0.66);
+}
+
+.title {
+  margin-top: 14rpx;
+  font-size: 58rpx;
+  font-weight: 900;
+}
+
+.placeholder {
+  margin-top: 34rpx;
+  color: rgba(244, 220, 169, 0.76);
+  font-size: 29rpx;
+  line-height: 1.7;
+}
+
+.back-button {
+  width: 320rpx;
+  height: 86rpx;
+  margin-top: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid rgba(56, 224, 228, 0.75);
+  border-radius: 44rpx;
+  color: #061d22;
+  font-size: 30rpx;
+  font-weight: 800;
+  background: linear-gradient(180deg, #38e0e4, #13b9c1);
+}
+
+.back-button-hover {
+  opacity: 0.78;
+}

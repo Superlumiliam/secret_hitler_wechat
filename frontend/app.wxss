@@ -1,0 +1,28 @@
+page {
+  min-height: 100vh;
+  color: #f6dfb4;
+  background: #061016;
+  font-family: "PingFang SC", "Hiragino Sans GB", Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+view,
+text,
+button,
+input {
+  box-sizing: border-box;
+}
+
+button {
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+button::after {
+  border: none;
+}

@@ -209,18 +209,18 @@ frontend/
     images/
       avatars/
         default-player.png
-      backgrounds/
       decorations/
       icons/
 ```
 
 目录约定：
 
-- `frontend/assets/images/avatars/`：默认玩家头像、占位头像。
-- `frontend/assets/images/backgrounds/`：页面背景、桌面背景等较大背景图。
-- `frontend/assets/images/decorations/`：非交互装饰元素、氛围图、分隔图。
-- `frontend/assets/images/icons/`：无法用 WXSS 或文字表达的静态图标。
+- `frontend/assets/images/avatars/`：小于等于 `200K` 的默认玩家头像、占位头像。
+- `frontend/assets/images/decorations/`：小于等于 `200K` 的非交互装饰元素、氛围图、分隔图。
+- `frontend/assets/images/icons/`：小于等于 `200K` 且无法用 WXSS 或文字表达的静态图标。
 - `frontend/static/` 只放结构化文本或配置，如 `rulesContent.ts`；不放图片。
+- 大于 `200K` 的图片资源不得进入 `frontend/` 主包，应上传到微信云存储；源文件在 `reference/` 保留备份。
+- 页面使用云存储图片时，不直接把 `cloud://` 地址传给 `image.src`，统一先通过 `wx.cloud.getTempFileURL` 获取临时 HTTPS 地址，失败时保留纯色或样式兜底。
 
 ## 5. 分包与路由方案
 
@@ -1456,12 +1456,14 @@ MVP 尽量少图化：
 
 - 优先使用纯色块、徽章和文字
 - 角色卡、政策卡优先用样式绘制，不依赖大图
-- 前端页面元素图片统一放在 `frontend/assets/images/`
+- 小于等于 `200K` 的前端页面元素图片可放在 `frontend/assets/images/`
+- 大于 `200K` 的图片必须放到微信云存储，不能进入主包
+- 云存储图片需在 `reference/` 目录保留一份源文件备份，如 `reference/home-background.png`
+- 云存储图片在页面侧通过 `wx.cloud.getTempFileURL` 获取临时 HTTPS 地址后再绑定到 `image.src`
 - 默认玩家头像放在 `frontend/assets/images/avatars/`
-- 背景元素图像放在 `frontend/assets/images/backgrounds/`
-- 装饰性图像放在 `frontend/assets/images/decorations/`
-- 静态图标统一放在 `frontend/assets/images/icons/`
-- 页面代码引用资源时使用项目内绝对路径，如 `/assets/images/avatars/default-player.png`
+- 装饰性小图放在 `frontend/assets/images/decorations/`
+- 静态小图标统一放在 `frontend/assets/images/icons/`
+- 页面代码引用本地资源时使用项目内绝对路径，如 `/assets/images/avatars/default-player.png`
 
 ### 20.3 页面复杂度控制
 
