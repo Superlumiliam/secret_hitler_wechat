@@ -18,12 +18,13 @@
 
 ### 2.1 当前仓库现状
 
-当前仓库仍是微信云开发 QuickStart 模板，前端目录只有示例页：
+当前仓库仍保留微信云开发 QuickStart 模板，`miniprogram` 目录和 `cloudfunctions/quickstartFunctions` 只作为语法参考；第一个模块跑通后会删除，不能基于这两个目录继续开发业务：
 
 - `miniprogram/pages/index`
 - `miniprogram/pages/example`
+- `cloudfunctions/quickstartFunctions`
 
-这意味着后续开发应直接在现有小程序壳上重构，而不是继续在示例页上堆功能。
+这意味着后续开发不是在示例页上堆功能，而是另起真实业务结构；现有模板代码只用于查语法和云开发调用方式。
 
 ### 2.2 不可违反的上位约束
 
@@ -32,7 +33,7 @@
 1. 前端不是裁判，不负责规则真相、胜负判定、身份分配、牌堆逻辑。
 2. 所有写操作只能通过 `wx.cloud.callFunction` 发起命令。
 3. 页面只能渲染大厅快照、游戏公共快照、当前玩家私密快照，不能持有完整真相。
-4. 隐私信息必须默认遮罩，切后台后要立即回到安全态。
+4. 前端只能展示当前用户有权查看的私密切片；身份页不做额外遮罩、定时隐藏或特殊保密逻辑。
 5. 前端不能直接读写或监听任何后端数据库集合。
 6. 所有写操作都必须携带 `commandId`，其中游戏内写操作还必须携带 `expectedVersion`。
 7. 所有渲染都以快照为准，不能用“按钮已点击”推断状态已推进。
@@ -76,21 +77,21 @@
 
 ### 3.3 从当前 JS 模板到 TS 结构的迁移策略
 
-由于当前项目仍是 JS 模板，建议按以下顺序迁移：
+由于当前 `miniprogram` 和 `quickstartFunctions` 后续会删除，迁移策略是“参考语法，不承接目录”：
 
-1. 保留现有 `app.js` 作为可运行壳。
-2. 先新建 `miniprogram/services`、`store`、`types`、`utils`。
-3. 新业务页面优先使用 TypeScript。
-4. 首页与示例页替换完成后，再删除 QuickStart 示例逻辑。
+1. 第一个模块跑通前，可临时保留模板作为微信小程序与云函数语法参考。
+2. 前端业务代码统一从 `frontend/` 目标目录重新创建，不在 `miniprogram` 示例页或 quickstart 云函数中扩写。
+3. 新业务页面与服务层优先使用 TypeScript。
+4. 第一个模块跑通后，删除 QuickStart 示例逻辑和不再使用的模板目录。
 
-换言之，迁移是“先扩建新结构，再清理旧模板”，不要一次性大改所有文件。
+换言之，迁移是“先搭 `frontend/` 真实业务骨架，再清理旧模板”，不要把 `miniprogram` 模板目录当成长期承载业务的基础。
 
 ## 4. 目标目录结构
 
-建议最终前端目录结构如下：
+建议最终前端目录结构如下。微信开发者工具项目根目录应指向 `frontend/`，而不是后续会删除的 `miniprogram/`：
 
 ```text
-miniprogram/
+frontend/
   app.ts
   app.json
   app.wxss
@@ -101,6 +102,11 @@ miniprogram/
     utilities.wxss
   pages/
     home/
+      index.ts
+      index.wxml
+      index.wxss
+      index.json
+    create-room/
       index.ts
       index.wxml
       index.wxss
@@ -148,7 +154,6 @@ miniprogram/
     policy-picker/
     target-picker/
     secret-panel/
-    privacy-mask/
     result-timeline/
     state-feedback/
   services/
@@ -200,19 +205,35 @@ miniprogram/
     withPageLifecycle.ts
   static/
     rulesContent.ts
+  assets/
+    images/
+      avatars/
+        default-player.png
+      backgrounds/
+      decorations/
+      icons/
 ```
+
+目录约定：
+
+- `frontend/assets/images/avatars/`：默认玩家头像、占位头像。
+- `frontend/assets/images/backgrounds/`：页面背景、桌面背景等较大背景图。
+- `frontend/assets/images/decorations/`：非交互装饰元素、氛围图、分隔图。
+- `frontend/assets/images/icons/`：无法用 WXSS 或文字表达的静态图标。
+- `frontend/static/` 只放结构化文本或配置，如 `rulesContent.ts`；不放图片。
 
 ## 5. 分包与路由方案
 
 ### 5.1 页面划分
 
-建议页面保留 6 个页面，其中 5 个主流程页面 + 1 个辅助规则页：
+建议页面保留 7 个页面，其中 6 个主流程页面 + 1 个辅助规则页。创建游戏前端流程拆为“首页（创建房间入口）”、“创建房间”、“房间大厅”三个页面，分别参考 `reference/01-创建房间入口.png`、`reference/02-创建房间.png`、`reference/03-房间大厅.png`：
 
 | 页面 | 路径 | 作用 |
 | --- | --- | --- |
-| 首页 | `pages/home/index` | 创建房间、加入房间、恢复活跃房间 |
-| 房间大厅 | `packageRoom/pages/lobby/index` | 展示房间、座位、准备、开始 |
-| 身份页 | `packageRoom/pages/identity/index` | 查看并确认个人身份 |
+| 首页 | `pages/home/index` | 展示创建房间入口、加入房间、恢复活跃房间 |
+| 创建房间 | `pages/create-room/index` | 选择对局人数、确认创建房间 |
+| 房间大厅 | `packageRoom/pages/lobby/index` | 展示房间、座位、准备、开始、分享 |
+| 身份页 | `packageRoom/pages/identity/index` | 查看自己的身份并返回桌面 |
 | 对局桌面页 | `packageRoom/pages/board/index` | 公共桌面 + 当前私密任务 |
 | 结果页 | `packageResult/pages/result/index` | 终局结果与复盘 |
 | 规则页 | `packageRoom/pages/rules/index` | 局内规则说明 |
@@ -222,7 +243,8 @@ miniprogram/
 ```json
 {
   "pages": [
-    "pages/home/index"
+    "pages/home/index",
+    "pages/create-room/index"
   ],
   "subpackages": [
     {
@@ -263,16 +285,18 @@ miniprogram/
 | 状态 | 目标页 |
 | --- | --- |
 | `roomStatus = lobby` | 大厅页 |
-| `roomStatus = in_game` 且 `currentPhase = role_reveal` | 身份页 |
-| `roomStatus = in_game` 且 `currentPhase != role_reveal` | 对局桌面页 |
+| `roomStatus = in_game` | 对局桌面页 |
 | `roomStatus = ended` 或 `currentPhase = game_ended` | 结果页 |
 | `roomStatus = expired` | 首页 |
 
 ### 5.4 页面栈策略
 
-- `home -> lobby`：`wx.redirectTo`
-- `lobby -> identity`：`wx.redirectTo`
-- `identity -> board`：`wx.redirectTo`
+- `home -> create-room`：`wx.navigateTo`
+- `create-room -> lobby`：`wx.redirectTo`
+- `home -> lobby`：加入房间或恢复房间成功后 `wx.redirectTo`
+- `lobby -> board`：开局成功后 `wx.redirectTo`
+- `board -> identity`：点击“我的身份”后 `wx.navigateTo`
+- `identity -> board`：点击“我知道了”后 `wx.navigateBack`
 - `board -> result`：`wx.redirectTo`
 - `rules`：统一 `wx.navigateTo`
 - 退出房间 / 房间失效：`wx.reLaunch({ url: '/pages/home/index' })`
@@ -320,11 +344,10 @@ miniprogram/
 `onHide` 不做业务提交，只做安全态处理：
 
 1. 向当前页面广播 `APP_HIDDEN`
-2. 所有私密面板立刻重新遮罩
-3. 清空组件中的“已展开私密内容”局部状态
-4. 停止当前页面的轮询计时器
+2. 停止当前页面的轮询计时器
+3. 清空临时提交态与未完成的面板交互态
 
-注意：只重置“显示态”，不清空内存中的快照对象；这样回前台后可以快速恢复，同时又不会在 UI 上裸露敏感信息。
+注意：只重置临时 UI 状态，不清空内存中的快照对象；这样回前台后可以快速恢复。
 
 ## 7. 类型体系设计
 
@@ -382,7 +405,6 @@ export type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure
 ```ts
 export const PHASE = {
   LOBBY: 'lobby',
-  ROLE_REVEAL: 'role_reveal',
   NOMINATION: 'nomination',
   VOTING: 'voting',
   HITLER_CHECK: 'hitler_check',
@@ -494,7 +516,6 @@ interface GameState {
 ```ts
 interface UiState {
   globalLoadingText: string
-  privacyShieldVisible: boolean
   latestToast: {
     type: 'success' | 'error' | 'info'
     text: string
@@ -556,12 +577,11 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 
 必须包含：
 
-- `createRoom(displayName)`
+- `createRoom(targetPlayerCount)`
 - `joinRoom(roomCode, displayName)`
 - `leaveRoom(roomId)`
 - `getLobbySnapshot(roomId)`
 - `updateDisplayName(roomId, displayName)`
-- `updateSeatOrder(roomId, orderedMemberIds)`
 - `setReady(roomId, ready)`
 - `startGame(roomId)`
 
@@ -570,6 +590,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 - 除 `getLobbySnapshot` 外，其余方法都属于写操作，必须通过 `callWriteAction` 自动补齐 `commandId`
 - `createRoom`、`joinRoom` 成功后直接返回 `lobbySnapshot`
 - `startGame` 成功后只以返回的 `routeHint / needsRefresh` 作为跳转依据，正式桌面数据仍通过 `getGameSnapshot` 获取
+- `updateSeatOrder(roomId, orderedMemberIds)` 属于 P1 座位管理扩展，MVP 前端不接入
 
 ### 9.4 `gameService`
 
@@ -647,10 +668,11 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 
 ### 10.4 对局同步流程
 
-1. 进入身份页 / 桌面页先主动 `getGameSnapshot`
-2. 页面可见时启动对局轮询
-3. 页面隐藏时停止对局轮询
-4. 命令提交成功、版本冲突或阶段变化时立即补拉一次最新快照
+1. 进入对局桌面页先主动 `getGameSnapshot`
+2. 桌面页可见时启动对局轮询
+3. 桌面页隐藏时停止对局轮询
+4. 身份页优先使用当前 `gameStore.privateState.identity`；缺失时只补拉一次 `getGameSnapshot`，不启动独立轮询
+5. 命令提交成功、版本冲突或阶段变化时立即补拉一次最新快照
 
 轮询间隔建议：
 
@@ -769,8 +791,7 @@ ${memberId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}
 
 ### 页面职责
 
-- 输入展示名
-- 创建房间
+- 展示创建房间入口
 - 输入房号加入
 - 恢复活跃房间
 
@@ -778,9 +799,7 @@ ${memberId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}
 
 ```ts
 interface HomePageData {
-  displayName: string
   roomCode: string
-  creating: boolean
   joining: boolean
   recovering: boolean
   canRecover: boolean
@@ -791,21 +810,48 @@ interface HomePageData {
 
 ### 主要方法
 
-- `onDisplayNameInput`
 - `onRoomCodeInput`
-- `handleCreateRoom`
+- `handleGoCreateRoom`
 - `handleJoinRoom`
 - `handleRecoverRoom`
 - `handleShareEntry`
 
 ### 实现细节
 
-1. 展示名默认取本地缓存，没有则给出随机占位，如“玩家1234”。
+1. 页面重点是“创建房间入口”和“输入房号加入”，参考 `reference/01-创建房间入口.png`。
 2. 房号输入统一转大写、去空格。
-3. 创建 / 加入共用 `state-feedback` 组件展示 loading 与错误。
+3. 加入 / 恢复共用 `state-feedback` 组件展示 loading 与错误。
 4. 恢复房间只依赖后端 `recoverActiveRoom()` 结果，不信任本地缓存单独跳转。
 
-## 12.2 大厅页 `lobby`
+## 12.2 创建房间页 `create-room`
+
+### 页面职责
+
+- 选择对局人数
+- 创建房间
+
+### `data` 字段
+
+```ts
+interface CreateRoomPageData {
+  playerCount: number
+  creating: boolean
+  errorText: string
+}
+```
+
+### 主要方法
+
+- `handleSelectPlayerCount`
+- `handleCreateRoom`
+
+### 实现细节
+
+1. 页面参考 `reference/02-创建房间.png`，人数范围固定为 `5-10`。
+2. 创建成功后跳转房间大厅。
+3. 选择人数用于创建时的目标人数与大厅展示；实际开局仍以后端校验的当前有效人数为准。
+
+## 12.3 大厅页 `lobby`
 
 ### 页面职责
 
@@ -813,7 +859,6 @@ interface HomePageData {
 - 展示玩家列表与座位顺序
 - 修改展示名
 - 设置准备状态
-- 房主调整座位
 - 房主开始游戏
 - 发起分享
 
@@ -825,24 +870,13 @@ interface LobbyPageData {
   renaming: boolean
   readySubmitting: boolean
   startSubmitting: boolean
-  seatSubmitting: boolean
   shareEnabled: boolean
 }
 ```
 
-### MVP 座位调整交互
+### 座位展示策略
 
-不做复杂拖拽，改用更稳的“上移 / 下移”方案：
-
-- 房主视角下，每个座位项显示 `上移` / `下移`
-- 点击后生成新的 `orderedMemberIds`
-- 调用 `updateSeatOrder`
-
-原因：
-
-1. 微信小程序拖拽实现复杂、误触成本高。
-2. 线下玩家数最多 10 人，上下移动足够。
-3. 更利于后续联调和异常排查。
+MVP 不支持房主调整座位，座位顺序由加入顺序初始化并在开局后锁定。大厅页只展示当前 `1-N` 座位、玩家名、准备状态与房主标识；后续 P1 座位管理再补充调整交互。
 
 ### 大厅页按钮策略
 
@@ -857,39 +891,35 @@ interface LobbyPageData {
 - 分享卡片 path：`/pages/home/index?roomCode=ABCD12`
 - 分享文案不出现任何私密词汇，只写房号和人数信息
 
-## 12.3 身份页 `identity`
+## 12.4 身份页 `identity`
 
 ### 页面职责
 
-- 私密显示角色 / 党派 / 可知队友
-- 玩家确认已查看身份
+- 显示当前玩家自己的角色 / 党派 / 可知队友
+- 点击“我知道了”返回对局桌面页
 
 ### `data` 字段
 
 ```ts
 interface IdentityPageData {
   identity: IdentityViewModel | null
-  revealed: boolean
-  ackSubmitting: boolean
-  privacyShieldVisible: boolean
 }
 ```
 
 ### 交互方案
 
-1. 初始只显示“请确认周围安全后查看身份”
-2. 点击后 `revealed = true`
-3. 再显示角色卡、党派卡、队友信息
-4. 页面顶部固定显示“请勿向他人展示本页”
-5. 用户点击“我已查看”后提交 `ACK_ROLE_REVEAL`
+1. 用户在对局桌面页点击“我的身份”，参考 `reference/04-对局桌面页.png`。
+2. 前端跳转到身份页，页面参考 `reference/07-身份页.png`。
+3. 身份页直接展示当前玩家自己的角色、党派、可知队友信息。
+4. 用户点击“我知道了”后返回对局桌面页。
 
-### 安全态处理
+### 实现约束
 
-- `onHide` 时强制 `revealed = false`
-- 回到前台后需再次手动显示
-- 不把身份信息写入本地缓存
+- 不做遮罩、二次点击展示、定时隐藏或特殊保密逻辑。
+- 不提交确认身份命令，点击“我知道了”只做页面返回。
+- 身份数据只来自 `privateState.identity`，不写入本地缓存。
 
-## 12.4 对局桌面页 `board`
+## 12.5 对局桌面页 `board`
 
 ### 页面职责
 
@@ -916,19 +946,18 @@ interface BoardPageData {
   task: PendingTaskViewModel | null
   actionPanelVisible: boolean
   submitting: boolean
-  privacyShieldVisible: boolean
 }
 ```
 
 ### 页面实现细节
 
 1. 公共桌面始终可见。
-2. 私密任务使用全屏遮罩层组件，不单独跳新页面。
+2. 页面提供“我的身份”入口，点击后跳转身份页。
 3. `pendingTask = null` 时显示“当前无需操作，等待其他玩家”。
 4. 已出局玩家显示只读提示，不显示操作入口。
 5. 规则入口固定在右上角。
 
-## 12.5 结果页 `result`
+## 12.6 结果页 `result`
 
 ### 页面职责
 
@@ -952,7 +981,7 @@ interface ResultPageData {
 - 支持“查看规则”
 - 不支持重新加入已失效旧局
 
-## 12.6 规则页 `rules`
+## 12.7 规则页 `rules`
 
 规则页不直接读取 markdown，而是消费 `static/rulesContent.ts` 的结构化数据：
 
@@ -992,8 +1021,7 @@ interface RuleSection {
 | `vote-panel` | 投票面板 | `visible` | `confirmVote`, `cancel` |
 | `policy-picker` | 政策牌选择 | `visible`, `cards`, `mode` | `confirmPick`, `cancel` |
 | `target-picker` | 选择玩家目标 | `visible`, `targets`, `mode` | `confirmTarget`, `cancel` |
-| `secret-panel` | 私密信息显示 | `visible`, `masked`, `contentType` | `reveal`, `close` |
-| `privacy-mask` | 应用切后台安全遮罩 | `visible` | 无 |
+| `secret-panel` | 展示当前玩家临时可见信息，如政策预览 | `visible`, `contentType`, `content` | `confirm`, `close` |
 | `state-feedback` | 空态 / 错误 / loading | `status`, `text` | `retry` |
 
 ### 13.3 组件实现细节
@@ -1002,7 +1030,7 @@ interface RuleSection {
 
 - 默认线性列表，不做圆桌布局
 - 每一项展示：座位号、昵称、存活状态、准备状态、政府标记、可选择高亮
-- 房主模式下可出现 `上移` / `下移`
+- MVP 大厅模式不展示 `上移` / `下移`，P1 座位管理再扩展移动事件
 
 #### `public-log`
 
@@ -1014,12 +1042,7 @@ interface RuleSection {
 
 - `mode = discard_one` 时显示“选择要弃掉的 1 张”
 - `mode = enact_one` 时显示“选择要颁布的 1 张”
-- 卡牌默认遮罩，点击后只显示当前用户手牌
-
-#### `privacy-mask`
-
-- 由 `uiStore.privacyShieldVisible` 控制
-- 文案固定为“已进入安全模式，请确认周围环境后重新查看”
+- 只显示当前用户在当前阶段可操作的牌
 
 ## 14. 快照到 ViewModel 的映射
 
@@ -1110,14 +1133,7 @@ interface PendingTaskViewModel {
 
 ## 15. 各阶段待办任务实现
 
-## 15.1 `ACK_ROLE_REVEAL`
-
-- 页面：`identity`
-- 数据源：`privateState.identity`
-- 提交命令：`ACK_ROLE_REVEAL`
-- UI：确认按钮
-
-## 15.2 `NOMINATE_CHANCELLOR`
+## 15.1 `NOMINATE_CHANCELLOR`
 
 - 页面：`board`
 - 组件：`target-picker`
@@ -1126,7 +1142,7 @@ interface PendingTaskViewModel {
   - 不可选玩家显示置灰和禁用原因
   - 显示“上一届政府任期限制”提示文案
 
-## 15.3 `SUBMIT_VOTE`
+## 15.2 `SUBMIT_VOTE`
 
 - 页面：`board`
 - 组件：`vote-panel`
@@ -1135,7 +1151,7 @@ interface PendingTaskViewModel {
   - 选择后弹出确认弹窗
   - 提交后显示等待态
 
-## 15.4 `PRESIDENT_DISCARD_POLICY`
+## 15.3 `PRESIDENT_DISCARD_POLICY`
 
 - 页面：`board`
 - 组件：`policy-picker`
@@ -1195,6 +1211,7 @@ interface PendingTaskViewModel {
   - 使用危险色样式
   - 提交前必须二次确认
   - 文案明确“该操作不可撤销”
+  - 若后端 `allowedTargets` 包含当前总统本人，前端不得自行过滤该选项
 
 ## 16. 前后端联调正式契约
 
@@ -1206,7 +1223,6 @@ interface PendingTaskViewModel {
 
 | `taskType` | 正式 `meta` |
 | --- | --- |
-| `ACK_ROLE_REVEAL` | 可为空，允许补充 `confirmText` |
 | `NOMINATE_CHANCELLOR` | `ruleHint` |
 | `SUBMIT_VOTE` | `options = ["JA", "NEIN"]` |
 | `PRESIDENT_DISCARD_POLICY` | `selectionMode = "discard_one"` |
@@ -1233,7 +1249,6 @@ interface PrivateState {
     role: 'LIBERAL' | 'FASCIST' | 'HITLER'
     party: 'LIBERAL' | 'FASCIST'
     knownMembers: Array<{ memberId: string; displayName: string }>
-    acknowledged: boolean
   }
   voting: {
     submitted: boolean
@@ -1371,15 +1386,14 @@ interface ResultSnapshot {
 - 预览结果
 - 未公开投票
 
-## 18.3 私密视图统一安全策略
+## 18.3 身份页查看策略
 
-所有私密组件遵循同一套规则：
+身份页是从对局桌面页打开的普通查看页：
 
-1. 默认遮罩
-2. 用户主动触发才显示
-3. `onHide` 立即恢复遮罩
-4. 页面切换回来后需再次主动显示
-5. 不允许截图保护依赖，因为小程序无法可靠防截屏
+1. 对局桌面页提供“我的身份”入口。
+2. 身份页直接展示当前用户自己的身份切片。
+3. 点击“我知道了”返回对局桌面页。
+4. 不做遮罩、定时隐藏、二次确认或身份确认提交。
 
 ## 18.4 房主权限边界
 
@@ -1442,7 +1456,12 @@ MVP 尽量少图化：
 
 - 优先使用纯色块、徽章和文字
 - 角色卡、政策卡优先用样式绘制，不依赖大图
-- 静态图标统一放在 `images/icons`
+- 前端页面元素图片统一放在 `frontend/assets/images/`
+- 默认玩家头像放在 `frontend/assets/images/avatars/`
+- 背景元素图像放在 `frontend/assets/images/backgrounds/`
+- 装饰性图像放在 `frontend/assets/images/decorations/`
+- 静态图标统一放在 `frontend/assets/images/icons/`
+- 页面代码引用资源时使用项目内绝对路径，如 `/assets/images/avatars/default-player.png`
 
 ### 20.3 页面复杂度控制
 
@@ -1468,7 +1487,7 @@ MVP 尽量少图化：
 每个阶段至少覆盖以下真机用例：
 
 1. 创建房间 -> 加入房间 -> 准备 -> 开局
-2. 身份查看 -> 确认 -> 跳桌面
+2. 桌面页点击“我的身份” -> 身份页点击“我知道了” -> 返回桌面
 3. 提名 -> 投票通过 / 失败
 4. 三连败自动翻牌
 5. 总统弃牌 -> 总理立法
@@ -1494,7 +1513,7 @@ MVP 尽量少图化：
 
 ### 阶段 1：基础壳
 
-- 重写首页
+- 重写首页与创建房间页
 - 接入 `bootstrapService`
 - 建好 `types / store / services / constants`
 - 跑通 `createRoom / joinRoom / recoverActiveRoom`
@@ -1502,15 +1521,14 @@ MVP 尽量少图化：
 ### 阶段 2：大厅
 
 - 大厅页
-- 座位调整
 - 准备
 - 开始游戏
 - 分享
 
-### 阶段 3：身份与桌面基础
+### 阶段 3：桌面与身份查看
 
-- 身份页
 - 桌面页公共区
+- “我的身份”入口与身份页返回
 - 路由决策器
 - 快照同步
 
@@ -1531,7 +1549,6 @@ MVP 尽量少图化：
 
 ### 阶段 6：稳定性与细节
 
-- 切后台安全态
 - 弱网恢复
 - 错误码处理
 - 空态 / loading / 重试
@@ -1545,7 +1562,7 @@ MVP 尽量少图化：
 3. 命令统一走 `submitGameCommand`，强制带 `commandId` 和 `expectedVersion`。
 4. 数据同步采用“云函数轮询读取快照”。
 5. 大厅与对局页面分包，规则与结果独立分包。
-6. 私密信息统一遮罩，切后台立刻进入安全态。
+6. 身份页只做“我的身份”查看与“我知道了”返回，不增加遮罩、定时或确认命令。
 7. MVP 先保证流程正确、状态清晰、恢复稳定，再做视觉增强。
 
 如果后续实现与本方案冲突，以：

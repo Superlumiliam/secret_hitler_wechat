@@ -32,8 +32,9 @@
 1. MVP 不开放前端直接读取或监听数据库快照，统一通过云函数轮询读取快照。
 2. 核心真相只保存在后端内部集合，前端永远不拿完整真相。
 3. 每次成功写入后同步重建公共快照和全部私密快照，优先保证一致性，暂不优先优化写放大。
-4. 现有 `cloudfunctions/quickstartFunctions` 仅视为模板示例，不继续在其上堆业务代码, 最后会删除。
+4. 现有 `cloudfunctions/quickstartFunctions` 仅视为语法参考，不继续在其上堆业务代码；第一个模块跑通后删除。
 5. 游戏内所有写操作统一走 `gameService.submitCommand`，大厅阶段写操作统一走 `roomService`。
+6. 现有 `miniprogram/` 仅视为语法参考，不继续在其上堆业务代码；第一个模块跑通后删除。
 
 ### 2.3 为什么不用数据库直读或监听
 
@@ -56,17 +57,7 @@ MVP 阶段为了降低泄露风险和权限配置复杂度，固定采用：
 
 ## 3. 与当前仓库的衔接方式
 
-当前仓库还是微信云开发初始模板，后端只有一个示例云函数：
-
-- `cloudfunctions/quickstartFunctions/index.js`
-
-这个云函数当前包含：
-
-- 获取 openid 示例
-- 小程序码示例
-- 示例集合 CRUD
-
-后续开发不要继续在这个文件中追加业务逻辑，而是新增正式云函数：
+当前仓库还是微信云开发初始模板，后端只有一个示例云函数。后续开发不要继续在这个文件中追加业务逻辑，而是新增正式云函数：
 
 - `bootstrapService`
 - `roomService`
@@ -268,7 +259,6 @@ export const LOBBY_POLL_INTERVAL_MS = 3000;
 export type RoomStatus = "lobby" | "in_game" | "ended" | "expired";
 
 export type Phase =
-  | "role_reveal"
   | "nomination"
   | "voting"
   | "hitler_check"
@@ -342,7 +332,7 @@ export type WinReason =
 
 - `_id` 直接使用 openid，避免再查二次索引
 - `activeRoomId` 只保存一个，表示用户当前唯一活跃房间
-- `defaultDisplayName` 仅作为下次创建/加入房间的默认值，不等于房内最终展示名
+- `defaultDisplayName` 作为创建房间时的初始展示名，以及加入房间时的默认填充值；不等于房内最终展示名
 
 ## 7.3 `rooms`
 
@@ -362,6 +352,7 @@ export type WinReason =
   "hostMemberId": "mem_xxx",
   "currentGameId": null,
   "playerCount": 6,
+  "targetPlayerCount": 7,
   "version": 4,
   "createdByOpenId": "openid",
   "createdAt": "2026-04-12T12:00:00.000Z",
@@ -375,6 +366,7 @@ export type WinReason =
 约束：
 
 - `rooms.version` 仅用于大厅阶段版本控制
+- `targetPlayerCount` 来自创建房间页选择，仅用于大厅展示和开局前提示；开局合法性仍以后端当前有效成员数为准
 - 开局后 `playerCount` 不再变化
 - `expireAt` 每次有效操作后更新
 
@@ -707,7 +699,6 @@ export type WinReason =
 `routeHint` 建议值：
 
 - `lobby`
-- `identity`
 - `board`
 - `result`
 
@@ -720,9 +711,10 @@ export type WinReason =
 - `leaveRoom`
 - `getLobbySnapshot`
 - `updateDisplayName`
-- `updateSeatOrder`
 - `setReady`
 - `startGame`
+
+说明：`updateSeatOrder` 属于 P1 座位管理扩展，MVP 不要求实现。
 
 统一约束：
 
@@ -735,26 +727,28 @@ export type WinReason =
 实现步骤：
 
 1. 认证当前 openid
-2. 校验 `displayName`
+2. 校验 `targetPlayerCount` 为 `5-10` 的整数
 3. 检查该用户是否已有未失效活跃房间
 4. 生成唯一 6 位房号
-5. 创建 `rooms`
-6. 创建首个 `room_members`
-7. 写 `room_public_snapshots`
-8. 更新 `user_profiles.activeRoomId/activeMemberId`
+5. 读取 `user_profiles.defaultDisplayName`，不存在时生成默认昵称
+6. 创建 `rooms`
+7. 创建首个 `room_members`
+8. 写 `room_public_snapshots`
+9. 更新 `user_profiles.activeRoomId/activeMemberId`
 
 约束：
 
 - 同一 openid 存在 `lobby` 或 `in_game` 状态活跃房间时，直接拒绝，错误码使用 `ACTION_NOT_ALLOWED`
 - 若 `user_profiles.activeRoomStatus === ended`，允许创建新房间，同时覆盖旧的活跃房间上下文
 - 房主默认 `seatIndex = 1`
+- MVP 座位顺序由加入顺序初始化；不提供房主调整座位能力
 
 ### 8.2.2 `joinRoom`
 
 实现步骤：
 
 1. 通过 `roomCode` 找房间
-2. 校验房间存在、未过期、仍在大厅或允许恢复
+2. 校验房间存在、未过期、仍在大厅；同一 openid 回流只允许恢复自己已有成员身份
 3. 若同一 openid 已在该房间有有效成员，则直接返回该成员记录
 4. 若房间是大厅且未满，则创建新成员
 5. 更新房间 `playerCount` 与大厅快照
@@ -774,8 +768,8 @@ export type WinReason =
 1. 将该成员标记为 `left`
 2. 从有效成员列表移除
 3. 重新压缩剩余 `seatIndex`
-4. 若离开者是房主，则把房主转移给新的最小 `seatIndex`
-5. 若房间没人了，直接标记房间过期
+4. 若房间没人了，直接销毁或标记房间过期
+5. 若离开者是房主且仍有其他有效成员，则把房主转移给新的最小 `seatIndex`
 
 对局阶段：
 
@@ -783,6 +777,8 @@ export type WinReason =
 2. 将 `memberStatus` 改为 `offline`
 3. 更新 `lastSeenAt`
 4. 返回当前房间仍有效
+
+说明：MVP 不提供“恢复所有人已离线的房间”能力。房间是否可回到活跃态只以具体玩家自己的 `activeRoomId/activeMemberId` 与房间过期规则为准；当大厅阶段所有玩家都退出后，房间立即失效。
 
 ### 8.2.4 `updateDisplayName`
 
@@ -793,7 +789,9 @@ export type WinReason =
 3. 同步更新 `user_profiles.defaultDisplayName`
 4. 重建大厅快照
 
-### 8.2.5 `updateSeatOrder`
+### 8.2.5 `updateSeatOrder`（P1 扩展，MVP 不实现）
+
+座位管理已降为 P1 可扩展能力。MVP 后端只按加入顺序生成与压缩 `seatIndex`，不开放调整座位 action。
 
 强校验：
 
@@ -952,7 +950,6 @@ lobby -> in_game -> ended -> expired
 
 | 阶段 | 是否等待玩家输入 | 唯一合法操作者 |
 | --- | --- | --- |
-| `role_reveal` | 是 | 各玩家本人 |
 | `nomination` | 是 | 当前总统候选人 |
 | `voting` | 是 | 全体存活玩家 |
 | `hitler_check` | 否 | 系统 |
@@ -970,14 +967,6 @@ lobby -> in_game -> ended -> expired
 - 前端理论上允许识别全部阶段枚举，但正常情况下很少观察到 `hitler_check` 和 `round_result`
 
 ## 9.3 `phaseData` 结构定义
-
-### `role_reveal`
-
-```json
-{
-  "pendingAckMemberIds": ["mem_1", "mem_2"]
-}
-```
 
 ### `nomination`
 
@@ -1117,9 +1106,9 @@ const initialDeck: PolicyType[] = [
 开局后随机生成一个 `seatIndex` 对应的成员作为首任总统候选人，写入：
 
 - `currentPresidentCandidateId`
-- `phase = role_reveal`
+- `phase = nomination`
 
-所有玩家确认身份后，再进入首轮 `nomination`。
+身份信息生成后即进入首轮 `nomination`。玩家可从对局桌面页点击“我的身份”查看，不影响阶段推进。
 
 ## 10.5 提名资格计算
 
@@ -1318,6 +1307,7 @@ export const EXECUTIVE_POWER_TRACK = {
 校验：
 
 - 目标必须存活
+- 目标可以是当前总统本人，不额外排除操作者自己
 
 执行：
 
@@ -1328,8 +1318,7 @@ export const EXECUTIVE_POWER_TRACK = {
 
 说明：
 
-- 现有规则文档未明确禁止总统选择自己为处决目标，因此 MVP 不额外施加“不能自处决”的后端限制
-- 若后续产品希望禁止，需要先更新规则文档和 API 文档
+- 规则明确允许总统处决自己，后端不得在 `EXECUTE_PLAYER` 中加入“不能选择自己”的限制
 
 ## 11. 轮换与回合推进算法
 
@@ -1438,7 +1427,7 @@ advanceSystemPhases(state): {
 作用域规则：
 
 - `createRoom`、`joinRoom`：`scopeKey = user:${openid}`
-- `leaveRoom`、`updateDisplayName`、`updateSeatOrder`、`setReady`、`startGame`：`scopeKey = room:${roomId}`
+- `leaveRoom`、`updateDisplayName`、`setReady`、`startGame`：`scopeKey = room:${roomId}`
 
 处理规则与游戏内命令一致：
 
@@ -1490,6 +1479,7 @@ type ApplyCommandResult = {
 - `roomStatus`
 - `hostMemberId`
 - `playerCount`
+- `targetPlayerCount`
 - `minPlayerCount`
 - `maxPlayerCount`
 - `seatOrder`
@@ -1557,8 +1547,7 @@ type ApplyCommandResult = {
     "party": "FASCIST",
     "knownMembers": [
       { "memberId": "mem_2", "displayName": "玩家B" }
-    ],
-    "acknowledged": true
+    ]
   },
   "voting": {
     "submitted": true,
@@ -1575,21 +1564,6 @@ type ApplyCommandResult = {
 ```
 
 ## 13.4 `pendingTask` 生成规则
-
-### `role_reveal`
-
-未确认玩家：
-
-```json
-{
-  "taskId": "game_xxx:18:ACK_ROLE_REVEAL:mem_1",
-  "taskType": "ACK_ROLE_REVEAL",
-  "required": true,
-  "deadline": null,
-  "allowedTargets": [],
-  "meta": {}
-}
-```
 
 ### `nomination`
 
@@ -1858,7 +1832,7 @@ MVP 不做自动托管或自动跳过。
 必须覆盖整局流程：
 
 1. `createRoom -> joinRoom -> setReady -> startGame`
-2. 全部身份确认
+2. 身份切片生成后直接进入首轮提名
 3. 正常提名、投票、立法
 4. 权力执行
 5. 终局结算

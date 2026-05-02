@@ -69,7 +69,7 @@ MVP 阶段固定为以下三类对外云函数：
 | 云函数 | 职责 | 允许 action |
 | --- | --- | --- |
 | `bootstrapService` | 会话初始化与活跃房间恢复 | `ensureSession`、`recoverActiveRoom` |
-| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`updateDisplayName`、`updateSeatOrder`、`setReady`、`startGame` |
+| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`updateDisplayName`、`setReady`、`startGame` |
 | `gameService` | 对局快照、命令处理、结果快照 | `getGameSnapshot`、`submitCommand`、`getResultSnapshot` |
 
 说明：
@@ -134,7 +134,7 @@ MVP 阶段固定为以下三类对外云函数：
 
 所有会改变状态的请求都必须带 `commandId`：
 
-- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`updateDisplayName`、`updateSeatOrder`、`setReady`、`startGame`
+- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`updateDisplayName`、`setReady`、`startGame`
 - 游戏写操作：`submitCommand`
 
 用途：
@@ -213,7 +213,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 字段约束：
 
-- `routeHint` 只允许为 `lobby`、`identity`、`board`、`result`
+- `routeHint` 只允许为 `lobby`、`board`、`result`
 - `version` 为当前房间对应快照版本；大厅时对应大厅快照版本，对局时对应游戏版本
 
 ## 4.2 `LobbySnapshot`
@@ -227,6 +227,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
   "roomStatus": "lobby",
   "hostMemberId": "mem_host",
   "playerCount": 6,
+  "targetPlayerCount": 7,
   "minPlayerCount": 5,
   "maxPlayerCount": 10,
   "seatOrder": [
@@ -247,7 +248,8 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 字段约束：
 
-- `seatOrder` 只包含当前有效大厅成员，顺序即实际座位顺序
+- `targetPlayerCount` 来自创建房间页选择，用于大厅展示目标人数
+- `seatOrder` 只包含当前有效大厅成员，MVP 顺序由加入顺序初始化
 - `canStart` 仅表示“从当前查看者视角是否满足开始条件”，不额外授予权限
 - 大厅快照绝不包含角色、党派、牌堆、投票等游戏真相
 
@@ -357,8 +359,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
         "memberId": "mem_3",
         "displayName": "玩家C"
       }
-    ],
-    "acknowledged": true
+    ]
   },
   "voting": {
     "submitted": true,
@@ -376,7 +377,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 字段说明：
 
-- `identity` 在整局有效，用于身份页和私密身份展示
+- `identity` 在整局有效，用于身份页展示当前玩家自己的身份
 - `knownMembers` 只包含按规则可见的队友信息
 - `voting.myVote` 仅当前玩家可见
 - `legislative.hand` 只在当前玩家持牌阶段出现，否则为 `null`
@@ -426,7 +427,6 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 | `taskType` | `meta` 字段 |
 | --- | --- |
-| `ACK_ROLE_REVEAL` | 可为空，允许补充 `confirmText` |
 | `NOMINATE_CHANCELLOR` | `ruleHint` |
 | `SUBMIT_VOTE` | `options = ["JA", "NEIN"]` |
 | `PRESIDENT_DISCARD_POLICY` | `selectionMode = "discard_one"` |
@@ -543,6 +543,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 - 在小程序回前台时恢复活跃房间上下文
 - 对已失效的 `activeRoomId` 做清理
+- 只恢复当前用户自己的活跃成员身份，不提供“恢复所有人已离线的房间”能力
 
 请求：
 
@@ -600,15 +601,16 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
   "action": "createRoom",
   "payload": {
     "commandId": "cmd_create_room_xxx",
-    "displayName": "玩家A"
+    "targetPlayerCount": 7
   }
 }
 ```
 
 字段校验：
 
-- `displayName` 去首尾空格后长度必须在 `1-20`
+- `targetPlayerCount` 必须是 `5-10` 的整数
 - 同一用户存在未失效活跃房间时拒绝创建新房间
+- 房主初始展示名由后端从 `user_profiles.defaultDisplayName` 读取；不存在时生成默认昵称
 
 成功响应：
 
@@ -651,7 +653,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 字段校验：
 
 - `roomCode` 必须是 6 位房号字符串
-- `displayName` 校验同 `createRoom`
+- `displayName` 去首尾空格后长度必须在 `1-20`
 
 成功响应：
 
@@ -712,6 +714,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     "roomStatus": "lobby",
     "memberId": "mem_2",
     "leaveMode": "removed_from_lobby",
+    "newHostMemberId": "mem_3",
     "roomExpired": false,
     "routeHint": "home"
   }
@@ -721,7 +724,9 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 字段说明：
 
 - `leaveMode` 只允许为 `removed_from_lobby` 或 `marked_offline`
+- `newHostMemberId` 表示本次退出后自动转移到的新房主；未发生转移时为 `null`
 - `roomExpired` 表示该房间是否在本次操作后变为无效房间
+- 大厅阶段所有玩家退出后，房间自动销毁或标记为失效，不支持恢复空房间
 - 对局阶段离开只会标记离线，不会移除成员
 
 主要失败错误码：
@@ -811,7 +816,9 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `ACTION_NOT_ALLOWED`
 - `INTERNAL_ERROR`
 
-## 6.6 `updateSeatOrder`
+## 6.6 `updateSeatOrder`（P1 扩展，MVP 不开放）
+
+说明：座位管理已调整为 P1 可扩展能力，MVP 不在前端暴露该 action，也不要求后端首期实现。以下协议仅作为后续扩展预留。
 
 请求：
 
@@ -929,7 +936,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     "roomCode": "482615",
     "roomStatus": "in_game",
     "version": 1,
-    "routeHint": "identity",
+    "routeHint": "board",
     "needsRefresh": true
   }
 }
@@ -1122,7 +1129,6 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 | `type` | 允许阶段 | 操作者 | `body` |
 | --- | --- | --- | --- |
-| `ACK_ROLE_REVEAL` | `role_reveal` | 所有未确认身份的存活玩家 | `{ "acknowledged": true }` |
 | `NOMINATE_CHANCELLOR` | `nomination` | 当前总统候选人 | `{ "targetMemberId": "mem_xxx" }` |
 | `SUBMIT_VOTE` | `voting` | 所有存活玩家 | `{ "vote": "JA" }` 或 `{ "vote": "NEIN" }` |
 | `PRESIDENT_DISCARD_POLICY` | `legislative_president` | 当前总统 | `{ "discardPolicyIndex": 0 }` |
@@ -1140,6 +1146,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `PRESIDENT_DISCARD_POLICY.discardPolicyIndex` 必须是当前 3 张手牌中的有效下标
 - `CHANCELLOR_ENACT_POLICY.enactPolicyIndex` 必须是当前 2 张手牌中的有效下标
 - `EXEC_POLICY_PEEK_ACK` 仅用于确认查看，不修改公共真相
+- `EXECUTE_PLAYER.targetMemberId` 必须是存活玩家；允许等于当前总统本人
 
 ## 8.3 `pendingTask` 与命令映射
 
@@ -1147,7 +1154,6 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 | `pendingTask.taskType` | 提交命令 |
 | --- | --- |
-| `ACK_ROLE_REVEAL` | `ACK_ROLE_REVEAL` |
 | `NOMINATE_CHANCELLOR` | `NOMINATE_CHANCELLOR` |
 | `SUBMIT_VOTE` | `SUBMIT_VOTE` |
 | `PRESIDENT_DISCARD_POLICY` | `PRESIDENT_DISCARD_POLICY` |
@@ -1346,7 +1352,6 @@ MVP 阶段统一使用以下错误码：
 ### `routeHint`
 
 - `lobby`
-- `identity`
 - `board`
 - `result`
 
@@ -1362,7 +1367,6 @@ MVP 阶段统一使用以下错误码：
 
 ### `phase`
 
-- `role_reveal`
 - `nomination`
 - `voting`
 - `hitler_check`
