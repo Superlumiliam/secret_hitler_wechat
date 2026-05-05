@@ -1,54 +1,213 @@
 page {
   min-height: 100vh;
-  background: #071016;
+  background: #061016;
 }
 
 .create-room-page {
+  position: relative;
   min-height: 100vh;
-  padding: calc(104rpx + env(safe-area-inset-top)) 48rpx 64rpx;
+  padding: calc(52rpx + env(safe-area-inset-top)) 24rpx 44rpx;
+  box-sizing: border-box;
   background:
-    radial-gradient(circle at 50% 18%, rgba(207, 161, 93, 0.25), transparent 32%),
-    linear-gradient(180deg, #10242a 0%, #080d11 100%);
-  color: #f4dca9;
+    radial-gradient(circle at 18% 18%, rgba(34, 190, 200, 0.16), transparent 30%),
+    radial-gradient(circle at 78% 80%, rgba(198, 51, 42, 0.16), transparent 32%),
+    linear-gradient(180deg, #07171c 0%, #03080b 100%);
+  color: #f1c47a;
 }
 
-.panel {
-  padding-top: 120rpx;
-}
-
-.eyebrow {
-  font-size: 26rpx;
-  color: rgba(244, 220, 169, 0.66);
-}
-
-.title {
-  margin-top: 14rpx;
-  font-size: 58rpx;
-  font-weight: 900;
-}
-
-.placeholder {
-  margin-top: 34rpx;
-  color: rgba(244, 220, 169, 0.76);
-  font-size: 29rpx;
-  line-height: 1.7;
-}
-
-.back-button {
-  width: 320rpx;
-  height: 86rpx;
-  margin-top: 64rpx;
+.back-control {
+  position: absolute;
+  left: 28rpx;
+  top: calc(86rpx + env(safe-area-inset-top));
+  width: 64rpx;
+  height: 64rpx;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 4rpx solid rgba(56, 224, 228, 0.75);
-  border-radius: 44rpx;
-  color: #061d22;
-  font-size: 30rpx;
-  font-weight: 800;
-  background: linear-gradient(180deg, #38e0e4, #13b9c1);
+  color: #d7a35d;
+  font-size: 78rpx;
+  line-height: 54rpx;
+  background: transparent;
+  border: 0;
+  z-index: 2;
 }
 
-.back-button-hover {
-  opacity: 0.78;
+.complete-button::after {
+  border: 0;
+}
+
+.content {
+  padding-top: 72rpx;
+}
+
+.title {
+  text-align: center;
+  font-size: 44rpx;
+  font-weight: 800;
+  color: #dca85e;
+  letter-spacing: 0;
+}
+
+.count-list {
+  margin-top: 34rpx;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  column-gap: 10rpx;
+  align-items: start;
+}
+
+.count-item {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 118rpx;
+  margin: 0;
+  padding: 0;
+  display: block;
+  box-sizing: border-box;
+  line-height: normal;
+  background: transparent;
+  overflow: visible;
+}
+
+.count-badge {
+  width: 100%;
+  height: 118rpx;
+  filter: drop-shadow(0 0 8rpx rgba(0, 0, 0, 0.7));
+}
+
+.count-number {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 24rpx;
+  text-align: center;
+  color: #d6b17b;
+  font-size: 48rpx;
+  font-weight: 700;
+}
+
+.count-item-active .count-badge {
+  filter: drop-shadow(0 0 18rpx rgba(42, 230, 230, 0.86));
+}
+
+.count-item-active .count-number {
+  color: #f3d5a1;
+}
+
+.count-hover,
+.icon-hover {
+  opacity: 0.76;
+}
+
+.faction-panel {
+  margin-top: 36rpx;
+  padding: 24rpx 20rpx 28rpx;
+  border: 2rpx solid rgba(119, 154, 162, 0.48);
+  border-radius: 8rpx;
+  background: rgba(17, 34, 41, 0.78);
+  box-shadow: inset 0 0 22rpx rgba(114, 166, 176, 0.12);
+}
+
+.fascist-panel {
+  border-color: rgba(172, 52, 43, 0.6);
+  background: rgba(44, 13, 12, 0.78);
+  box-shadow: inset 0 0 22rpx rgba(180, 48, 38, 0.12);
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+  color: #94c6d6;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.fascist-heading {
+  color: #e66b5c;
+}
+
+.heading-line {
+  width: 128rpx;
+  height: 2rpx;
+  background: rgba(148, 198, 214, 0.34);
+}
+
+.fascist-heading .heading-line {
+  background: rgba(230, 107, 92, 0.34);
+}
+
+.role-grid {
+  margin-top: 24rpx;
+  display: grid;
+  gap: 18rpx;
+}
+
+.liberal-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.fascist-grid {
+  grid-template-columns: repeat(2, 176rpx);
+  justify-content: center;
+  gap: 40rpx;
+}
+
+.role-card {
+  min-width: 0;
+  padding: 8rpx;
+  border: 2rpx solid rgba(134, 166, 174, 0.42);
+  background: rgba(8, 17, 22, 0.56);
+}
+
+.fascist-card,
+.hitler-card {
+  border-color: rgba(185, 58, 48, 0.5);
+}
+
+.role-avatar {
+  width: 100%;
+  height: 160rpx;
+  display: block;
+  background: #20343d;
+}
+
+.role-name {
+  padding: 10rpx 0 6rpx;
+  color: #f6e2b7;
+  font-size: 25rpx;
+  font-weight: 700;
+  text-align: center;
+}
+
+.hitler-card .role-name {
+  color: #f05d4b;
+}
+
+.complete-button {
+  width: 410rpx;
+  height: 94rpx;
+  margin: 34rpx auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid rgba(76, 255, 255, 0.55);
+  border-radius: 48rpx;
+  color: #04252a;
+  font-size: 36rpx;
+  font-weight: 900;
+  background: linear-gradient(180deg, #49eff2 0%, #13bdc7 100%);
+  box-shadow: 0 0 22rpx rgba(32, 226, 232, 0.32);
+}
+
+.complete-button-hover {
+  opacity: 0.82;
+}
+
+.complete-button[disabled] {
+  color: rgba(4, 37, 42, 0.7);
+  background: #2aaeb5;
 }

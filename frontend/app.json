@@ -3,6 +3,14 @@
     "pages/home/index",
     "pages/create-room/index"
   ],
+  "subpackages": [
+    {
+      "root": "packageRoom",
+      "pages": [
+        "pages/lobby/index"
+      ]
+    }
+  ],
   "window": {
     "backgroundColor": "#061016",
     "backgroundTextStyle": "light",

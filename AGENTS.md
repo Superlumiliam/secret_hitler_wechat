@@ -20,10 +20,16 @@
 - 每次修改文档后做一致性检查，确保关联文档逻辑一致
 - 不要删除`docs/`和`reference/`目录下的文件
 
-## 开发约束
-- 本项目是微信小程序，开发时需遵循[微信小程序开发指南](https://developers.weixin.qq.com/miniprogram/dev/framework/)和[小程序优化指南](https://developers.weixin.qq.com/community/develop/doc/00040e5a0846706e893dcc24256009)
+## 项目开发约束
 - 本项目按功能/模块渐进式开发，功能/模块需遵循设计文档和页面参考设计图实现
-- 当前端需要生成图片（如默认用户头像、背景图标）时，不要直接调用`image_gen`工具，而是先用一个占位符替代图片，然后生成图片描述提示词到`project_state.md`的`image prompt`目录下
-- 前端图片资源遵循小程序包体优化：大于`200K`的图片不要放进`frontend/`主包，应上传到微信云存储，通过`wx.cloud.getTempFileURL`转换为临时 HTTPS 地址后给`image.src`使用；云存储图片的源文件需在`reference/`目录保留一份备份
+- 当前端需要生成图片（如默认用户头像、背景图标）时，生成与本项目主题贴合的png或svg格式素材，素材图片需尽量贴合参考设计图
 - 前端设计页面时，在参考页面设计图的基础上，自行决定需要哪些页面元素
+- 前端设计页面时，优先使用图片素材而非通过css代码实现
+
+## 微信开发经验
+- 本项目是微信小程序，开发时需遵循[微信小程序开发指南](https://developers.weixin.qq.com/miniprogram/dev/framework/)和[小程序优化指南](https://developers.weixin.qq.com/community/develop/doc/00040e5a0846706e893dcc24256009)
+- 前端图片资源遵循小程序包体优化：大于`200K`的图片不要放进`frontend/`主包，应上传到微信云存储，通过`wx.cloud.getTempFileURL`转换为临时 HTTPS 地址后给`image.src`使用；云存储图片的源文件需在`reference/`目录保留一份备份
 - 当无法使用微信开发者 CLI 做小程序页面验证时，优先用 Computer Use 查看已打开的微信开发者工具右侧模拟器并进行交互验证；例如可在首页模拟器中点击“创建房间”，再通过画面内容和底部页面路径确认是否进入`pages/create-room/index`。
+- 后端创建新的云函数后，需要在“微信开发者工具”中右键点击新的云函数文件夹，点击“上传并部署：云端安装依赖（不上传node_modules）”才会将云函数真正部署到云环境
+- 微信小程序原生`button`带有默认盒模型、边距、行高和伪元素样式，容易导致图标型按钮或横向均分选项出现视觉位置偏移。仅图标点击控件优先使用可点击`view`并保留`role="button"`、`aria-label`、`bindtap`；横向均分选项也优先用`view`承载，避免为了抵消`button`默认样式写负数定位或魔法偏移。
+- 调整小程序布局时，不要只看样式数值，应使用 Computer Use 在微信开发者工具模拟器里确认实际表现；特别是横向多个选项，要验证所有选项完整可见、均匀排列，且点击每个选项后数据和高亮都与对应图标准确绑定。

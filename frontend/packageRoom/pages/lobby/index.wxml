@@ -1,0 +1,25 @@
+<view class="lobby-page">
+  <view class="top-bar">
+    <button class="back-control" bindtap="onBackHome" hover-class="icon-hover" aria-label="返回首页">‹</button>
+    <view class="page-title">房间大厅</view>
+  </view>
+
+  <view wx:if="{{isLoading}}" class="state-text">正在进入房间...</view>
+
+  <view wx:elif="{{lobby}}" class="lobby-content">
+    <view class="room-code-label">房间号</view>
+    <view class="room-code">{{lobby.roomCode}}</view>
+    <view class="room-meta">目标 {{lobby.targetPlayerCount}} 人 · 当前 {{lobby.playerCount}} 人</view>
+
+    <view class="seat-panel">
+      <view class="seat-title">座位</view>
+      <view wx:for="{{lobby.seatOrder}}" wx:key="memberId" class="seat-row">
+        <view class="seat-index">{{item.seatIndex}}</view>
+        <view class="seat-name">{{item.displayName}}</view>
+        <view wx:if="{{item.isHost}}" class="host-tag">房主</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="state-text">房间暂不可用</view>
+</view>

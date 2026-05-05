@@ -1,8 +1,65 @@
 <view class="create-room-page">
-  <view class="panel">
-    <view class="eyebrow">创建房间</view>
-    <view class="title">选择对局人数</view>
-    <view class="placeholder">页面骨架已接入，人数选择与创建逻辑将在后续模块实现。</view>
-    <button class="back-button" bindtap="onBackHome" hover-class="back-button-hover">返回首页</button>
+  <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回">‹</view>
+
+  <view class="content">
+    <view class="title">选择人数</view>
+
+    <view class="count-list">
+      <view
+        wx:for="{{playerCounts}}"
+        wx:key="value"
+        class="count-item {{selectedCount === item.value ? 'count-item-active' : ''}}"
+        data-count="{{item.value}}"
+        bindtap="onSelectCount"
+        hover-class="count-hover"
+        role="button"
+        aria-label="选择{{item.value}}人"
+      >
+        <image class="count-badge" src="/assets/images/icons/player-count.svg" mode="aspectFit" />
+        <text class="count-number">{{item.value}}</text>
+      </view>
+    </view>
+
+    <view class="faction-panel liberal-panel">
+      <view class="panel-heading">
+        <view class="heading-line"></view>
+        <text>自由派阵营（{{liberalCount}}人）</text>
+        <view class="heading-line"></view>
+      </view>
+      <view class="role-grid liberal-grid">
+        <view wx:for="{{liberalCards}}" wx:key="index" class="role-card">
+          <image class="role-avatar" src="/assets/images/avatars/liberal-avatar.svg" mode="aspectFill" />
+          <view class="role-name">自由派</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="faction-panel fascist-panel">
+      <view class="panel-heading fascist-heading">
+        <view class="heading-line"></view>
+        <text>法西斯阵营（{{fascistTotal}}人）</text>
+        <view class="heading-line"></view>
+      </view>
+      <view class="role-grid fascist-grid">
+        <view wx:for="{{fascistCards}}" wx:key="index" class="role-card fascist-card">
+          <image class="role-avatar" src="/assets/images/avatars/fascist-avatar.svg" mode="aspectFill" />
+          <view class="role-name">法西斯</view>
+        </view>
+        <view class="role-card hitler-card">
+          <image class="role-avatar" src="/assets/images/avatars/hitler-avatar.svg" mode="aspectFill" />
+          <view class="role-name">希特勒</view>
+        </view>
+      </view>
+    </view>
   </view>
+
+  <button
+    class="complete-button"
+    loading="{{isSubmitting}}"
+    disabled="{{isSubmitting}}"
+    bindtap="onCreateRoom"
+    hover-class="complete-button-hover"
+  >
+    完成
+  </button>
 </view>
