@@ -18,13 +18,9 @@
 
 ### 2.1 当前仓库现状
 
-当前仓库仍保留微信云开发 QuickStart 模板，`miniprogram` 目录和 `cloudfunctions/quickstartFunctions` 只作为语法参考；第一个模块跑通后会删除，不能基于这两个目录继续开发业务：
+当前仓库已经完成微信云开发 QuickStart 模板清理，真实前端入口统一位于 `frontend/`，微信开发者工具配置中的 `miniprogramRoot` 与 `srcMiniprogramRoot` 均应指向该目录。
 
-- `miniprogram/pages/index`
-- `miniprogram/pages/example`
-- `cloudfunctions/quickstartFunctions`
-
-这意味着后续开发不是在示例页上堆功能，而是另起真实业务结构；现有模板代码只用于查语法和云开发调用方式。
+后续开发必须继续在 `frontend/` 真实业务结构内推进，不再依赖旧模板页面或示例云函数作为代码参考。
 
 ### 2.2 不可违反的上位约束
 
@@ -75,20 +71,17 @@
 - `errorMapper`
 - `snapshotMapper`
 
-### 3.3 从当前 JS 模板到 TS 结构的迁移策略
+### 3.3 当前 JS 到 TS 结构的演进策略
 
-由于当前 `miniprogram` 和 `quickstartFunctions` 后续会删除，迁移策略是“参考语法，不承接目录”：
+当前业务页面已经位于 `frontend/`，后续演进策略是“稳定现有业务路径，逐步补齐 TS 化能力”：
 
-1. 第一个模块跑通前，可临时保留模板作为微信小程序与云函数语法参考。
-2. 前端业务代码统一从 `frontend/` 目标目录重新创建，不在 `miniprogram` 示例页或 quickstart 云函数中扩写。
-3. 新业务页面与服务层优先使用 TypeScript。
-4. 第一个模块跑通后，删除 QuickStart 示例逻辑和不再使用的模板目录。
-
-换言之，迁移是“先搭 `frontend/` 真实业务骨架，再清理旧模板”，不要把 `miniprogram` 模板目录当成长期承载业务的基础。
+1. 新增业务页面、组件、服务层都放在 `frontend/` 目录下。
+2. 新业务页面与服务层优先使用 TypeScript；已有 JS 页面可随功能迭代逐步迁移。
+3. 所有云函数调用统一通过前端服务层封装，页面不直接拼接底层请求细节。
 
 ## 4. 目标目录结构
 
-建议最终前端目录结构如下。微信开发者工具项目根目录应指向 `frontend/`，而不是后续会删除的 `miniprogram/`：
+建议最终前端目录结构如下。微信开发者工具项目根目录应指向 `frontend/`：
 
 ```text
 frontend/
