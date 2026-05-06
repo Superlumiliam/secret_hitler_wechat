@@ -1,41 +1,174 @@
-const ROLE_CONFIG = {
-  5: { liberals: 3, fascists: 1 },
-  6: { liberals: 4, fascists: 1 },
-  7: { liberals: 4, fascists: 2 },
-  8: { liberals: 5, fascists: 2 },
-  9: { liberals: 5, fascists: 3 },
-  10: { liberals: 6, fascists: 3 },
+const CLOUD_ASSET_ROOT =
+  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
+
+const ROOM_ROLE_DATA = {
+  5: {
+    liberalCards: [
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
+    ],
+    fascistCards: [
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-1.webp` },
+      { roleName: "独裁者", fileId: `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`, isDictator: true },
+    ],
+  },
+  6: {
+    liberalCards: [
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
+    ],
+    fascistCards: [
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-1.webp` },
+      { roleName: "独裁者", fileId: `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`, isDictator: true },
+    ],
+  },
+  7: {
+    liberalCards: [
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
+    ],
+    fascistCards: [
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-1.webp` },
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-2.webp` },
+      { roleName: "独裁者", fileId: `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`, isDictator: true },
+    ],
+  },
+  8: {
+    liberalCards: [
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-elder-male.webp` },
+    ],
+    fascistCards: [
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-1.webp` },
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-2.webp` },
+      { roleName: "独裁者", fileId: `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`, isDictator: true },
+    ],
+  },
+  9: {
+    liberalCards: [
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-elder-male.webp` },
+    ],
+    fascistCards: [
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-1.webp` },
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-2.webp` },
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-female.webp` },
+      { roleName: "独裁者", fileId: `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`, isDictator: true },
+    ],
+  },
+  10: {
+    liberalCards: [
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-elder-male.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-elder-female.webp` },
+    ],
+    fascistCards: [
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-1.webp` },
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-male-2.webp` },
+      { roleName: "极权派", fileId: `${CLOUD_ASSET_ROOT}room-fascist-female.webp` },
+      { roleName: "独裁者", fileId: `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`, isDictator: true },
+    ],
+  },
 };
 
 const playerCounts = [5, 6, 7, 8, 9, 10].map((value) => ({ value }));
+const ALL_ROOM_AVATAR_FILE_IDS = [
+  `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp`,
+  `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp`,
+  `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp`,
+  `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp`,
+  `${CLOUD_ASSET_ROOT}room-liberal-elder-male.webp`,
+  `${CLOUD_ASSET_ROOT}room-liberal-elder-female.webp`,
+  `${CLOUD_ASSET_ROOT}room-fascist-male-1.webp`,
+  `${CLOUD_ASSET_ROOT}room-fascist-male-2.webp`,
+  `${CLOUD_ASSET_ROOT}room-fascist-female.webp`,
+  `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`,
+];
 
 function createCommandId() {
   return `cmd_create_room_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function buildRoleData(count) {
-  const config = ROLE_CONFIG[count] || ROLE_CONFIG[6];
+function hydrateCards(cards, urlByFileId) {
+  return cards.map((card) => ({
+    ...card,
+    avatarSrc: urlByFileId[card.fileId] || "",
+  }));
+}
+
+function buildRoleData(count, urlByFileId = {}) {
+  const config = ROOM_ROLE_DATA[count] || ROOM_ROLE_DATA[6];
   return {
-    liberalCount: config.liberals,
-    fascistTotal: config.fascists + 1,
-    liberalCards: Array.from({ length: config.liberals }),
-    fascistCards: Array.from({ length: config.fascists }),
+    liberalCount: config.liberalCards.length,
+    fascistTotal: config.fascistCards.length,
+    liberalCards: hydrateCards(config.liberalCards, urlByFileId),
+    fascistCards: hydrateCards(config.fascistCards, urlByFileId),
   };
 }
 
 Page({
+  avatarUrlByFileId: {},
+
   data: {
     playerCounts,
     selectedCount: 6,
     isSubmitting: false,
+    preloadedAvatars: [],
     ...buildRoleData(6),
+  },
+
+  onLoad() {
+    this.loadAllRoleAvatars();
   },
 
   onSelectCount(event) {
     const selectedCount = Number(event.currentTarget.dataset.count);
     this.setData({
       selectedCount,
-      ...buildRoleData(selectedCount),
+      ...buildRoleData(selectedCount, this.avatarUrlByFileId),
+    });
+  },
+
+  loadAllRoleAvatars() {
+    if (!wx.cloud) {
+      return;
+    }
+
+    wx.cloud.getTempFileURL({
+      fileList: ALL_ROOM_AVATAR_FILE_IDS,
+      success: (res) => {
+        const urlByFileId = {};
+        (res.fileList || []).forEach((file) => {
+          if (file.status === 0 && file.tempFileURL) {
+            urlByFileId[file.fileID] = file.tempFileURL;
+          } else {
+            console.error("创建房间头像云存储临时链接获取失败", file);
+          }
+        });
+
+        this.avatarUrlByFileId = urlByFileId;
+        this.setData({
+          ...buildRoleData(this.data.selectedCount, this.avatarUrlByFileId),
+          preloadedAvatars: Object.keys(urlByFileId).map((fileId) => urlByFileId[fileId]),
+        });
+      },
+      fail: (err) => {
+        console.error("创建房间头像云存储临时链接获取失败", err);
+      },
     });
   },
 

@@ -28,8 +28,8 @@
       </view>
       <view class="role-grid liberal-grid">
         <view wx:for="{{liberalCards}}" wx:key="index" class="role-card">
-          <image class="role-avatar" src="/assets/images/avatars/liberal-avatar.svg" mode="aspectFill" />
-          <view class="role-name">自由派</view>
+          <image wx:if="{{item.avatarSrc}}" class="role-avatar" src="{{item.avatarSrc}}" mode="aspectFit" />
+          <view wx:else class="role-avatar role-avatar-empty"></view>
         </view>
       </view>
     </view>
@@ -37,24 +37,20 @@
     <view class="faction-panel fascist-panel">
       <view class="panel-heading fascist-heading">
         <view class="heading-line"></view>
-        <text>法西斯阵营（{{fascistTotal}}人）</text>
+        <text>极权派阵营（{{fascistTotal}}人）</text>
         <view class="heading-line"></view>
       </view>
       <view class="role-grid fascist-grid">
-        <view wx:for="{{fascistCards}}" wx:key="index" class="role-card fascist-card">
-          <image class="role-avatar" src="/assets/images/avatars/fascist-avatar.svg" mode="aspectFill" />
-          <view class="role-name">法西斯</view>
-        </view>
-        <view class="role-card hitler-card">
-          <image class="role-avatar" src="/assets/images/avatars/hitler-avatar.svg" mode="aspectFill" />
-          <view class="role-name">希特勒</view>
+        <view wx:for="{{fascistCards}}" wx:key="index" class="role-card fascist-card {{item.isDictator ? 'dictator-card' : ''}}">
+          <image wx:if="{{item.avatarSrc}}" class="role-avatar" src="{{item.avatarSrc}}" mode="aspectFit" />
+          <view wx:else class="role-avatar role-avatar-empty"></view>
         </view>
       </view>
     </view>
   </view>
 
   <button
-    class="complete-button"
+    class="complete-button {{isSubmitting ? 'complete-button-disabled' : ''}}"
     loading="{{isSubmitting}}"
     disabled="{{isSubmitting}}"
     bindtap="onCreateRoom"
@@ -62,4 +58,8 @@
   >
     完成
   </button>
+
+  <view class="avatar-preload" aria-hidden="true">
+    <image wx:for="{{preloadedAvatars}}" wx:key="*this" class="avatar-preload-image" src="{{item}}" mode="aspectFit" />
+  </view>
 </view>
