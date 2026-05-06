@@ -1,8 +1,8 @@
-# 《揭秘希特勒面杀助手》前后端交互 API 详细设计
+# 《secret hitler》前后端交互 API 详细设计
 
 ## 1. 文档目标
 
-本文档用于统一《揭秘希特勒面杀助手》微信小程序的前后端交互协议，覆盖：
+本文档用于统一《secret hitler》微信小程序的前后端交互协议，覆盖：
 
 - 云函数 action 划分
 - 请求与响应 envelope
@@ -69,7 +69,7 @@ MVP 阶段固定为以下三类对外云函数：
 | 云函数 | 职责 | 允许 action |
 | --- | --- | --- |
 | `bootstrapService` | 会话初始化与活跃房间恢复 | `ensureSession`、`recoverActiveRoom` |
-| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`updateDisplayName`、`setReady`、`startGame` |
+| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`setReady`、`startGame` |
 | `gameService` | 对局快照、命令处理、结果快照 | `getGameSnapshot`、`submitCommand`、`getResultSnapshot` |
 
 说明：
@@ -134,7 +134,7 @@ MVP 阶段固定为以下三类对外云函数：
 
 所有会改变状态的请求都必须带 `commandId`：
 
-- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`updateDisplayName`、`setReady`、`startGame`
+- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`setReady`、`startGame`
 - 游戏写操作：`submitCommand`
 
 用途：
@@ -234,6 +234,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     {
       "memberId": "mem_host",
       "displayName": "玩家A",
+      "avatarUrl": "cloud://xxx/avatar/openid.png",
       "seatIndex": 1,
       "isHost": true,
       "isReady": true
@@ -291,6 +292,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     {
       "memberId": "mem_1",
       "displayName": "玩家A",
+      "avatarUrl": "cloud://xxx/avatar/openid.png",
       "seatIndex": 1,
       "isAlive": true,
       "isOffline": false,
@@ -459,6 +461,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     {
       "memberId": "mem_1",
       "displayName": "玩家A",
+      "avatarUrl": "cloud://xxx/avatar/openid.png",
       "seatIndex": 1,
       "role": "LIBERAL",
       "party": "LIBERAL",
@@ -472,7 +475,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
       "phase": "executive_action",
       "type": "PLAYER_EXECUTED",
       "title": "总统处决玩家",
-      "summary": "玩家A 处决了 玩家E，系统判定希特勒被处决，自由派获胜",
+      "summary": "玩家A 处决了 玩家E，系统判定独裁者被处决，自由派获胜",
       "createdAt": "2026-04-12T13:29:58.000Z"
     }
   ]
@@ -492,8 +495,8 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 用途：
 
 - 确认当前用户身份
-- 初始化或读取 `user_profiles`
-- 返回默认展示名与当前活跃房间摘要
+- 建立云函数会话
+- 返回当前用户是否有活跃房间摘要
 
 请求：
 
@@ -513,7 +516,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
   "serverTime": "2026-04-12T12:00:00.000Z",
   "data": {
     "user": {
-      "defaultDisplayName": "玩家A"
+      "sessionReady": true
     },
     "activeRoom": {
       "roomId": "room_xxx",
@@ -542,7 +545,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 用途：
 
 - 在小程序回前台时恢复活跃房间上下文
-- 对已失效的 `activeRoomId` 做清理
+- 通过当前 openid 对应的 `room_members` 查找仍有效的活跃房间
 - 只恢复当前用户自己的活跃成员身份，不提供“恢复所有人已离线的房间”能力
 
 请求：
@@ -601,7 +604,9 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
   "action": "createRoom",
   "payload": {
     "commandId": "cmd_create_room_xxx",
-    "targetPlayerCount": 7
+    "targetPlayerCount": 7,
+    "displayName": "玩家A",
+    "avatarUrl": "cloud://room-assets/avatar_xxx.png"
   }
 }
 ```
@@ -609,8 +614,10 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 字段校验：
 
 - `targetPlayerCount` 必须是 `5-10` 的整数
+- `displayName` 来自小程序本地用户资料，去首尾空格后长度必须在 `1-20`
+- `avatarUrl` 来自小程序本地用户资料，可以为空；为空时前端使用默认头像
 - 同一用户存在未失效活跃房间时拒绝创建新房间
-- 房主初始展示名由后端从 `user_profiles.defaultDisplayName` 读取；不存在时生成默认昵称
+- 房主初始用户名与头像由请求中的 `displayName/avatarUrl` 写入房间成员快照
 
 成功响应：
 
@@ -645,7 +652,8 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
   "payload": {
     "commandId": "cmd_join_room_xxx",
     "roomCode": "482615",
-    "displayName": "玩家B"
+    "displayName": "玩家B",
+    "avatarUrl": "cloud://room-assets/avatar_yyy.png"
   }
 }
 ```
@@ -653,7 +661,9 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 字段校验：
 
 - `roomCode` 必须是 6 位房号字符串
-- `displayName` 去首尾空格后长度必须在 `1-20`
+- `displayName` 来自小程序本地用户资料，去首尾空格后长度必须在 `1-20`
+- `avatarUrl` 来自小程序本地用户资料，可以为空；为空时前端使用默认头像
+- 新成员用户名与头像由请求中的 `displayName/avatarUrl` 写入房间成员快照
 
 成功响应：
 
@@ -770,53 +780,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `GAME_ALREADY_STARTED`
 - `INTERNAL_ERROR`
 
-## 6.5 `updateDisplayName`
-
-请求：
-
-```json
-{
-  "action": "updateDisplayName",
-  "payload": {
-    "commandId": "cmd_update_name_xxx",
-    "roomId": "room_xxx",
-    "displayName": "新名字"
-  }
-}
-```
-
-成功响应：
-
-```json
-{
-  "success": true,
-  "requestId": "req_xxx",
-  "serverTime": "2026-04-12T12:00:00.000Z",
-  "data": {
-    "roomId": "room_xxx",
-    "roomStatus": "lobby",
-    "newVersion": 4,
-    "lobbySnapshot": {}
-  }
-}
-```
-
-约束：
-
-- 仅大厅允许修改
-- 仅本人可修改自己的展示名
-- 成功后必须同步刷新大厅快照
-
-主要失败错误码：
-
-- `INVALID_PAYLOAD`
-- `ROOM_NOT_FOUND`
-- `ROOM_EXPIRED`
-- `NOT_ROOM_MEMBER`
-- `ACTION_NOT_ALLOWED`
-- `INTERNAL_ERROR`
-
-## 6.6 `updateSeatOrder`（P1 扩展，MVP 不开放）
+## 6.5 `updateSeatOrder`（P1 扩展，MVP 不开放）
 
 说明：座位管理已调整为 P1 可扩展能力，MVP 不在前端暴露该 action，也不要求后端首期实现。以下协议仅作为后续扩展预留。
 

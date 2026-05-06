@@ -1,4 +1,4 @@
-# 《揭秘希特勒面杀助手》后端详细技术方案
+# 《secret hitler》后端详细技术方案
 
 ## 1. 文档定位
 
@@ -291,7 +291,6 @@ export type WinReason =
 
 | 集合 | 用途 | 前端是否可直读 | 前端是否可直写 |
 | --- | --- | --- | --- |
-| `user_profiles` | 用户默认资料与活跃房间上下文 | 否 | 否 |
 | `rooms` | 房间主记录 | 否 | 否 |
 | `room_members` | 房间成员与座位信息 | 否 | 否 |
 | `game_core` | 游戏完整真相 | 否 | 否 |
@@ -300,35 +299,23 @@ export type WinReason =
 | `game_events` | 事件日志与复盘依据 | 否 | 否 |
 | `command_records` | 幂等记录与请求审计 | 否 | 否 |
 
-## 7.2 `user_profiles`
+## 7.2 用户资料存储边界
 
-作用：
+MVP 后端不建立长期 `user_profiles` 集合。
 
-- 绑定 openid
-- 保存用户默认展示名
-- 保存活跃房间上下文，便于恢复
+原因：
 
-推荐文档结构：
+- 用户可能只使用一次小程序，长期保存头像与用户名会造成数据只增不减
+- MVP 不支持换设备、清缓存、重装后恢复用户名头像
+- 用户资料只服务于房间内展示，不是账号体系
 
-```json
-{
-  "_id": "openid",
-  "openId": "openid",
-  "defaultDisplayName": "玩家A",
-  "activeRoomId": "room_xxx",
-  "activeMemberId": "mem_xxx",
-  "activeRoomStatus": "in_game",
-  "lastSeenAt": "2026-04-12T12:00:00.000Z",
-  "createdAt": "2026-04-12T12:00:00.000Z",
-  "updatedAt": "2026-04-12T12:00:00.000Z"
-}
-```
+实现约束：
 
-约束：
-
-- `_id` 直接使用 openid，避免再查二次索引
-- `activeRoomId` 只保存一个，表示用户当前唯一活跃房间
-- `defaultDisplayName` 作为创建房间时的初始展示名，以及加入房间时的默认填充值；不等于房内最终展示名
+- 用户名、头像、资料完成状态只存在小程序本地缓存
+- `createRoom` / `joinRoom` 请求必须携带本地用户资料
+- 后端只把请求中的 `displayName/avatarUrl` 写入当前房间的 `room_members` 成员快照
+- 房间结束、过期或销毁后，成员快照随房间数据清理，不保留跨局用户资料
+- 恢复活跃房间时，通过 `room_members.openId` 查询当前 openid 仍有效的房间成员，不依赖用户资料表
 
 ## 7.3 `rooms`
 
@@ -382,6 +369,7 @@ export type WinReason =
   "roomId": "room_xxx",
   "openId": "openid",
   "displayName": "玩家A",
+  "avatarUrl": "cloud://xxx/avatar/openid.png",
   "seatIndex": 1,
   "isHost": true,
   "isReady": true,
@@ -654,16 +642,16 @@ export type WinReason =
 流程：
 
 1. 通过 `cloud.getWXContext()` 取得 `OPENID`
-2. 读取 `user_profiles`
-3. 若不存在则创建默认记录
-4. 返回用户基础信息和默认展示名
+2. 不创建长期用户资料记录
+3. 可按 `room_members.openId` 尝试查找当前用户仍有效的活跃房间摘要
+4. 返回会话可用状态和活跃房间摘要
 
 返回建议：
 
 ```json
 {
   "user": {
-    "defaultDisplayName": "玩家A"
+    "sessionReady": true
   },
   "activeRoom": {
     "roomId": "room_xxx",
@@ -681,10 +669,10 @@ export type WinReason =
 
 流程：
 
-1. 读取 `user_profiles.activeRoomId`
-2. 若为空，返回 `null`
-3. 读取 `rooms` 和 `room_members`
-4. 若房间已过期或成员已失效，清空 `activeRoomId/activeMemberId`
+1. 通过 `cloud.getWXContext()` 取得 `OPENID`
+2. 查询 `room_members` 中当前 openid 仍有效的成员记录
+3. 按 `updatedAt/lastSeenAt` 选择最近的未失效房间；若没有，返回 `null`
+4. 读取对应 `rooms`，若房间已过期或成员已失效，返回 `null`
 5. 若仍有效，返回：
    - `roomId`
    - `roomCode`
@@ -706,7 +694,6 @@ export type WinReason =
 - `joinRoom`
 - `leaveRoom`
 - `getLobbySnapshot`
-- `updateDisplayName`
 - `setReady`
 - `startGame`
 
@@ -724,18 +711,19 @@ export type WinReason =
 
 1. 认证当前 openid
 2. 校验 `targetPlayerCount` 为 `5-10` 的整数
-3. 检查该用户是否已有未失效活跃房间
-4. 生成唯一 6 位房号
-5. 读取 `user_profiles.defaultDisplayName`，不存在时生成默认昵称
-6. 创建 `rooms`
-7. 创建首个 `room_members`
-8. 写 `room_public_snapshots`
-9. 更新 `user_profiles.activeRoomId/activeMemberId`
+3. 校验请求中的 `displayName/avatarUrl`，作为本房间成员快照资料
+4. 检查该用户是否已有未失效活跃房间
+5. 生成唯一 6 位房号
+6. 使用请求中的 `displayName/avatarUrl` 创建房主成员资料快照
+7. 创建 `rooms`
+8. 创建首个 `room_members`
+9. 写 `room_public_snapshots`
+10. 返回房间与房主成员快照
 
 约束：
 
 - 同一 openid 存在 `lobby` 或 `in_game` 状态活跃房间时，直接拒绝，错误码使用 `ACTION_NOT_ALLOWED`
-- 若 `user_profiles.activeRoomStatus === ended`，允许创建新房间，同时覆盖旧的活跃房间上下文
+- 若用户当前只关联到 `ended` 或已过期房间，允许创建新房间
 - 房主默认 `seatIndex = 1`
 - MVP 座位顺序由加入顺序初始化；不提供房主调整座位能力
 
@@ -744,18 +732,19 @@ export type WinReason =
 实现步骤：
 
 1. 通过 `roomCode` 找房间
-2. 校验房间存在、未过期、仍在大厅；同一 openid 回流只允许恢复自己已有成员身份
-3. 若同一 openid 已在该房间有有效成员，则直接返回该成员记录
-4. 若房间是大厅且未满，则创建新成员
-5. 更新房间 `playerCount` 与大厅快照
-6. 更新 `user_profiles.activeRoomId/activeMemberId`
+2. 校验请求中的 `displayName/avatarUrl`，作为本房间成员快照资料
+3. 校验房间存在、未过期、仍在大厅；同一 openid 回流只允许恢复自己已有成员身份
+4. 若同一 openid 已在该房间有有效成员，则直接返回该成员记录；不因本次请求覆盖既有成员快照
+5. 若房间是大厅且未满，则使用请求中的 `displayName/avatarUrl` 创建新成员资料快照
+6. 更新房间 `playerCount` 与大厅快照
+7. 返回房间与当前成员快照
 
 关键约束：
 
 - 大厅阶段最多 10 人
 - 开局后不允许新 openid 加入
 - 同 openid 分享回流时必须复用原成员身份，不重复占座
-- 若用户当前只关联到 `ended` 房间，允许加入新房间，并在成功后覆盖 `activeRoomId`
+- 若用户当前只关联到 `ended` 或已过期房间，允许加入新房间
 
 ### 8.2.3 `leaveRoom`
 
@@ -774,18 +763,9 @@ export type WinReason =
 3. 更新 `lastSeenAt`
 4. 返回当前房间仍有效
 
-说明：MVP 不提供“恢复所有人已离线的房间”能力。房间是否可回到活跃态只以具体玩家自己的 `activeRoomId/activeMemberId` 与房间过期规则为准；当大厅阶段所有玩家都退出后，房间立即失效。
+说明：MVP 不提供“恢复所有人已离线的房间”能力。房间是否可回到活跃态只以具体玩家自己的 `room_members.openId/memberId` 与房间过期规则为准；当大厅阶段所有玩家都退出后，房间立即失效。
 
-### 8.2.4 `updateDisplayName`
-
-建议限制为仅大厅可修改，流程如下：
-
-1. 校验 `roomStatus === lobby`
-2. 更新 `room_members.displayName`
-3. 同步更新 `user_profiles.defaultDisplayName`
-4. 重建大厅快照
-
-### 8.2.5 `updateSeatOrder`（P1 扩展，MVP 不实现）
+### 8.2.4 `updateSeatOrder`（P1 扩展，MVP 不实现）
 
 座位管理已降为 P1 可扩展能力。MVP 后端只按加入顺序生成与压缩 `seatIndex`，不开放调整座位 action。
 
@@ -913,7 +893,7 @@ export type WinReason =
 - 清理已结束超时房间
 - 清理过期命令记录
 - 清理过期快照
-- 修复 `user_profiles.activeRoomId` 指向失效房间的脏数据
+- 清理已失效房间关联的 `room_members` 状态
 
 建议每 10 分钟执行一次。
 
@@ -1062,9 +1042,9 @@ export const ROLE_PRESET_BY_PLAYER_COUNT = {
 
 规则如下：
 
-- 普通法西斯始终知道所有普通法西斯和希特勒
-- `5-6` 人局的希特勒知道普通法西斯
-- `7-10` 人局的希特勒不知道普通法西斯
+- 普通极权派始终知道所有普通极权派和独裁者
+- `5-6` 人局的独裁者知道普通极权派
+- `7-10` 人局的独裁者不知道普通极权派
 - 自由派没有已知队友
 
 因此 `roleAssignments[memberId].knownMemberIds` 在开局时一次性写入，不在游戏中变化。
@@ -1152,7 +1132,7 @@ getEligibleChancellorIds(state): string[]
 
 并同步到公共快照。
 
-## 10.7 政府通过后的即时希特勒判定
+## 10.7 政府通过后的即时独裁者判定
 
 当投票通过时：
 
@@ -1164,7 +1144,7 @@ getEligibleChancellorIds(state): string[]
 2. `electionTracker = 0`
 3. 若当前 `fascistPolicyCount >= 3`：
    - 检查总理角色是否为 `HITLER`
-   - 若是，则直接结束游戏，法西斯胜
+   - 若是，则直接结束游戏，极权派胜
    - 若不是，把该总理加入 `confirmedNotHitlerMemberIds`
 
 只有通过这个检查后，才进入立法阶段。
@@ -1215,7 +1195,7 @@ getEligibleChancellorIds(state): string[]
 
 实现约束：
 
-- `vetoUnlocked` 只有在第 5 张法西斯政策颁布之后，才从“后续立法阶段”生效
+- `vetoUnlocked` 只有在第 5 张极权派政策颁布之后，才从“后续立法阶段”生效
 - 当前立法阶段是否可否决，取决于进入 `legislative_chancellor` 时的 `vetoUnlocked`
 
 `CHANCELLOR_REQUEST_VETO`：
@@ -1310,7 +1290,7 @@ export const EXECUTIVE_POWER_TRACK = {
 1. 从 `aliveMemberIds` 移除目标
 2. 加入 `deadMemberIds`
 3. 若目标角色是 `HITLER`，自由派立即胜利
-4. 若不是希特勒，不公开身份
+4. 若不是独裁者，不公开身份
 
 说明：
 
@@ -1418,12 +1398,12 @@ advanceSystemPhases(state): {
 
 ### 大厅写操作
 
-大厅写操作也必须带 `commandId`，不再保留退化时间窗方案。
+大厅写操作必须带 `commandId`，不再保留退化时间窗方案。
 
 作用域规则：
 
 - `createRoom`、`joinRoom`：`scopeKey = user:${openid}`
-- `leaveRoom`、`updateDisplayName`、`setReady`、`startGame`：`scopeKey = room:${roomId}`
+- `leaveRoom`、`setReady`、`startGame`：`scopeKey = room:${roomId}`
 
 处理规则与游戏内命令一致：
 
@@ -1498,6 +1478,7 @@ type ApplyCommandResult = {
     {
       "memberId": "mem_1",
       "displayName": "玩家A",
+      "avatarUrl": "cloud://xxx/avatar/openid.png",
       "seatIndex": 1,
       "isAlive": true,
       "isOffline": false,
@@ -1542,7 +1523,7 @@ type ApplyCommandResult = {
     "role": "FASCIST",
     "party": "FASCIST",
     "knownMembers": [
-      { "memberId": "mem_2", "displayName": "玩家B" }
+      { "memberId": "mem_2", "displayName": "玩家B", "avatarUrl": "cloud://xxx/avatar/openid-b.png" }
     ]
   },
   "voting": {
@@ -1757,7 +1738,6 @@ type ApplyCommandResult = {
 
 每次成功调用任意后端接口，都更新：
 
-- `user_profiles.lastSeenAt`
 - `room_members.lastSeenAt`
 
 恢复流程：
@@ -1792,7 +1772,7 @@ MVP 不做自动托管或自动跳过。
 当 `maintenanceService` 发现房间过期时：
 
 1. 把 `rooms.status` 标记为 `expired`
-2. 清空相关 `user_profiles.activeRoomId/activeMemberId`
+2. 将相关 `room_members` 标记为失效或随房间归档清理
 3. 删除或失效：
    - `room_public_snapshots`
    - `player_private_snapshots`
@@ -1816,7 +1796,7 @@ MVP 不做自动托管或自动跳过。
 - 提名资格计算
 - 投票通过/失败/平票
 - 三连败混乱政策
-- 希特勒当选即时判定
+- 独裁者当选即时判定
 - 立法弃牌流程
 - 否决逻辑
 - 各人数权力触发
@@ -1862,7 +1842,7 @@ export interface RandomProvider {
 按以下顺序实现，风险最低：
 
 1. 先搭建 TypeScript 后端工程和四个云函数入口
-2. 实现 `user_profiles / rooms / room_members` 仓储
+2. 实现 `rooms / room_members` 仓储
 3. 实现 `createRoom / joinRoom / getLobbySnapshot`
 4. 实现 `startGame` 和开局身份生成
 5. 实现纯领域状态机与 `submitCommand`

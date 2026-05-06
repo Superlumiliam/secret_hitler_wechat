@@ -1,1 +1,4 @@
 .DS_Store
+/reference/backup_images
+/reference/origin_images
+/reference/processed_images

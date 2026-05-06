@@ -1,4 +1,4 @@
-# 《揭秘希特勒面杀助手》前端详细技术方案
+# 《secret hitler》前端详细技术方案
 
 ## 1. 文档目标
 
@@ -99,6 +99,11 @@ frontend/
       index.wxml
       index.wxss
       index.json
+    user-profile/
+      index.ts
+      index.wxml
+      index.wxss
+      index.json
     create-room/
       index.ts
       index.wxml
@@ -159,6 +164,7 @@ frontend/
   store/
     createStore.ts
     sessionStore.ts
+    userProfileStore.ts
     roomStore.ts
     gameStore.ts
     uiStore.ts
@@ -219,11 +225,12 @@ frontend/
 
 ### 5.1 页面划分
 
-建议页面保留 7 个页面，其中 6 个主流程页面 + 1 个辅助规则页。创建游戏前端流程拆为“首页（创建房间入口）”、“创建房间”、“房间大厅”三个页面，分别参考 `reference/01-创建房间入口.png`、`reference/02-创建房间.png`、`reference/03-房间大厅.png`：
+建议页面保留 8 个页面，其中 7 个主流程页面 + 1 个辅助规则页。创建游戏前端流程拆为“首页（创建房间入口）”、“创建用户”、“创建房间”、“房间大厅”四个页面；创建用户页也是首页头像入口的资料编辑页。页面参考 `reference/01-首页入口.png`、`reference/02-创建房间.png`、`reference/03-房间大厅.png`：
 
 | 页面 | 路径 | 作用 |
 | --- | --- | --- |
-| 首页 | `pages/home/index` | 展示创建房间入口、加入房间、恢复活跃房间 |
+| 首页 | `pages/home/index` | 展示左上角圆形头像入口、创建房间入口、加入房间、恢复活跃房间 |
+| 创建用户 | `pages/user-profile/index` | 首次创建或后续修改用户头像与用户名 |
 | 创建房间 | `pages/create-room/index` | 选择对局人数、确认创建房间 |
 | 房间大厅 | `packageRoom/pages/lobby/index` | 展示房间、座位、准备、开始、分享 |
 | 身份页 | `packageRoom/pages/identity/index` | 查看自己的身份并返回桌面 |
@@ -237,6 +244,7 @@ frontend/
 {
   "pages": [
     "pages/home/index",
+    "pages/user-profile/index",
     "pages/create-room/index"
   ],
   "subpackages": [
@@ -285,6 +293,10 @@ frontend/
 ### 5.4 页面栈策略
 
 - `home -> create-room`：`wx.navigateTo`
+- `home -> user-profile`：点击左上角圆形头像后 `wx.navigateTo`
+- `home -> create-room` / `home -> joinRoom` 前必须先检查用户资料；缺失时 `wx.navigateTo({ url: '/pages/user-profile/index?redirectIntent=...' })`
+- `user-profile -> create-room`：保存成功且 `redirectIntent=createRoom` 时 `wx.redirectTo`
+- `user-profile -> home`：保存成功且无待执行意图时 `wx.navigateBack` 或 `wx.redirectTo`
 - `create-room -> lobby`：`wx.redirectTo`
 - `home -> lobby`：加入房间或恢复房间成功后 `wx.redirectTo`
 - `lobby -> board`：开局成功后 `wx.redirectTo`
@@ -319,7 +331,7 @@ frontend/
 1. 校验 `wx.cloud` 可用
 2. `wx.cloud.init({ env, traceUser: true })`
 3. 初始化 `sessionStore` / `roomStore` / `gameStore` / `uiStore`
-4. 加载本地缓存的非敏感上下文
+4. 加载本地缓存的非敏感上下文与用户资料缓存
 5. 注册 `wx.onNetworkStatusChange`
 
 ### 6.3 `onShow`
@@ -329,8 +341,9 @@ frontend/
 1. 记录页面回流时间
 2. 发布全局“应用回到前台”事件
 3. 若带 `roomCode` 分享参数，优先尝试恢复 / 加入目标房间
-4. 调用 `bootstrapService.recoverActiveRoom()`
-5. 按返回结果决定是否自动跳转
+4. 调用 `bootstrapService.ensureSession()` 建立云函数会话
+5. 调用 `bootstrapService.recoverActiveRoom()`
+6. 按返回结果决定是否自动跳转
 
 ### 6.4 `onHide`
 
@@ -459,6 +472,8 @@ interface Store<T> {
 interface SessionState {
   envReady: boolean
   bootstrapReady: boolean
+  profileCompleted: boolean
+  avatarUrl: string
   activeRoomId: string | null
   activeRoomCode: string | null
   activeMemberId: string | null
@@ -570,11 +585,10 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 
 必须包含：
 
-- `createRoom(targetPlayerCount)`
-- `joinRoom(roomCode, displayName)`
+- `createRoom(targetPlayerCount, localUserProfile)`
+- `joinRoom(roomCode, localUserProfile)`
 - `leaveRoom(roomId)`
 - `getLobbySnapshot(roomId)`
-- `updateDisplayName(roomId, displayName)`
 - `setReady(roomId, ready)`
 - `startGame(roomId)`
 
@@ -582,6 +596,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 
 - 除 `getLobbySnapshot` 外，其余方法都属于写操作，必须通过 `callWriteAction` 自动补齐 `commandId`
 - `createRoom`、`joinRoom` 成功后直接返回 `lobbySnapshot`
+- `createRoom`、`joinRoom` 前端必须先确认本地用户资料已完成，并在请求中携带 `displayName/avatarUrl`；后端只校验并保存到当前房间成员快照
 - `startGame` 成功后只以返回的 `routeHint / needsRefresh` 作为跳转依据，正式桌面数据仍通过 `getGameSnapshot` 获取
 - `updateSeatOrder(roomId, orderedMemberIds)` 属于 P1 座位管理扩展，MVP 前端不接入
 
@@ -784,6 +799,7 @@ ${memberId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}
 
 ### 页面职责
 
+- 展示左上角圆形头像按钮
 - 展示创建房间入口
 - 输入房号加入
 - 恢复活跃房间
@@ -792,6 +808,8 @@ ${memberId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}
 
 ```ts
 interface HomePageData {
+  userProfileReady: boolean
+  avatarUrl: string
   roomCode: string
   joining: boolean
   recovering: boolean
@@ -804,6 +822,7 @@ interface HomePageData {
 ### 主要方法
 
 - `onRoomCodeInput`
+- `handleOpenUserProfile`
 - `handleGoCreateRoom`
 - `handleJoinRoom`
 - `handleRecoverRoom`
@@ -811,12 +830,50 @@ interface HomePageData {
 
 ### 实现细节
 
-1. 页面重点是“创建房间入口”和“输入房号加入”，参考 `reference/01-创建房间入口.png`。
+1. 页面重点是“创建房间入口”和“输入房号加入”，参考 `reference/01-首页入口.png`。
 2. 房号输入统一转大写、去空格。
 3. 加入 / 恢复共用 `state-feedback` 组件展示 loading 与错误。
 4. 恢复房间只依赖后端 `recoverActiveRoom()` 结果，不信任本地缓存单独跳转。
+5. 左上角头像使用圆形按钮：已有用户头像时展示头像，没有时展示默认头像；点击进入 `pages/user-profile/index`。
+6. `handleGoCreateRoom` 与 `handleJoinRoom` 都必须先执行 `ensureUserProfileReady(intent)`：本地缺少 `profileCompleted` 时，跳转创建用户页，并把原始意图写入页面参数或临时 store。
 
-## 12.2 创建房间页 `create-room`
+## 12.2 创建用户页 `user-profile`
+
+### 页面职责
+
+- 首次创建用户资料
+- 后续修改头像或用户名
+- 保存到本地缓存后继续执行创建房间或加入房间意图
+
+### `data` 字段
+
+```ts
+interface UserProfilePageData {
+  avatarUrl: string
+  displayName: string
+  saving: boolean
+  redirectIntent: 'createRoom' | 'joinRoom' | ''
+  pendingRoomCode: string
+  errorText: string
+}
+```
+
+### 主要方法
+
+- `handleChooseAvatar`
+- `onNicknameInput`
+- `handleSaveLocalProfile`
+
+### 实现细节
+
+1. 头像使用微信小程序当前支持的头像选择能力，例如 `button open-type="chooseAvatar"`；MVP 可优先使用默认头像或本地可用头像路径。若后续要让其他玩家看到自定义头像，需在创建 / 加入房间时上传为房间临时资源，并随房间数据清理，不建立长期用户头像库。
+2. 用户名输入优先使用微信昵称输入能力，例如 `input type="nickname"`，同时允许用户手动编辑。
+3. 用户名去首尾空格后长度必须在 `1-20`；头像可为空，为空时使用默认头像。
+4. 保存成功后只写入 `wx.setStorageSync` 的用户资料缓存，并更新 `userProfileStore`，不调用云函数保存长期用户资料。
+5. 若 `redirectIntent=createRoom`，保存成功后跳转创建房间页；若 `redirectIntent=joinRoom`，保存成功后回到首页继续提交加入房间；无意图时返回首页。
+6. 创建用户页只处理头像和用户名，不承载房间规则或对局设置。
+
+## 12.3 创建房间页 `create-room`
 
 ### 页面职责
 
@@ -844,13 +901,12 @@ interface CreateRoomPageData {
 2. 创建成功后跳转房间大厅。
 3. 选择人数用于创建时的目标人数与大厅展示；实际开局仍以后端校验的当前有效人数为准。
 
-## 12.3 大厅页 `lobby`
+## 12.4 大厅页 `lobby`
 
 ### 页面职责
 
 - 展示房间号
 - 展示玩家列表与座位顺序
-- 修改展示名
 - 设置准备状态
 - 房主开始游戏
 - 发起分享
@@ -860,7 +916,6 @@ interface CreateRoomPageData {
 ```ts
 interface LobbyPageData {
   lobby: LobbyViewModel | null
-  renaming: boolean
   readySubmitting: boolean
   startSubmitting: boolean
   shareEnabled: boolean
@@ -884,7 +939,7 @@ MVP 不支持房主调整座位，座位顺序由加入顺序初始化并在开�
 - 分享卡片 path：`/pages/home/index?roomCode=ABCD12`
 - 分享文案不出现任何私密词汇，只写房号和人数信息
 
-## 12.4 身份页 `identity`
+## 12.5 身份页 `identity`
 
 ### 页面职责
 
@@ -912,7 +967,7 @@ interface IdentityPageData {
 - 不提交确认身份命令，点击“我知道了”只做页面返回。
 - 身份数据只来自 `privateState.identity`，不写入本地缓存。
 
-## 12.5 对局桌面页 `board`
+## 12.6 对局桌面页 `board`
 
 ### 页面职责
 
@@ -950,7 +1005,7 @@ interface BoardPageData {
 4. 已出局玩家显示只读提示，不显示操作入口。
 5. 规则入口固定在右上角。
 
-## 12.6 结果页 `result`
+## 12.7 结果页 `result`
 
 ### 页面职责
 
@@ -974,7 +1029,7 @@ interface ResultPageData {
 - 支持“查看规则”
 - 不支持重新加入已失效旧局
 
-## 12.7 规则页 `rules`
+## 12.8 规则页 `rules`
 
 规则页不直接读取 markdown，而是消费 `static/rulesContent.ts` 的结构化数据：
 
@@ -1064,6 +1119,7 @@ interface LobbyViewModel {
   players: Array<{
     memberId: string
     displayName: string
+    avatarUrl: string
     seatIndex: number
     isHost: boolean
     isReady: boolean
@@ -1241,7 +1297,7 @@ interface PrivateState {
   identity: {
     role: 'LIBERAL' | 'FASCIST' | 'HITLER'
     party: 'LIBERAL' | 'FASCIST'
-    knownMembers: Array<{ memberId: string; displayName: string }>
+    knownMembers: Array<{ memberId: string; displayName: string; avatarUrl: string }>
   }
   voting: {
     submitted: boolean
@@ -1286,6 +1342,7 @@ interface ResultSnapshot {
   finalPlayers: Array<{
     memberId: string
     displayName: string
+    avatarUrl: string
     seatIndex: number
     role: 'LIBERAL' | 'FASCIST' | 'HITLER'
     party: 'LIBERAL' | 'FASCIST'
@@ -1360,7 +1417,9 @@ interface ResultSnapshot {
 
 可写入 `wx.setStorageSync` 的只有：
 
+- `profileCompleted`
 - `displayName`
+- `avatarUrl`
 - `activeRoomId`
 - `activeRoomCode`
 - `activeMemberId`
@@ -1406,7 +1465,7 @@ interface ResultSnapshot {
 
 - 中性背景：浅灰米白
 - 自由派：深蓝 / 青蓝
-- 法西斯：深红 / 暗红
+- 极权派：深红 / 暗红
 - 危险操作：高对比警示红
 - 禁用态：低饱和灰
 
@@ -1481,15 +1540,15 @@ MVP 尽量少图化：
 
 每个阶段至少覆盖以下真机用例：
 
-1. 创建房间 -> 加入房间 -> 准备 -> 开局
+1. 创建用户 -> 创建房间 -> 加入房间 -> 准备 -> 开局
 2. 桌面页点击“我的身份” -> 身份页点击“我知道了” -> 返回桌面
 3. 提名 -> 投票通过 / 失败
 4. 三连败自动翻牌
 5. 总统弃牌 -> 总理立法
-6. 第 5 张法西斯政策后的否决流程
+6. 第 5 张极权派政策后的否决流程
 7. 调查 / 特别选举 / 预览 / 处决
-8. 希特勒当选即时结束
-9. 处决希特勒结束
+8. 独裁者当选即时结束
+9. 处决独裁者结束
 10. 对局结束 -> 结果页
 
 ## 21.3 弱网与恢复测试
@@ -1508,7 +1567,7 @@ MVP 尽量少图化：
 
 ### 阶段 1：基础壳
 
-- 重写首页与创建房间页
+- 重写首页、创建用户页与创建房间页
 - 接入 `bootstrapService`
 - 建好 `types / store / services / constants`
 - 跑通 `createRoom / joinRoom / recoverActiveRoom`
