@@ -20,6 +20,8 @@ const MAX_PLAYER_COUNT = 10;
 const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_RETRY_LIMIT = 10;
 const ROOM_TTL_LOBBY_MS = 2 * 60 * 60 * 1000;
+const MIN_DISPLAY_NAME_LENGTH = 2;
+const MAX_DISPLAY_NAME_LENGTH = 12;
 
 function nowIso() {
   return new Date().toISOString();
@@ -67,13 +69,45 @@ function payloadHash(payload) {
   return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
+function isCollectionAlreadyExistsError(err) {
+  const errCode = err && (err.errCode || err.code);
+  const errMessage = String((err && (err.errMsg || err.message)) || "");
+  return (
+    errCode === -501001 ||
+    errMessage.includes("already exists") ||
+    errMessage.includes("ResourceExist") ||
+    errMessage.includes("Table exist") ||
+    errMessage.includes("DATABASE_COLLECTION_ALREADY_EXIST")
+  );
+}
+
+function normalizeProfilePayload(payload) {
+  const displayName = String((payload && payload.displayName) || "").trim();
+  const avatarUrl = String((payload && payload.avatarUrl) || "").trim();
+
+  if (displayName.length < MIN_DISPLAY_NAME_LENGTH || displayName.length > MAX_DISPLAY_NAME_LENGTH) {
+    return {
+      error: fail("INVALID_PAYLOAD", "用户名需为 2-12 个字符"),
+    };
+  }
+
+  return {
+    data: {
+      defaultDisplayName: displayName,
+      avatarUrl,
+      profileCompleted: true,
+      updatedAt: new Date(),
+    },
+  };
+}
+
 async function ensureCollections() {
   await Promise.all(
     COLLECTIONS.map(async (name) => {
       try {
         await db.createCollection(name);
       } catch (err) {
-        if (!String(err && err.errMsg).includes("already exists")) {
+        if (!isCollectionAlreadyExistsError(err)) {
           throw err;
         }
       }
@@ -179,6 +213,34 @@ async function upsertProfile(openid, data) {
   return addRes._id;
 }
 
+function buildProfileDto(profile, openid) {
+  const fallbackName = `玩家${openid.slice(-4)}`;
+  return {
+    profileCompleted: Boolean(profile && profile.profileCompleted),
+    displayName: (profile && (profile.defaultDisplayName || profile.displayName)) || fallbackName,
+    avatarUrl: (profile && profile.avatarUrl) || "",
+    updatedAt: profile && profile.updatedAt ? new Date(profile.updatedAt).toISOString() : "",
+  };
+}
+
+async function getSavedProfile(openid) {
+  const profile = await getProfile(openid);
+  return ok(buildProfileDto(profile, openid));
+}
+
+async function saveUserProfile(payload, openid) {
+  return withCommandIdempotency(openid, payload, async () => {
+    const normalized = normalizeProfilePayload(payload);
+    if (normalized.error) {
+      return normalized.error;
+    }
+
+    await upsertProfile(openid, normalized.data);
+    const profile = await getProfile(openid);
+    return ok(buildProfileDto(profile, openid));
+  });
+}
+
 async function assertNoActiveRoom(profile) {
   if (!profile || !profile.activeRoomId) {
     return null;
@@ -231,6 +293,7 @@ async function buildLobbySnapshot(roomId, openid) {
     seatOrder: members.map((member) => ({
       memberId: getMemberId(member),
       displayName: member.displayName,
+      avatarUrl: member.avatarUrl || "",
       seatIndex: member.seatIndex,
       isHost: Boolean(member.isHost || getMemberId(member) === room.hostMemberId),
       isReady: member.isReady,
@@ -269,10 +332,20 @@ async function createRoom(payload, openid) {
       return activeRoomError;
     }
 
+    const requestProfile = normalizeProfilePayload(payload);
+    if (requestProfile.error && !(profile && profile.profileCompleted)) {
+      return requestProfile.error;
+    }
+
     const roomId = createId("room");
     const memberId = createId("mem");
     const roomCode = await generateRoomCode();
-    const displayName = (profile && profile.defaultDisplayName) || `玩家${openid.slice(-4)}`;
+    const profileData = requestProfile.error ? null : requestProfile.data;
+    const displayName =
+      (profileData && profileData.defaultDisplayName) ||
+      (profile && (profile.defaultDisplayName || profile.displayName)) ||
+      `玩家${openid.slice(-4)}`;
+    const avatarUrl = (profileData && profileData.avatarUrl) || (profile && profile.avatarUrl) || "";
     const createdAt = new Date();
     const expireAt = new Date(Date.now() + ROOM_TTL_LOBBY_MS);
 
@@ -301,6 +374,7 @@ async function createRoom(payload, openid) {
         roomId,
         openId: openid,
         displayName,
+        avatarUrl,
         seatIndex: 1,
         isHost: true,
         isReady: true,
@@ -314,6 +388,7 @@ async function createRoom(payload, openid) {
     });
 
     await upsertProfile(openid, {
+      ...(profileData || {}),
       activeRoomId: roomId,
       activeMemberId: memberId,
       activeRoomStatus: "lobby",
@@ -368,6 +443,10 @@ exports.main = async (event) => {
     }
 
     switch (action) {
+      case "getProfile":
+        return await getSavedProfile(openid);
+      case "saveProfile":
+        return await saveUserProfile(payload, openid);
       case "createRoom":
         return await createRoom(payload, openid);
       case "getLobbySnapshot":

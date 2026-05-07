@@ -8,6 +8,7 @@ page {
   min-height: 100vh;
   padding: calc(52rpx + env(safe-area-inset-top)) 24rpx 44rpx;
   box-sizing: border-box;
+  font-family: "Songti SC", STSong, SimSun, serif;
   background:
     radial-gradient(circle at 18% 18%, rgba(34, 190, 200, 0.16), transparent 30%),
     radial-gradient(circle at 78% 80%, rgba(198, 51, 42, 0.16), transparent 32%),

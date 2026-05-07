@@ -1,6 +1,7 @@
 App({
   globalData: {
     env: "cloud1-9gcbbsjv4ce11da4",
+    userProfileStorageKey: "secret_hitler_user_profile",
   },
   onLaunch() {
     if (!wx.cloud) {

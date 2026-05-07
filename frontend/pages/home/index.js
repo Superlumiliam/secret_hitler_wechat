@@ -1,5 +1,18 @@
 const HOME_BACKGROUND_FILE_ID =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/home-background.webp";
+const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
+
+function getCachedUserProfile() {
+  try {
+    const profile = wx.getStorageSync(PROFILE_STORAGE_KEY);
+    if (profile && profile.profileCompleted && profile.displayName) {
+      return profile;
+    }
+  } catch (err) {
+    console.error("读取用户资料缓存失败", err);
+  }
+  return null;
+}
 
 Page({
   data: {
@@ -53,12 +66,26 @@ Page({
   },
 
   onCreateRoom() {
+    if (!getCachedUserProfile()) {
+      wx.navigateTo({
+        url: "/pages/user-profile/index",
+      });
+      return;
+    }
+
     wx.navigateTo({
       url: "/pages/create-room/index",
     });
   },
 
   onJoinRoom() {
+    if (!getCachedUserProfile()) {
+      wx.navigateTo({
+        url: "/pages/user-profile/index",
+      });
+      return;
+    }
+
     wx.showToast({
       title: "暂未开放",
       icon: "none",

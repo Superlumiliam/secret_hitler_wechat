@@ -5,7 +5,7 @@ const ROOM_ROLE_DATA = {
   5: {
     liberalCards: [
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
-      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
     ],
     fascistCards: [
@@ -16,7 +16,7 @@ const ROOM_ROLE_DATA = {
   6: {
     liberalCards: [
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
-      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
     ],
@@ -28,7 +28,7 @@ const ROOM_ROLE_DATA = {
   7: {
     liberalCards: [
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
-      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
     ],
@@ -41,7 +41,7 @@ const ROOM_ROLE_DATA = {
   8: {
     liberalCards: [
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
-      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-elder-male.webp` },
@@ -55,7 +55,7 @@ const ROOM_ROLE_DATA = {
   9: {
     liberalCards: [
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
-      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-elder-male.webp` },
@@ -70,7 +70,7 @@ const ROOM_ROLE_DATA = {
   10: {
     liberalCards: [
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp` },
-      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp` },
+      { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-young-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp` },
       { roleName: "自由派", fileId: `${CLOUD_ASSET_ROOT}room-liberal-elder-male.webp` },
@@ -88,7 +88,7 @@ const ROOM_ROLE_DATA = {
 const playerCounts = [5, 6, 7, 8, 9, 10].map((value) => ({ value }));
 const ALL_ROOM_AVATAR_FILE_IDS = [
   `${CLOUD_ASSET_ROOT}room-liberal-young-male.webp`,
-  `${CLOUD_ASSET_ROOT}room-liberal-young-femal.webp`,
+  `${CLOUD_ASSET_ROOT}room-liberal-young-female.webp`,
   `${CLOUD_ASSET_ROOT}room-liberal-middle-male.webp`,
   `${CLOUD_ASSET_ROOT}room-liberal-middle-female.webp`,
   `${CLOUD_ASSET_ROOT}room-liberal-elder-male.webp`,
@@ -98,9 +98,22 @@ const ALL_ROOM_AVATAR_FILE_IDS = [
   `${CLOUD_ASSET_ROOT}room-fascist-female.webp`,
   `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`,
 ];
+const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 
 function createCommandId() {
   return `cmd_create_room_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getCachedUserProfile() {
+  try {
+    const profile = wx.getStorageSync(PROFILE_STORAGE_KEY);
+    if (profile && profile.profileCompleted && profile.displayName) {
+      return profile;
+    }
+  } catch (err) {
+    console.error("读取用户资料缓存失败", err);
+  }
+  return null;
 }
 
 function hydrateCards(cards, urlByFileId) {
@@ -132,6 +145,13 @@ Page({
   },
 
   onLoad() {
+    if (!getCachedUserProfile()) {
+      wx.redirectTo({
+        url: "/pages/user-profile/index",
+      });
+      return;
+    }
+
     this.loadAllRoleAvatars();
   },
 
@@ -196,6 +216,14 @@ Page({
     });
 
     try {
+      const profile = getCachedUserProfile();
+      if (!profile) {
+        wx.redirectTo({
+          url: "/pages/user-profile/index",
+        });
+        return;
+      }
+
       const res = await wx.cloud.callFunction({
         name: "roomService",
         data: {
@@ -203,6 +231,8 @@ Page({
           payload: {
             commandId: createCommandId(),
             targetPlayerCount: this.data.selectedCount,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl || "",
           },
         },
       });

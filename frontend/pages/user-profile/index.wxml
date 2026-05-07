@@ -1,0 +1,85 @@
+<view class="profile-page">
+  <view class="top-bar">
+    <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回">‹</view>
+    <view class="page-title">创建用户</view>
+    <view class="top-actions" aria-hidden="true">
+      <view class="top-action">规则</view>
+      <view class="top-action">帮助</view>
+    </view>
+  </view>
+
+  <view class="hero-copy">
+    <view class="hero-title">建立你的机密档案</view>
+    <view class="hero-subtitle">
+      <view class="subtitle-line"></view>
+      <text>设置用户名与头像后即可进入房间</text>
+      <view class="subtitle-line"></view>
+    </view>
+  </view>
+
+  <view class="avatar-stage">
+    <button
+      class="avatar-button"
+      open-type="chooseAvatar"
+      bindchooseavatar="onChooseAvatar"
+      hover-class="avatar-button-hover"
+      aria-label="选择头像"
+    >
+      <view class="avatar-ring">
+        <image class="avatar-image" src="{{avatarUrl || defaultAvatar}}" mode="aspectFill" />
+      </view>
+      <view class="avatar-seal">档</view>
+    </button>
+  </view>
+
+  <form bindsubmit="onSubmitProfile">
+    <view class="form-panel">
+      <view class="field-label">
+        <view class="label-line"></view>
+        <text>用户名</text>
+        <view class="label-line"></view>
+      </view>
+      <input
+        class="name-input"
+        name="displayName"
+        type="nickname"
+        maxlength="12"
+        value="{{displayName}}"
+        placeholder="白夜行者"
+        placeholder-class="input-placeholder"
+        bindinput="onNameInput"
+      />
+      <view class="field-note">2-12个字符，创建后可修改</view>
+    </view>
+
+    <view class="notice-panel">
+      <view class="notice-title">
+        <view class="label-line"></view>
+        <text>档案说明</text>
+        <view class="label-line"></view>
+      </view>
+      <view class="notice-row">
+        <text class="notice-icon">人</text>
+        <text>头像仅用于房间内展示</text>
+      </view>
+      <view class="notice-row">
+        <text class="notice-icon">名</text>
+        <text>用户名将显示给其他玩家</text>
+      </view>
+      <view class="notice-row">
+        <text class="notice-icon">!</text>
+        <text>请勿使用敏感信息</text>
+      </view>
+    </view>
+
+    <button
+      class="save-button {{isSaving ? 'save-button-disabled' : ''}}"
+      form-type="submit"
+      loading="{{isSaving}}"
+      disabled="{{isSaving}}"
+      hover-class="save-button-hover"
+    >
+      保存形象
+    </button>
+  </form>
+</view>

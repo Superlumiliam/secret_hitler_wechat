@@ -1,0 +1,251 @@
+page {
+  min-height: 100vh;
+  background: #061016;
+}
+
+button {
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+button::after {
+  border: 0;
+}
+
+.profile-page {
+  min-height: 100vh;
+  padding: calc(54rpx + env(safe-area-inset-top)) 34rpx 44rpx;
+  color: #d6a464;
+  font-family: "Songti SC", STSong, SimSun, serif;
+  background:
+    linear-gradient(180deg, rgba(6, 18, 22, 0.2), rgba(2, 8, 11, 0.74)),
+    radial-gradient(circle at 50% 42%, rgba(40, 220, 226, 0.18), transparent 24%),
+    linear-gradient(180deg, #07171c 0%, #03080b 100%);
+}
+
+.top-bar {
+  position: relative;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1rpx solid rgba(169, 111, 61, 0.5);
+  border-bottom: 1rpx solid rgba(169, 111, 61, 0.28);
+}
+
+.back-control {
+  position: absolute;
+  left: 0;
+  top: 8rpx;
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d7a35d;
+  font-size: 86rpx;
+  line-height: 58rpx;
+}
+
+.page-title {
+  color: #d4a161;
+  font-size: 38rpx;
+  font-weight: 800;
+}
+
+.top-actions {
+  position: absolute;
+  right: 0;
+  top: 14rpx;
+  display: flex;
+  gap: 18rpx;
+  color: rgba(215, 163, 93, 0.72);
+  font-size: 22rpx;
+}
+
+.top-action {
+  width: 64rpx;
+  text-align: center;
+}
+
+.hero-copy {
+  margin-top: 58rpx;
+  text-align: center;
+}
+
+.hero-title {
+  color: #d9aa6a;
+  font-size: 52rpx;
+  font-weight: 700;
+}
+
+.hero-subtitle,
+.field-label,
+.notice-title {
+  margin-top: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18rpx;
+  color: rgba(214, 164, 100, 0.82);
+  font-size: 25rpx;
+}
+
+.subtitle-line,
+.label-line {
+  width: 96rpx;
+  height: 1rpx;
+  background: rgba(169, 111, 61, 0.5);
+}
+
+.avatar-stage {
+  margin-top: 44rpx;
+  display: flex;
+  justify-content: center;
+}
+
+.avatar-button {
+  position: relative;
+  width: 372rpx;
+  height: 372rpx;
+}
+
+.avatar-button-hover,
+.save-button-hover,
+.icon-hover {
+  opacity: 0.78;
+}
+
+.avatar-ring {
+  width: 372rpx;
+  height: 372rpx;
+  padding: 18rpx;
+  border: 4rpx solid rgba(59, 235, 240, 0.72);
+  border-radius: 50%;
+  background:
+    linear-gradient(180deg, rgba(236, 194, 128, 0.28), rgba(20, 37, 39, 0.3)),
+    #081a1f;
+  box-shadow:
+    0 0 28rpx rgba(44, 222, 230, 0.42),
+    inset 0 0 0 8rpx rgba(173, 113, 62, 0.45);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #10242b;
+}
+
+.avatar-seal {
+  position: absolute;
+  left: 50%;
+  bottom: -6rpx;
+  width: 82rpx;
+  height: 82rpx;
+  margin-left: -41rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid rgba(196, 132, 71, 0.78);
+  border-radius: 50%;
+  color: #e2b270;
+  font-size: 34rpx;
+  font-weight: 900;
+  background: #071318;
+  box-shadow: 0 8rpx 18rpx rgba(0, 0, 0, 0.38);
+}
+
+.form-panel,
+.notice-panel {
+  margin-top: 48rpx;
+  padding: 28rpx 34rpx;
+  border: 1rpx solid rgba(169, 111, 61, 0.48);
+  border-radius: 8rpx;
+  background: rgba(4, 16, 20, 0.58);
+  box-shadow:
+    inset 0 1rpx 0 rgba(234, 188, 128, 0.15),
+    inset 0 -1rpx 0 rgba(0, 0, 0, 0.6);
+}
+
+.field-label,
+.notice-title {
+  margin-top: 0;
+  color: #d6a464;
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.name-input {
+  width: 100%;
+  height: 86rpx;
+  margin-top: 22rpx;
+  padding: 0 30rpx;
+  border: 2rpx solid rgba(210, 145, 82, 0.82);
+  color: #f6dfb4;
+  font-size: 34rpx;
+  background: rgba(2, 12, 15, 0.86);
+}
+
+.input-placeholder {
+  color: rgba(246, 223, 180, 0.36);
+}
+
+.field-note {
+  margin-top: 18rpx;
+  color: rgba(214, 164, 100, 0.82);
+  font-size: 24rpx;
+}
+
+.notice-panel {
+  margin-top: 28rpx;
+  padding-bottom: 32rpx;
+}
+
+.notice-row {
+  margin-top: 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  color: #d6a464;
+  font-size: 26rpx;
+}
+
+.notice-icon {
+  width: 42rpx;
+  height: 42rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #071318;
+  font-size: 24rpx;
+  font-weight: 900;
+  background: rgba(214, 164, 100, 0.82);
+}
+
+.save-button {
+  width: 430rpx;
+  height: 96rpx;
+  margin: 42rpx auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid rgba(76, 255, 255, 0.58);
+  border-radius: 52rpx;
+  color: #04252a;
+  font-size: 36rpx;
+  font-weight: 900;
+  background: linear-gradient(180deg, #4af2f4 0%, #14bbc6 100%);
+  box-shadow: 0 0 24rpx rgba(32, 226, 232, 0.38);
+}
+
+.save-button-disabled {
+  color: rgba(4, 37, 42, 0.68);
+  background: #2aaeb5;
+}
