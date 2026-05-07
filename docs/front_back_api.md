@@ -490,6 +490,8 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 ## 5. `bootstrapService` 详细接口
 
+说明：创建用户页的“保存形象”不调用后端接口，只写入小程序本地缓存并回到首页。`createRoom` / `joinRoom` 在用户重新点击入口时携带本地缓存中的 `displayName/avatarUrl`。
+
 ## 5.1 `ensureSession`
 
 用途：

@@ -294,9 +294,8 @@ frontend/
 
 - `home -> create-room`：`wx.navigateTo`
 - `home -> user-profile`：点击左上角圆形头像后 `wx.navigateTo`
-- `home -> create-room` / `home -> joinRoom` 前必须先检查用户资料；缺失时 `wx.navigateTo({ url: '/pages/user-profile/index?redirectIntent=...' })`
-- `user-profile -> create-room`：保存成功且 `redirectIntent=createRoom` 时 `wx.redirectTo`
-- `user-profile -> home`：保存成功且无待执行意图时 `wx.navigateBack` 或 `wx.redirectTo`
+- `home -> create-room` / `home -> joinRoom` 前必须先检查本地用户资料；缺失时 `wx.navigateTo({ url: '/pages/user-profile/index' })`
+- `user-profile -> home`：点击“保存形象”且保存成功后统一回首页；优先 `wx.navigateBack` 回到上一层首页，异常栈下兜底 `wx.reLaunch({ url: '/pages/home/index' })`
 - `create-room -> lobby`：`wx.redirectTo`
 - `home -> lobby`：加入房间或恢复房间成功后 `wx.redirectTo`
 - `lobby -> board`：开局成功后 `wx.redirectTo`
@@ -835,7 +834,7 @@ interface HomePageData {
 3. 加入 / 恢复共用 `state-feedback` 组件展示 loading 与错误。
 4. 恢复房间只依赖后端 `recoverActiveRoom()` 结果，不信任本地缓存单独跳转。
 5. 左上角头像使用圆形按钮：已有用户头像时展示头像，没有时展示默认头像；点击进入 `pages/user-profile/index`。
-6. `handleGoCreateRoom` 与 `handleJoinRoom` 都必须先执行 `ensureUserProfileReady(intent)`：本地缺少 `profileCompleted` 时，跳转创建用户页，并把原始意图写入页面参数或临时 store。
+6. `handleGoCreateRoom` 与 `handleJoinRoom` 都必须先执行 `ensureUserProfileReady()`：本地缺少 `profileCompleted` 时，跳转创建用户页；创建用户页保存成功后只回首页，不自动继续创建或加入。
 
 ## 12.2 创建用户页 `user-profile`
 
@@ -843,7 +842,7 @@ interface HomePageData {
 
 - 首次创建用户资料
 - 后续修改头像或用户名
-- 保存到本地缓存后继续执行创建房间或加入房间意图
+- 点击“保存形象”后写入本地缓存并回到首页
 
 ### `data` 字段
 
@@ -852,8 +851,6 @@ interface UserProfilePageData {
   avatarUrl: string
   displayName: string
   saving: boolean
-  redirectIntent: 'createRoom' | 'joinRoom' | ''
-  pendingRoomCode: string
   errorText: string
 }
 ```
@@ -862,15 +859,15 @@ interface UserProfilePageData {
 
 - `handleChooseAvatar`
 - `onNicknameInput`
-- `handleSaveLocalProfile`
+- `handleSaveAvatarProfile`
 
 ### 实现细节
 
 1. 头像使用微信小程序当前支持的头像选择能力，例如 `button open-type="chooseAvatar"`；MVP 可优先使用默认头像或本地可用头像路径。若后续要让其他玩家看到自定义头像，需在创建 / 加入房间时上传为房间临时资源，并随房间数据清理，不建立长期用户头像库。
 2. 用户名输入优先使用微信昵称输入能力，例如 `input type="nickname"`，同时允许用户手动编辑。
 3. 用户名去首尾空格后长度必须在 `1-20`；头像可为空，为空时使用默认头像。
-4. 保存成功后只写入 `wx.setStorageSync` 的用户资料缓存，并更新 `userProfileStore`，不调用云函数保存长期用户资料。
-5. 若 `redirectIntent=createRoom`，保存成功后跳转创建房间页；若 `redirectIntent=joinRoom`，保存成功后回到首页继续提交加入房间；无意图时返回首页。
+4. “保存形象”按钮触发保存：成功后只写入 `wx.setStorageSync` 的用户资料缓存，并更新 `userProfileStore`，不调用云函数保存长期用户资料。
+5. 保存成功后统一回首页，不自动继续创建房间或加入房间；用户回到首页后重新点击对应入口。
 6. 创建用户页只处理头像和用户名，不承载房间规则或对局设置。
 
 ## 12.3 创建房间页 `create-room`
@@ -1540,7 +1537,7 @@ MVP 尽量少图化：
 
 每个阶段至少覆盖以下真机用例：
 
-1. 创建用户 -> 创建房间 -> 加入房间 -> 准备 -> 开局
+1. 创建用户 -> 回首页 -> 创建房间 -> 加入房间 -> 准备 -> 开局
 2. 桌面页点击“我的身份” -> 身份页点击“我知道了” -> 返回桌面
 3. 提名 -> 投票通过 / 失败
 4. 三连败自动翻牌
