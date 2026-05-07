@@ -1,5 +1,8 @@
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
-const DEFAULT_AVATAR = "/assets/images/avatars/liberal-avatar.svg";
+const CLOUD_ASSET_ROOT =
+  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
+const IDENTITY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}identity-background.webp`;
+const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const DISPLAY_NAME_MIN_LENGTH = 2;
 const DISPLAY_NAME_MAX_LENGTH = 12;
 
@@ -27,23 +30,83 @@ function createCommandId() {
   return `cmd_save_profile_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function isCloudFileId(fileId) {
+  return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
+
 Page({
   data: {
     avatarUrl: "",
+    avatarPreviewSrc: "",
     avatarDirty: false,
+    backgroundSrc: "",
+    backgroundVisible: true,
     displayName: "",
     isSaving: false,
-    defaultAvatar: DEFAULT_AVATAR,
+    defaultAvatarSrc: "",
   },
 
   onLoad() {
     const cached = readCachedProfile();
     if (cached) {
+      const avatarUrl = cached.avatarUrl || "";
       this.setData({
-        avatarUrl: cached.avatarUrl || "",
+        avatarUrl,
+        avatarPreviewSrc: isCloudFileId(avatarUrl) ? "" : avatarUrl,
         displayName: cached.displayName || "",
       });
     }
+
+    this.loadCloudAssets();
+  },
+
+  loadCloudAssets() {
+    if (!wx.cloud) {
+      this.setData({
+        backgroundVisible: false,
+      });
+      return;
+    }
+
+    const cloudAvatarUrl = isCloudFileId(this.data.avatarUrl) ? this.data.avatarUrl : "";
+    const fileList = [IDENTITY_BACKGROUND_FILE_ID, DEFAULT_AVATAR_FILE_ID];
+    if (cloudAvatarUrl && cloudAvatarUrl !== DEFAULT_AVATAR_FILE_ID) {
+      fileList.push(cloudAvatarUrl);
+    }
+
+    wx.cloud.getTempFileURL({
+      fileList,
+      success: (res) => {
+        const urlByFileId = {};
+        (res.fileList || []).forEach((file) => {
+          if (file.status === 0 && file.tempFileURL) {
+            urlByFileId[file.fileID] = file.tempFileURL;
+          } else {
+            console.error("创建用户页云存储临时链接获取失败", file);
+          }
+        });
+
+        this.setData({
+          backgroundSrc: urlByFileId[IDENTITY_BACKGROUND_FILE_ID] || "",
+          backgroundVisible: Boolean(urlByFileId[IDENTITY_BACKGROUND_FILE_ID]),
+          defaultAvatarSrc: urlByFileId[DEFAULT_AVATAR_FILE_ID] || "",
+          avatarPreviewSrc: cloudAvatarUrl ? urlByFileId[cloudAvatarUrl] || "" : this.data.avatarPreviewSrc,
+        });
+      },
+      fail: (err) => {
+        console.error("创建用户页云存储临时链接获取失败", err);
+        this.setData({
+          backgroundVisible: false,
+        });
+      },
+    });
+  },
+
+  onBackgroundError() {
+    console.error("创建用户页背景图加载失败", this.data.backgroundSrc);
+    this.setData({
+      backgroundVisible: false,
+    });
   },
 
   onBackHome() {
@@ -68,6 +131,7 @@ Page({
 
     this.setData({
       avatarUrl,
+      avatarPreviewSrc: avatarUrl,
       avatarDirty: true,
     });
   },
@@ -81,7 +145,7 @@ Page({
   async uploadAvatarIfNeeded() {
     const avatarUrl = this.data.avatarUrl;
     if (!this.data.avatarDirty) {
-      return avatarUrl;
+      return avatarUrl || DEFAULT_AVATAR_FILE_ID;
     }
 
     if (!wx.cloud || !wx.cloud.uploadFile) {
@@ -137,14 +201,6 @@ Page({
     if (displayName.length < DISPLAY_NAME_MIN_LENGTH || displayName.length > DISPLAY_NAME_MAX_LENGTH) {
       wx.showToast({
         title: "用户名需为 2-12 个字符",
-        icon: "none",
-      });
-      return;
-    }
-
-    if (!this.data.avatarUrl) {
-      wx.showToast({
-        title: "请先选择头像",
         icon: "none",
       });
       return;

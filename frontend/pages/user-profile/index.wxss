@@ -18,8 +18,9 @@ button::after {
 }
 
 .profile-page {
+  position: relative;
   min-height: 100vh;
-  padding: calc(54rpx + env(safe-area-inset-top)) 34rpx 44rpx;
+  padding: calc(78rpx + env(safe-area-inset-top)) 34rpx 44rpx;
   color: #d6a464;
   font-family: "Songti SC", STSong, SimSun, serif;
   background:
@@ -28,8 +29,28 @@ button::after {
     linear-gradient(180deg, #07171c 0%, #03080b 100%);
 }
 
+.profile-background,
+.profile-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.profile-background {
+  z-index: 0;
+}
+
+.profile-overlay {
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(2, 10, 13, 0.08) 0%, rgba(2, 8, 11, 0.2) 52%, rgba(1, 5, 8, 0.72) 100%);
+}
+
 .top-bar {
   position: relative;
+  z-index: 2;
   height: 88rpx;
   display: flex;
   align-items: center;
@@ -41,39 +62,26 @@ button::after {
 .back-control {
   position: absolute;
   left: 0;
-  top: 8rpx;
+  top: 0;
   width: 72rpx;
-  height: 72rpx;
+  height: 64rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #d7a35d;
-  font-size: 86rpx;
-  line-height: 58rpx;
+  font-size: 78rpx;
+  line-height: 88rpx;
 }
 
 .page-title {
   color: #d4a161;
   font-size: 38rpx;
-  font-weight: 800;
-}
-
-.top-actions {
-  position: absolute;
-  right: 0;
-  top: 14rpx;
-  display: flex;
-  gap: 18rpx;
-  color: rgba(215, 163, 93, 0.72);
-  font-size: 22rpx;
-}
-
-.top-action {
-  width: 64rpx;
-  text-align: center;
+  font-weight: 500;
 }
 
 .hero-copy {
+  position: relative;
+  z-index: 2;
   margin-top: 58rpx;
   text-align: center;
 }
@@ -104,6 +112,8 @@ button::after {
 }
 
 .avatar-stage {
+  position: relative;
+  z-index: 2;
   margin-top: 44rpx;
   display: flex;
   justify-content: center;
@@ -113,6 +123,7 @@ button::after {
   position: relative;
   width: 372rpx;
   height: 372rpx;
+  overflow: visible;
 }
 
 .avatar-button-hover,
@@ -122,6 +133,7 @@ button::after {
 }
 
 .avatar-ring {
+  box-sizing: border-box;
   width: 372rpx;
   height: 372rpx;
   padding: 18rpx;
@@ -136,6 +148,7 @@ button::after {
 }
 
 .avatar-image {
+  display: block;
   width: 100%;
   height: 100%;
   border-radius: 50%;
@@ -163,6 +176,8 @@ button::after {
 
 .form-panel,
 .notice-panel {
+  position: relative;
+  z-index: 2;
   margin-top: 48rpx;
   padding: 28rpx 34rpx;
   border: 1rpx solid rgba(169, 111, 61, 0.48);
@@ -230,6 +245,8 @@ button::after {
 }
 
 .save-button {
+  position: relative;
+  z-index: 2;
   width: 430rpx;
   height: 96rpx;
   margin: 42rpx auto 0;

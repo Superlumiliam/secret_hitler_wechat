@@ -1,11 +1,17 @@
 <view class="profile-page">
+  <image
+    wx:if="{{backgroundVisible}}"
+    class="profile-background"
+    src="{{backgroundSrc}}"
+    mode="aspectFill"
+    binderror="onBackgroundError"
+  />
+
+  <view class="profile-overlay"></view>
+
   <view class="top-bar">
     <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回">‹</view>
     <view class="page-title">创建用户</view>
-    <view class="top-actions" aria-hidden="true">
-      <view class="top-action">规则</view>
-      <view class="top-action">帮助</view>
-    </view>
   </view>
 
   <view class="hero-copy">
@@ -26,7 +32,7 @@
       aria-label="选择头像"
     >
       <view class="avatar-ring">
-        <image class="avatar-image" src="{{avatarUrl || defaultAvatar}}" mode="aspectFill" />
+        <image class="avatar-image" src="{{avatarPreviewSrc || defaultAvatarSrc}}" mode="aspectFill" />
       </view>
       <view class="avatar-seal">档</view>
     </button>
