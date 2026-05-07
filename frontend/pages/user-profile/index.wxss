@@ -159,6 +159,7 @@ button::after {
   position: absolute;
   left: 50%;
   bottom: -6rpx;
+  box-sizing: border-box;
   width: 82rpx;
   height: 82rpx;
   margin-left: -41rpx;
@@ -171,7 +172,14 @@ button::after {
   font-size: 34rpx;
   font-weight: 900;
   background: #071318;
+  overflow: hidden;
   box-shadow: 0 8rpx 18rpx rgba(0, 0, 0, 0.38);
+}
+
+.avatar-seal-icon {
+  display: block;
+  width: 74rpx;
+  height: 74rpx;
 }
 
 .form-panel,
@@ -232,16 +240,10 @@ button::after {
 }
 
 .notice-icon {
-  width: 42rpx;
-  height: 42rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: #071318;
-  font-size: 24rpx;
-  font-weight: 900;
-  background: rgba(214, 164, 100, 0.82);
+  display: block;
+  width: 32rpx;
+  height: 32rpx;
+  flex: 0 0 32rpx;
 }
 
 .save-button {

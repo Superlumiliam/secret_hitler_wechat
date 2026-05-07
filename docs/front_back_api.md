@@ -234,7 +234,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     {
       "memberId": "mem_host",
       "displayName": "玩家A",
-      "avatarUrl": "cloud://xxx/avatar/openid.png",
+      "avatarUrl": "cloud://xxx/room_assets/room_xxx/avatars/member_xxx.png",
       "seatIndex": 1,
       "isHost": true,
       "isReady": true
@@ -292,7 +292,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     {
       "memberId": "mem_1",
       "displayName": "玩家A",
-      "avatarUrl": "cloud://xxx/avatar/openid.png",
+      "avatarUrl": "cloud://xxx/room_assets/room_xxx/avatars/member_1.png",
       "seatIndex": 1,
       "isAlive": true,
       "isOffline": false,
@@ -461,7 +461,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     {
       "memberId": "mem_1",
       "displayName": "玩家A",
-      "avatarUrl": "cloud://xxx/avatar/openid.png",
+      "avatarUrl": "cloud://xxx/room_assets/room_xxx/avatars/member_1.png",
       "seatIndex": 1,
       "role": "LIBERAL",
       "party": "LIBERAL",
@@ -490,7 +490,14 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 ## 5. `bootstrapService` 详细接口
 
-说明：创建用户页的“保存形象”不调用后端接口，只写入小程序本地缓存并回到首页。`createRoom` / `joinRoom` 在用户重新点击入口时携带本地缓存中的 `displayName/avatarUrl`。
+说明：创建用户页的“保存形象”不调用后端接口，只写入小程序本地缓存并回到首页。`createRoom` / `joinRoom` 在用户重新点击入口时携带本地缓存中的 `displayName`，并在需要对房间内其他玩家展示自定义头像时，先把本地头像上传为房间临时头像，再携带该房间头像 `fileID`。
+
+头像生命周期约束：
+
+- 前端不得在保存形象时上传长期用户头像，不使用 `user_avatars/` 作为用户头像库。
+- 房间临时头像应可归属到具体房间；创建 / 加入房间前未知 `roomId` 时，可用 `commandId` 生成待关联路径，成功创建或加入后由后端登记到房间资源清理清单。
+- 游戏结束后不立即删除头像；`ended` 复盘保留期内头像继续可用。
+- 房间进入 `expired`、大厅空房间销毁或维护任务清理房间数据时，后端删除该房间关联的头像文件。
 
 ## 5.1 `ensureSession`
 
@@ -608,7 +615,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     "commandId": "cmd_create_room_xxx",
     "targetPlayerCount": 7,
     "displayName": "玩家A",
-    "avatarUrl": "cloud://room-assets/avatar_xxx.png"
+    "avatarUrl": "cloud://xxx/room_assets/pending/cmd_create_room_xxx/avatar_xxx.png"
   }
 }
 ```
@@ -617,7 +624,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 - `targetPlayerCount` 必须是 `5-10` 的整数
 - `displayName` 来自小程序本地用户资料，去首尾空格后长度必须在 `1-20`
-- `avatarUrl` 来自小程序本地用户资料，可以为空；为空时前端使用默认头像
+- `avatarUrl` 为前端上传后的房间临时头像 `fileID`，可以为空；为空时前端使用默认头像
 - 同一用户存在未失效活跃房间时拒绝创建新房间
 - 房主初始用户名与头像由请求中的 `displayName/avatarUrl` 写入房间成员快照
 
@@ -655,7 +662,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     "commandId": "cmd_join_room_xxx",
     "roomCode": "482615",
     "displayName": "玩家B",
-    "avatarUrl": "cloud://room-assets/avatar_yyy.png"
+    "avatarUrl": "cloud://xxx/room_assets/pending/cmd_join_room_xxx/avatar_yyy.png"
   }
 }
 ```
@@ -664,7 +671,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 - `roomCode` 必须是 6 位房号字符串
 - `displayName` 来自小程序本地用户资料，去首尾空格后长度必须在 `1-20`
-- `avatarUrl` 来自小程序本地用户资料，可以为空；为空时前端使用默认头像
+- `avatarUrl` 为前端上传后的房间临时头像 `fileID`，可以为空；为空时前端使用默认头像
 - 新成员用户名与头像由请求中的 `displayName/avatarUrl` 写入房间成员快照
 
 成功响应：

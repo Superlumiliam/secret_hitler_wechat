@@ -220,6 +220,7 @@ frontend/
 - `frontend/static/` 只放结构化文本或配置，如 `rulesContent.ts`；不放图片。
 - 大于 `200K` 的图片资源不得进入 `frontend/` 主包，应上传到微信云存储；源文件在 `reference/` 保留备份。
 - 页面使用云存储图片时，不直接把 `cloud://` 地址传给 `image.src`，统一先通过 `wx.cloud.getTempFileURL` 获取临时 HTTPS 地址，失败时保留纯色或样式兜底。
+- 用户自定义头像不作为长期云存储资源保存；创建 / 加入房间时才上传为房间临时头像，并由房间过期或维护清理流程删除。
 
 ## 5. 分包与路由方案
 
@@ -595,7 +596,8 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 
 - 除 `getLobbySnapshot` 外，其余方法都属于写操作，必须通过 `callWriteAction` 自动补齐 `commandId`
 - `createRoom`、`joinRoom` 成功后直接返回 `lobbySnapshot`
-- `createRoom`、`joinRoom` 前端必须先确认本地用户资料已完成，并在请求中携带 `displayName/avatarUrl`；后端只校验并保存到当前房间成员快照
+- `createRoom`、`joinRoom` 前端必须先确认本地用户资料已完成；若使用自定义头像，应先上传为房间临时头像，再在请求中携带 `displayName/avatarUrl`，后端只校验并保存到当前房间成员快照
+- 房间临时头像建议使用可归属到房间的云路径，例如 `room_assets/{roomId}/avatars/{memberId或openid}_{timestamp}.jpg`；创建 / 加入房间前未知 `roomId` 时可先使用 `room_assets/pending/{commandId}/...`，由后端在成功创建或加入后关联到房间清理清单
 - `startGame` 成功后只以返回的 `routeHint / needsRefresh` 作为跳转依据，正式桌面数据仍通过 `getGameSnapshot` 获取
 - `updateSeatOrder(roomId, orderedMemberIds)` 属于 P1 座位管理扩展，MVP 前端不接入
 
@@ -863,10 +865,10 @@ interface UserProfilePageData {
 
 ### 实现细节
 
-1. 头像使用微信小程序当前支持的头像选择能力，例如 `button open-type="chooseAvatar"`；MVP 可优先使用默认头像或本地可用头像路径。若后续要让其他玩家看到自定义头像，需在创建 / 加入房间时上传为房间临时资源，并随房间数据清理，不建立长期用户头像库。
+1. 头像使用微信小程序当前支持的头像选择能力，例如 `button open-type="chooseAvatar"`；MVP 可优先使用默认头像或本地可用头像路径。创建用户页只保存本地资料，不上传头像到云存储。
 2. 用户名输入优先使用微信昵称输入能力，例如 `input type="nickname"`，同时允许用户手动编辑。
 3. 用户名去首尾空格后长度必须在 `1-20`；头像可为空，为空时使用默认头像。
-4. “保存形象”按钮触发保存：成功后只写入 `wx.setStorageSync` 的用户资料缓存，并更新 `userProfileStore`，不调用云函数保存长期用户资料。
+4. “保存形象”按钮触发保存：成功后只写入 `wx.setStorageSync` 的用户资料缓存，并更新 `userProfileStore`，不调用云函数保存长期用户资料，也不产生 `user_avatars/` 这类长期头像资源。
 5. 保存成功后统一回首页，不自动继续创建房间或加入房间；用户回到首页后重新点击对应入口。
 6. 创建用户页只处理头像和用户名，不承载房间规则或对局设置。
 
@@ -1416,7 +1418,7 @@ interface ResultSnapshot {
 
 - `profileCompleted`
 - `displayName`
-- `avatarUrl`
+- `avatarUrl`：仅表示本地头像路径、默认头像标识或前端可展示的临时地址；不能把它当作长期云端用户头像
 - `activeRoomId`
 - `activeRoomCode`
 - `activeMemberId`
@@ -1510,6 +1512,7 @@ MVP 尽量少图化：
 - 云存储图片需在 `reference/` 目录保留一份源文件备份，如 `reference/home-background.png`
 - 云存储图片在页面侧通过 `wx.cloud.getTempFileURL` 获取临时 HTTPS 地址后再绑定到 `image.src`
 - 默认玩家头像放在 `frontend/assets/images/avatars/`
+- 用户自定义头像仅在创建 / 加入房间时上传为房间临时头像；`ended` 复盘期继续使用，房间进入 `expired` 或维护清理时由后端删除
 - 装饰性小图放在 `frontend/assets/images/decorations/`
 - 静态小图标统一放在 `frontend/assets/images/icons/`
 - 页面代码引用本地资源时使用项目内绝对路径，如 `/assets/images/avatars/default-player.png`

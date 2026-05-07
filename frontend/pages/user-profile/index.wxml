@@ -34,7 +34,13 @@
       <view class="avatar-ring">
         <image class="avatar-image" src="{{avatarPreviewSrc || defaultAvatarSrc}}" mode="aspectFill" />
       </view>
-      <view class="avatar-seal">档</view>
+      <view class="avatar-seal">
+        <image
+          class="avatar-seal-icon"
+          src="/assets/images/icons/logo-envelop-stamp-clean.png"
+          mode="aspectFit"
+        />
+      </view>
     </button>
   </view>
 
@@ -65,15 +71,15 @@
         <view class="label-line"></view>
       </view>
       <view class="notice-row">
-        <text class="notice-icon">人</text>
+        <image class="notice-icon" src="/assets/images/icons/logo-warn-clean.png" mode="aspectFit" />
         <text>头像仅用于房间内展示</text>
       </view>
       <view class="notice-row">
-        <text class="notice-icon">名</text>
+        <image class="notice-icon" src="/assets/images/icons/logo-warn-clean.png" mode="aspectFit" />
         <text>用户名将显示给其他玩家</text>
       </view>
       <view class="notice-row">
-        <text class="notice-icon">!</text>
+        <image class="notice-icon" src="/assets/images/icons/logo-warn-clean.png" mode="aspectFit" />
         <text>请勿使用敏感信息</text>
       </view>
     </view>

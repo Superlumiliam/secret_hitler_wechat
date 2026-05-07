@@ -5,7 +5,7 @@
 [x]首页入口ui设计
 [x]清理微信云开发 QuickStart 示例目录（旧 `miniprogram/` 与 `cloudfunctions/quickstartFunctions`）
 [ ]首页“加入房间”按钮的后端功能
-[ ]用户头像云存储生命周期清理：保存新头像后清理旧头像，保存失败时清理孤儿头像，避免`user_avatars/`长期累积
+[ ]用户头像云存储生命周期清理：创建 / 加入房间时上传房间临时头像，房间进入`expired`或维护清理房间数据时删除关联头像，避免长期头像库累积
 
 ## image prompt
 ```

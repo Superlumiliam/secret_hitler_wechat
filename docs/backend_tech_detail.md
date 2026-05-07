@@ -311,11 +311,12 @@ MVP 后端不建立长期 `user_profiles` 集合。
 
 实现约束：
 
-- 用户名、头像、资料完成状态只存在小程序本地缓存
+- 用户名、本地头像路径或默认头像标识、资料完成状态只存在小程序本地缓存
 - 创建用户页点击“保存形象”只更新小程序本地缓存并回到首页，不触发后端写操作
 - `createRoom` / `joinRoom` 请求必须携带本地用户资料
-- 后端只把请求中的 `displayName/avatarUrl` 写入当前房间的 `room_members` 成员快照
-- 房间结束、过期或销毁后，成员快照随房间数据清理，不保留跨局用户资料
+- 前端在创建 / 加入房间时把自定义头像上传为房间临时头像，后端只把请求中的 `displayName/avatarUrl` 写入当前房间的 `room_members` 成员快照
+- 房间临时头像不在游戏刚结束时删除；`ended` 复盘保留期内继续可用，房间进入 `expired`、大厅空房间销毁或维护任务清理房间数据时再删除关联头像资源
+- 房间过期或销毁后，成员快照随房间数据清理，不保留跨局用户资料
 - 恢复活跃房间时，通过 `room_members.openId` 查询当前 openid 仍有效的房间成员，不依赖用户资料表
 
 ## 7.3 `rooms`
@@ -343,7 +344,10 @@ MVP 后端不建立长期 `user_profiles` 集合。
   "updatedAt": "2026-04-12T12:05:00.000Z",
   "startedAt": null,
   "endedAt": null,
-  "expireAt": "2026-04-12T14:00:00.000Z"
+  "expireAt": "2026-04-12T14:00:00.000Z",
+  "assetFileIds": [
+    "cloud://xxx/room_assets/room_xxx/avatars/member_xxx.png"
+  ]
 }
 ```
 
@@ -353,6 +357,7 @@ MVP 后端不建立长期 `user_profiles` 集合。
 - `targetPlayerCount` 来自创建房间页选择，仅用于大厅展示和开局前提示；开局合法性仍以后端当前有效成员数为准
 - 开局后 `playerCount` 不再变化
 - `expireAt` 每次有效操作后更新
+- `assetFileIds` 记录该房间已关联的临时云存储资源，用于房间过期或销毁时统一删除；默认头像等公共静态资源不得写入该字段
 
 ## 7.4 `room_members`
 
@@ -370,7 +375,7 @@ MVP 后端不建立长期 `user_profiles` 集合。
   "roomId": "room_xxx",
   "openId": "openid",
   "displayName": "玩家A",
-  "avatarUrl": "cloud://xxx/avatar/openid.png",
+  "avatarUrl": "cloud://xxx/room_assets/room_xxx/avatars/member_xxx.png",
   "seatIndex": 1,
   "isHost": true,
   "isReady": true,
@@ -712,10 +717,10 @@ MVP 后端不建立长期 `user_profiles` 集合。
 
 1. 认证当前 openid
 2. 校验 `targetPlayerCount` 为 `5-10` 的整数
-3. 校验请求中的 `displayName/avatarUrl`，作为本房间成员快照资料
+3. 校验请求中的 `displayName/avatarUrl`，其中 `avatarUrl` 必须为空或待关联的房间临时头像 `fileID`
 4. 检查该用户是否已有未失效活跃房间
 5. 生成唯一 6 位房号
-6. 使用请求中的 `displayName/avatarUrl` 创建房主成员资料快照
+6. 使用请求中的 `displayName/avatarUrl` 创建房主成员资料快照，并登记房间临时头像到该房间资源清理清单
 7. 创建 `rooms`
 8. 创建首个 `room_members`
 9. 写 `room_public_snapshots`
@@ -727,16 +732,17 @@ MVP 后端不建立长期 `user_profiles` 集合。
 - 若用户当前只关联到 `ended` 或已过期房间，允许创建新房间
 - 房主默认 `seatIndex = 1`
 - MVP 座位顺序由加入顺序初始化；不提供房主调整座位能力
+- 若创建房间失败且前端已上传待关联头像，前端应尝试删除该头像；后端只负责清理已成功关联到房间的头像资源
 
 ### 8.2.2 `joinRoom`
 
 实现步骤：
 
 1. 通过 `roomCode` 找房间
-2. 校验请求中的 `displayName/avatarUrl`，作为本房间成员快照资料
+2. 校验请求中的 `displayName/avatarUrl`，其中 `avatarUrl` 必须为空或待关联的房间临时头像 `fileID`
 3. 校验房间存在、未过期、仍在大厅；同一 openid 回流只允许恢复自己已有成员身份
 4. 若同一 openid 已在该房间有有效成员，则直接返回该成员记录；不因本次请求覆盖既有成员快照
-5. 若房间是大厅且未满，则使用请求中的 `displayName/avatarUrl` 创建新成员资料快照
+5. 若房间是大厅且未满，则使用请求中的 `displayName/avatarUrl` 创建新成员资料快照，并登记房间临时头像到该房间资源清理清单
 6. 更新房间 `playerCount` 与大厅快照
 7. 返回房间与当前成员快照
 
@@ -744,7 +750,7 @@ MVP 后端不建立长期 `user_profiles` 集合。
 
 - 大厅阶段最多 10 人
 - 开局后不允许新 openid 加入
-- 同 openid 分享回流时必须复用原成员身份，不重复占座
+- 同 openid 分享回流时必须复用原成员身份，不重复占座，不因回流请求覆盖既有头像资源；若前端已为回流请求上传新头像但后端未采用，前端应尝试删除该待关联头像
 - 若用户当前只关联到 `ended` 或已过期房间，允许加入新房间
 
 ### 8.2.3 `leaveRoom`
@@ -754,7 +760,7 @@ MVP 后端不建立长期 `user_profiles` 集合。
 1. 将该成员标记为 `left`
 2. 从有效成员列表移除
 3. 重新压缩剩余 `seatIndex`
-4. 若房间没人了，直接销毁或标记房间过期
+4. 若房间没人了，直接销毁或标记房间过期，并触发该房间临时头像清理
 5. 若离开者是房主且仍有其他有效成员，则把房主转移给新的最小 `seatIndex`
 
 对局阶段：
@@ -895,6 +901,7 @@ MVP 后端不建立长期 `user_profiles` 集合。
 - 清理过期命令记录
 - 清理过期快照
 - 清理已失效房间关联的 `room_members` 状态
+- 删除已过期或已销毁房间登记的临时头像云存储文件
 
 建议每 10 分钟执行一次。
 
@@ -1479,7 +1486,7 @@ type ApplyCommandResult = {
     {
       "memberId": "mem_1",
       "displayName": "玩家A",
-      "avatarUrl": "cloud://xxx/avatar/openid.png",
+      "avatarUrl": "cloud://xxx/room_assets/room_xxx/avatars/member_1.png",
       "seatIndex": 1,
       "isAlive": true,
       "isOffline": false,
@@ -1524,7 +1531,7 @@ type ApplyCommandResult = {
     "role": "FASCIST",
     "party": "FASCIST",
     "knownMembers": [
-      { "memberId": "mem_2", "displayName": "玩家B", "avatarUrl": "cloud://xxx/avatar/openid-b.png" }
+      { "memberId": "mem_2", "displayName": "玩家B", "avatarUrl": "cloud://xxx/room_assets/room_xxx/avatars/member_2.png" }
     ]
   },
   "voting": {
@@ -1777,6 +1784,7 @@ MVP 不做自动托管或自动跳过。
 3. 删除或失效：
    - `room_public_snapshots`
    - `player_private_snapshots`
+   - 房间关联的临时头像云存储文件
 4. 保留或延迟清理：
    - `game_events`
    - `command_records`
