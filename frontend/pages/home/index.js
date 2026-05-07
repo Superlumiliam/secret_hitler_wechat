@@ -1,5 +1,7 @@
 const HOME_BACKGROUND_FILE_ID =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/home-background.webp";
+const DEFAULT_AVATAR_FILE_ID =
+  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/man-in-black.webp";
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 
 function getCachedUserProfile() {
@@ -14,14 +16,23 @@ function getCachedUserProfile() {
   return null;
 }
 
+function isCloudFileId(fileId) {
+  return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
+
 Page({
   data: {
     homeBackgroundSrc: "",
     homeBackgroundVisible: true,
+    profileAvatarSrc: "",
   },
 
   onLoad() {
     this.loadHomeBackground();
+  },
+
+  onShow() {
+    this.loadProfileAvatar();
   },
 
   loadHomeBackground() {
@@ -62,6 +73,66 @@ Page({
     console.error("首页背景图加载失败", this.data.homeBackgroundSrc);
     this.setData({
       homeBackgroundVisible: false,
+    });
+  },
+
+  loadProfileAvatar() {
+    const profile = getCachedUserProfile();
+    const avatarUrl = profile && profile.avatarUrl ? profile.avatarUrl : DEFAULT_AVATAR_FILE_ID;
+    this.loadCloudAvatar(avatarUrl, avatarUrl !== DEFAULT_AVATAR_FILE_ID);
+  },
+
+  loadCloudAvatar(avatarUrl, canFallbackToDefault) {
+    if (!isCloudFileId(avatarUrl)) {
+      this.setData({
+        profileAvatarSrc: avatarUrl,
+      });
+      return;
+    }
+
+    if (!wx.cloud) {
+      this.setData({
+        profileAvatarSrc: "",
+      });
+      return;
+    }
+
+    wx.cloud.getTempFileURL({
+      fileList: [avatarUrl],
+      success: (res) => {
+        const file = res.fileList && res.fileList[0];
+        if (!file || file.status !== 0 || !file.tempFileURL) {
+          console.error("首页头像云存储临时链接获取失败", file);
+          if (canFallbackToDefault) {
+            this.loadCloudAvatar(DEFAULT_AVATAR_FILE_ID, false);
+            return;
+          }
+          this.setData({
+            profileAvatarSrc: "",
+          });
+          return;
+        }
+
+        this.setData({
+          profileAvatarSrc: file.tempFileURL,
+        });
+      },
+      fail: (err) => {
+        console.error("首页头像云存储临时链接获取失败", err);
+        if (canFallbackToDefault) {
+          this.loadCloudAvatar(DEFAULT_AVATAR_FILE_ID, false);
+          return;
+        }
+        this.setData({
+          profileAvatarSrc: "",
+        });
+      },
+    });
+  },
+
+  onProfileEntry() {
+    wx.navigateTo({
+      url: "/pages/user-profile/index",
     });
   },
 

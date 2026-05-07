@@ -7,6 +7,21 @@
     binderror="onBackgroundError"
   />
 
+  <view
+    class="profile-entry"
+    bindtap="onProfileEntry"
+    hover-class="profile-entry-hover"
+    role="button"
+    aria-label="创建或修改用户形象"
+  >
+    <image
+      wx:if="{{profileAvatarSrc}}"
+      class="profile-avatar"
+      src="{{profileAvatarSrc}}"
+      mode="aspectFill"
+    />
+  </view>
+
   <view class="actions">
     <button
       class="create-button"
