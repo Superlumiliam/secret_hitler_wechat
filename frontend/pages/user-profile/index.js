@@ -1,7 +1,7 @@
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
-const IDENTITY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}identity-background.webp`;
+const IDENTITY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-identity.webp`;
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const DISPLAY_NAME_MIN_LENGTH = 2;
 const DISPLAY_NAME_MAX_LENGTH = 12;
@@ -44,9 +44,10 @@ Page({
     displayName: "",
     isSaving: false,
     defaultAvatarSrc: "",
+    redirect: "",
   },
 
-  onLoad() {
+  onLoad(options = {}) {
     const cached = readCachedProfile();
     if (cached) {
       const avatarUrl = cached.avatarUrl || "";
@@ -56,6 +57,10 @@ Page({
         displayName: cached.displayName || "",
       });
     }
+
+    this.setData({
+      redirect: options.redirect ? decodeURIComponent(options.redirect) : "",
+    });
 
     this.loadCloudAssets();
   },
@@ -224,6 +229,14 @@ Page({
         title: "已保存",
         icon: "success",
       });
+
+      const redirect = this.data.redirect;
+      if (redirect) {
+        wx.redirectTo({
+          url: redirect,
+        });
+        return;
+      }
 
       wx.reLaunch({
         url: "/pages/home/index",

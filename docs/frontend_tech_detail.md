@@ -1509,7 +1509,7 @@ MVP 尽量少图化：
 - 角色卡、政策卡优先用样式绘制，不依赖大图
 - 小于等于 `200K` 的前端页面元素图片可放在 `frontend/assets/images/`
 - 大于 `200K` 的图片必须放到微信云存储，不能进入主包
-- 云存储图片需在 `reference/` 目录保留一份源文件备份，如 `reference/home-background.png`
+- 云存储图片需在 `reference/` 目录保留一份源文件备份，如 `reference/background-home.png`
 - 云存储图片在页面侧通过 `wx.cloud.getTempFileURL` 获取临时 HTTPS 地址后再绑定到 `image.src`
 - 默认玩家头像放在 `frontend/assets/images/avatars/`
 - 用户自定义头像仅在创建 / 加入房间时上传为房间临时头像；`ended` 复盘期继续使用，房间进入 `expired` 或维护清理时由后端删除

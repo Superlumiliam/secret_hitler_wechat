@@ -35,7 +35,8 @@
 
 ## 微信开发经验
 - 本项目是微信小程序，开发时需遵循[微信小程序开发指南](https://developers.weixin.qq.com/miniprogram/dev/framework/)和[小程序优化指南](https://developers.weixin.qq.com/community/develop/doc/00040e5a0846706e893dcc24256009)
-- 前端图片资源遵循小程序包体优化：大于`200K`的图片不要放进`frontend/`主包，应上传到微信云存储，通过`wx.cloud.getTempFileURL`转换为临时 HTTPS 地址后给`image.src`使用；云存储图片的源文件需在`reference/backup_images`目录保留一份备份
+- 前端图片资源遵循小程序包体优化：大于`200K`的图片不要放进`frontend/`主包，应上传到微信云存储，通过`wx.cloud.getTempFileURL`转换为临时 HTTPS 地址后给`image.src`使用；云存储图片的源文件需在`reference/processed_images`目录保留一份备份
+- 微信小程序 `image` 组件的 `webp` 属性默认不解析 WebP，且 WebP 只支持网络资源；页面使用 WebP 时优先上传到微信云存储，通过 `wx.cloud.getTempFileURL` 获取临时 HTTPS 地址，并在 `image` 上显式设置 `webp="{{true}}"`。不要在 WXSS `background-image` 或本地主包路径中直接依赖 WebP 渲染。
 - 云存储图片也要控制移动端加载成本。处理大型 PNG 背景图时，优先在不缩小尺寸的前提下尝试 WebP 有损压缩并移除元数据
 - 当无法使用微信开发者 CLI 做小程序页面验证时，优先用 Computer Use 查看已打开的微信开发者工具右侧模拟器并进行交互验证；例如可在首页模拟器中点击“创建房间”，再通过画面内容和底部页面路径确认是否进入`pages/create-room/index`。
 - 后端创建新的云函数后，需要在“微信开发者工具”中右键点击新的云函数文件夹，点击“上传并部署：云端安装依赖（不上传node_modules）”才会将云函数真正部署到云环境

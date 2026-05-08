@@ -1,24 +1,67 @@
 <view class="lobby-page">
+  <image
+    wx:if="{{backgroundVisible}}"
+    class="lobby-background"
+    src="{{backgroundSrc}}"
+    mode="aspectFill"
+    webp="{{true}}"
+  />
+  <view class="lobby-overlay"></view>
+
   <view class="top-bar">
-    <button class="back-control" bindtap="onBackHome" hover-class="icon-hover" aria-label="返回首页">‹</button>
-    <view class="page-title">房间大厅</view>
+    <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回首页">‹</view>
   </view>
 
   <view wx:if="{{isLoading}}" class="state-text">正在进入房间...</view>
 
   <view wx:elif="{{lobby}}" class="lobby-content">
-    <view class="room-code-label">房间号</view>
-    <view class="room-code">{{lobby.roomCode}}</view>
-    <view class="room-meta">目标 {{lobby.targetPlayerCount}} 人 · 当前 {{lobby.playerCount}} 人</view>
-
-    <view class="seat-panel">
-      <view class="seat-title">座位</view>
-      <view wx:for="{{lobby.seatOrder}}" wx:key="memberId" class="seat-row">
-        <view class="seat-index">{{item.seatIndex}}</view>
-        <view class="seat-name">{{item.displayName}}</view>
-        <view wx:if="{{item.isHost}}" class="host-tag">房主</view>
+    <view class="room-head">
+      <view>
+        <text class="room-code-label">房间号</text>
+        <text class="room-code">{{lobby.roomCode}}</text>
+      </view>
+      <view class="room-actions">
+        <view class="tool-control" bindtap="onTapRoomSettings" role="button" aria-label="房间设置">
+          <view class="tool-icon gear-icon"></view>
+          <view class="tool-text">房间设置</view>
+        </view>
+        <view class="tool-control" bindtap="onTapRules" role="button" aria-label="规则说明">
+          <view class="tool-icon rules-icon"></view>
+          <view class="tool-text">规则说明</view>
+        </view>
       </view>
     </view>
+
+    <view class="room-meta">目标 {{lobby.targetPlayerCount}} 人 · 当前 {{lobby.playerCount}} 人</view>
+
+    <view class="seat-grid">
+      <view wx:for="{{seats}}" wx:key="seatIndex" class="seat-card {{item.isReady ? 'is-ready' : ''}}">
+        <view class="seat-index">{{item.seatIndex}}</view>
+        <block wx:if="{{item.isEmpty}}">
+          <button class="seat-share" open-type="share" hover-class="seat-hover" aria-label="邀请好友">
+            <image class="seat-avatar" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
+            <view class="seat-name">邀请好友</view>
+          </button>
+        </block>
+        <block wx:else>
+          <image class="seat-avatar" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
+          <view class="seat-name">{{item.displayName}}</view>
+          <view class="seat-tags">
+            <view wx:if="{{item.isHost}}" class="host-tag">房主</view>
+            <view wx:if="{{item.isReady}}" class="ready-tag">已准备</view>
+          </view>
+        </block>
+      </view>
+    </view>
+
+    <button
+      class="primary-action {{lobby.isHost && lobby.myIsReady && !lobby.canStart ? 'is-disabled' : ''}}"
+      bindtap="onReadyAction"
+      loading="{{isSubmitting}}"
+      disabled="{{isSubmitting || (lobby.isHost && lobby.myIsReady && !lobby.canStart)}}"
+    >
+      {{lobby.isHost && lobby.myIsReady ? '开始' : (lobby.myIsReady ? '已准备' : '准备')}}
+    </button>
   </view>
 
   <view wx:else class="state-text">房间暂不可用</view>

@@ -1,0 +1,4 @@
+<view class="board-page">
+  <view class="board-title">对局桌面页</view>
+  <view class="board-room">房间 {{roomId}}</view>
+</view>

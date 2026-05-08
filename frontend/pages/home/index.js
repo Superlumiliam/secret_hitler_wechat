@@ -1,5 +1,5 @@
 const HOME_BACKGROUND_FILE_ID =
-  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/home-background.webp";
+  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/background-home.webp";
 const DEFAULT_AVATAR_FILE_ID =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/man-in-black.webp";
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";

@@ -12,7 +12,7 @@ page {
   background: #061016;
 }
 
-.home-background {
+.background-home {
   position: absolute;
   top: 0;
   left: 0;

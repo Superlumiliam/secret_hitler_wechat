@@ -8,7 +8,8 @@
     {
       "root": "packageRoom",
       "pages": [
-        "pages/lobby/index"
+        "pages/lobby/index",
+        "pages/board/index"
       ]
     }
   ],

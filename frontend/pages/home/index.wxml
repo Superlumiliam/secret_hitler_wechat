@@ -1,7 +1,7 @@
 <view class="home-page">
   <image
     wx:if="{{homeBackgroundVisible}}"
-    class="home-background"
+    class="background-home"
     src="{{homeBackgroundSrc}}"
     mode="aspectFill"
     binderror="onBackgroundError"
