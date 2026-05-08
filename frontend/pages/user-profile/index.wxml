@@ -34,13 +34,6 @@
       <view class="avatar-ring">
         <image class="avatar-image" src="{{avatarPreviewSrc || defaultAvatarSrc}}" mode="aspectFill" />
       </view>
-      <view class="avatar-seal">
-        <image
-          class="avatar-seal-icon"
-          src="/assets/images/icons/logo-envelop-stamp-clean.png"
-          mode="aspectFit"
-        />
-      </view>
     </button>
   </view>
 

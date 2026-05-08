@@ -155,33 +155,6 @@ button::after {
   background: #10242b;
 }
 
-.avatar-seal {
-  position: absolute;
-  left: 50%;
-  bottom: -6rpx;
-  box-sizing: border-box;
-  width: 82rpx;
-  height: 82rpx;
-  margin-left: -41rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 4rpx solid rgba(196, 132, 71, 0.78);
-  border-radius: 50%;
-  color: #e2b270;
-  font-size: 34rpx;
-  font-weight: 900;
-  background: #071318;
-  overflow: hidden;
-  box-shadow: 0 8rpx 18rpx rgba(0, 0, 0, 0.38);
-}
-
-.avatar-seal-icon {
-  display: block;
-  width: 74rpx;
-  height: 74rpx;
-}
-
 .form-panel,
 .notice-panel {
   position: relative;
