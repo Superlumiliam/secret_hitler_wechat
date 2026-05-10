@@ -39,6 +39,7 @@ Page({
     lobby: null,
     isLoading: true,
     isSubmitting: false,
+    isLeaving: false,
     defaultAvatarSrc: "",
     backgroundSrc: "",
     backgroundVisible: false,
@@ -294,10 +295,43 @@ Page({
     }
   },
 
-  onBackHome() {
-    wx.reLaunch({
-      url: "/pages/home/index",
+  async onBackHome() {
+    if (this.data.isLeaving) {
+      return;
+    }
+
+    if (!this.data.roomId || !wx.cloud) {
+      wx.reLaunch({
+        url: "/pages/home/index",
+      });
+      return;
+    }
+
+    this.stopRefreshTimer();
+    this.setData({
+      isLeaving: true,
     });
+
+    try {
+      await this.callRoomService("leaveRoom", {
+        commandId: createCommandId("leave_room"),
+        roomId: this.data.roomId,
+      });
+
+      wx.reLaunch({
+        url: "/pages/home/index",
+      });
+    } catch (err) {
+      console.error("离开房间失败", err);
+      wx.showToast({
+        title: err.message || "离开房间失败",
+        icon: "none",
+      });
+      this.setData({
+        isLeaving: false,
+      });
+      this.startRefreshTimer();
+    }
   },
 
   onTapRoomSettings() {

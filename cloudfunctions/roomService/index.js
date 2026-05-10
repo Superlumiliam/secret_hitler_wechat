@@ -241,7 +241,56 @@ async function saveUserProfile(payload, openid) {
   });
 }
 
-async function assertNoActiveRoom(profile) {
+async function clearActiveRoomForProfile(profile, updatedAt) {
+  if (!profile || !profile._id) {
+    return;
+  }
+
+  await db.collection("user_profiles").doc(profile._id).update({
+    data: {
+      activeRoomId: null,
+      activeMemberId: null,
+      activeRoomStatus: null,
+      updatedAt,
+    },
+  });
+}
+
+async function expireLobbyRoom(room, updatedAt) {
+  await db.collection("rooms").doc(room.roomId || room._id).update({
+    data: {
+      status: "expired",
+      playerCount: 0,
+      hostMemberId: null,
+      expireAt: updatedAt,
+      updatedAt,
+      version: _.inc(1),
+    },
+  });
+
+  await db.collection("room_public_snapshots").doc(room.roomId || room._id).set({
+    data: {
+      roomId: room.roomId || room._id,
+      roomCode: room.roomCode,
+      roomStatus: "expired",
+      hostMemberId: null,
+      playerCount: 0,
+      targetPlayerCount: room.targetPlayerCount,
+      minPlayerCount: MIN_PLAYER_COUNT,
+      maxPlayerCount: MAX_PLAYER_COUNT,
+      seatOrder: [],
+      myMemberId: "",
+      isHost: false,
+      myIsReady: false,
+      canStart: false,
+      version: (room.version || 1) + 1,
+      snapshotType: "lobby",
+      updatedAt,
+    },
+  });
+}
+
+async function assertNoActiveRoom(profile, openid) {
   if (!profile || !profile.activeRoomId) {
     return null;
   }
@@ -250,11 +299,42 @@ async function assertNoActiveRoom(profile) {
     const roomRes = await db.collection("rooms").doc(profile.activeRoomId).get();
     const room = roomRes.data;
     const expireAt = room && (room.expireAt || room.expiresAt);
-    if (
-      room &&
-      ["lobby", "in_game"].includes(room.status) &&
-      (!expireAt || new Date(expireAt).getTime() > Date.now())
-    ) {
+    if (!room || !["lobby", "in_game"].includes(room.status)) {
+      await clearActiveRoomForProfile(profile, new Date());
+      return null;
+    }
+
+    if (expireAt && new Date(expireAt).getTime() <= Date.now()) {
+      await clearActiveRoomForProfile(profile, new Date());
+      return null;
+    }
+
+    if (room.status === "lobby") {
+      const members = await getActiveRoomMembers(profile.activeRoomId);
+      const myMember = members.find((member) => getMemberOpenId(member) === openid);
+      if (!myMember) {
+        await clearActiveRoomForProfile(profile, new Date());
+        return null;
+      }
+
+      if (members.length === 1) {
+        const updatedAt = new Date();
+        await db.collection("room_members").doc(getMemberId(myMember)).update({
+          data: {
+            memberStatus: "left",
+            isReady: false,
+            leftAt: updatedAt,
+            updatedAt,
+            lastSeenAt: updatedAt,
+          },
+        });
+        await expireLobbyRoom(room, updatedAt);
+        await clearActiveRoomForProfile(profile, updatedAt);
+        return null;
+      }
+    }
+
+    if (room && ["lobby", "in_game"].includes(room.status)) {
       return fail("ACTION_NOT_ALLOWED", "当前账号已有进行中的房间");
     }
   } catch (err) {
@@ -333,7 +413,7 @@ async function createRoom(payload, openid) {
 
   return withCommandIdempotency(openid, payload, async () => {
     const profile = await getProfile(openid);
-    const activeRoomError = await assertNoActiveRoom(profile);
+    const activeRoomError = await assertNoActiveRoom(profile, openid);
     if (activeRoomError) {
       return activeRoomError;
     }
@@ -437,7 +517,7 @@ async function joinRoom(payload, openid) {
     }
 
     const profile = await getProfile(openid);
-    const activeRoomError = await assertNoActiveRoom(profile);
+    const activeRoomError = await assertNoActiveRoom(profile, openid);
     if (activeRoomError) {
       return activeRoomError;
     }
@@ -544,6 +624,17 @@ async function getLobbySnapshot(payload, openid) {
   return ok(snapshot);
 }
 
+async function getActiveRoomMembers(roomId) {
+  const membersRes = await db
+    .collection("room_members")
+    .where({
+      roomId,
+    })
+    .orderBy("seatIndex", "asc")
+    .get();
+  return membersRes.data.filter(isActiveMember);
+}
+
 async function getRoomMember(roomId, openid) {
   const membersRes = await db
     .collection("room_members")
@@ -554,6 +645,173 @@ async function getRoomMember(roomId, openid) {
     .limit(1)
     .get();
   return membersRes.data.find(isActiveMember) || null;
+}
+
+async function clearActiveRoomForMember(roomId, memberId, updatedAt) {
+  await db
+    .collection("user_profiles")
+    .where({
+      activeRoomId: roomId,
+      activeMemberId: memberId,
+    })
+    .update({
+      data: {
+        activeRoomId: null,
+        activeMemberId: null,
+        activeRoomStatus: null,
+        updatedAt,
+      },
+    });
+}
+
+async function leaveRoom(payload, openid) {
+  const roomId = payload && payload.roomId;
+  if (!roomId || typeof roomId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+
+  return withCommandIdempotency(openid, payload, async () => {
+    const roomRes = await db.collection("rooms").doc(roomId).get();
+    const room = roomRes.data;
+    if (!room) {
+      return fail("ROOM_NOT_FOUND", "房间不存在");
+    }
+
+    if (!["lobby", "in_game"].includes(room.status)) {
+      return fail("ACTION_NOT_ALLOWED", "当前房间已失效");
+    }
+
+    const member = await getRoomMember(roomId, openid);
+    if (!member) {
+      return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+    }
+
+    const memberId = getMemberId(member);
+    const updatedAt = new Date();
+
+    if (room.status === "in_game") {
+      await db.collection("room_members").doc(memberId).update({
+        data: {
+          memberStatus: "offline",
+          updatedAt,
+          lastSeenAt: updatedAt,
+        },
+      });
+
+      await clearActiveRoomForMember(roomId, memberId, updatedAt);
+
+      return ok({
+        roomId,
+        roomStatus: "in_game",
+        memberId,
+        leaveMode: "marked_offline",
+        newHostMemberId: null,
+        roomExpired: false,
+        routeHint: "home",
+      });
+    }
+
+    await db.collection("room_members").doc(memberId).update({
+      data: {
+        memberStatus: "left",
+        isReady: false,
+        leftAt: updatedAt,
+        updatedAt,
+        lastSeenAt: updatedAt,
+      },
+    });
+
+    await clearActiveRoomForMember(roomId, memberId, updatedAt);
+
+    const remainingMembers = (await getActiveRoomMembers(roomId)).filter((item) => getMemberId(item) !== memberId);
+
+    if (!remainingMembers.length) {
+      await db.collection("rooms").doc(roomId).update({
+        data: {
+          status: "expired",
+          playerCount: 0,
+          hostMemberId: null,
+          expireAt: updatedAt,
+          updatedAt,
+          version: _.inc(1),
+        },
+      });
+
+      await db.collection("room_public_snapshots").doc(roomId).set({
+        data: {
+          roomId,
+          roomCode: room.roomCode,
+          roomStatus: "expired",
+          hostMemberId: null,
+          playerCount: 0,
+          targetPlayerCount: room.targetPlayerCount,
+          minPlayerCount: MIN_PLAYER_COUNT,
+          maxPlayerCount: MAX_PLAYER_COUNT,
+          seatOrder: [],
+          myMemberId: "",
+          isHost: false,
+          myIsReady: false,
+          canStart: false,
+          version: (room.version || 1) + 1,
+          snapshotType: "lobby",
+          updatedAt,
+        },
+      });
+
+      return ok({
+        roomId,
+        roomStatus: "expired",
+        memberId,
+        leaveMode: "removed_from_lobby",
+        newHostMemberId: null,
+        roomExpired: true,
+        routeHint: "home",
+      });
+    }
+
+    let newHostMemberId = room.hostMemberId;
+    const leavingWasHost = memberId === room.hostMemberId || member.isHost;
+    if (leavingWasHost) {
+      newHostMemberId = getMemberId(remainingMembers[0]);
+    }
+
+    await Promise.all(
+      remainingMembers.map((remainingMember, index) =>
+        db
+          .collection("room_members")
+          .doc(getMemberId(remainingMember))
+          .update({
+            data: {
+              seatIndex: index + 1,
+              isHost: getMemberId(remainingMember) === newHostMemberId,
+              updatedAt,
+            },
+          }),
+      ),
+    );
+
+    await db.collection("rooms").doc(roomId).update({
+      data: {
+        hostMemberId: newHostMemberId,
+        playerCount: remainingMembers.length,
+        version: _.inc(1),
+        updatedAt,
+      },
+    });
+
+    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+    await saveLobbySnapshot(lobbySnapshot);
+
+    return ok({
+      roomId,
+      roomStatus: "lobby",
+      memberId,
+      leaveMode: "removed_from_lobby",
+      newHostMemberId: leavingWasHost ? newHostMemberId : null,
+      roomExpired: false,
+      routeHint: "home",
+    });
+  });
 }
 
 async function setReady(payload, openid) {
@@ -681,6 +939,8 @@ exports.main = async (event) => {
         return await createRoom(payload, openid);
       case "joinRoom":
         return await joinRoom(payload, openid);
+      case "leaveRoom":
+        return await leaveRoom(payload, openid);
       case "getLobbySnapshot":
         return await getLobbySnapshot(payload, openid);
       case "setReady":
