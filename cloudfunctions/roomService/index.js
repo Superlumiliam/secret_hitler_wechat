@@ -91,6 +91,12 @@ function normalizeProfilePayload(payload) {
     };
   }
 
+  if (avatarUrl && !isRoomAssetFileId(avatarUrl)) {
+    return {
+      error: fail("INVALID_PAYLOAD", "头像必须是房间临时资源"),
+    };
+  }
+
   return {
     data: {
       defaultDisplayName: displayName,
@@ -113,6 +119,69 @@ async function ensureCollections() {
       }
     }),
   );
+}
+
+function isCloudFileId(fileId) {
+  return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
+
+function isRoomAssetFileId(fileId) {
+  return isCloudFileId(fileId) && fileId.indexOf("/room_assets/") !== -1;
+}
+
+function getRoomAssetFileIds(room) {
+  return Array.from(new Set(((room && room.assetFileIds) || []).filter(isRoomAssetFileId)));
+}
+
+function mergeRoomAssetFileIds(existingFileIds, fileId) {
+  const fileIds = Array.isArray(existingFileIds) ? existingFileIds.slice() : [];
+  if (isRoomAssetFileId(fileId) && !fileIds.includes(fileId)) {
+    fileIds.push(fileId);
+  }
+  return fileIds.filter(isRoomAssetFileId);
+}
+
+async function deleteRoomAssets(room) {
+  const fileList = getRoomAssetFileIds(room);
+  if (!fileList.length) {
+    return {
+      success: true,
+      deletedFileCount: 0,
+      fileList: [],
+      remainingFileIds: [],
+    };
+  }
+
+  try {
+    const res = await cloud.deleteFile({
+      fileList,
+    });
+    const resultFileList = res.fileList || [];
+    const successfulFileIds = resultFileList
+      .filter((file) => file && file.status === 0 && file.fileID)
+      .map((file) => file.fileID);
+    const remainingFileIds = fileList.filter((fileID) => !successfulFileIds.includes(fileID));
+
+    return {
+      success: remainingFileIds.length === 0,
+      deletedFileCount: successfulFileIds.length,
+      fileList: resultFileList,
+      remainingFileIds,
+    };
+  } catch (err) {
+    console.error("delete room assets failed", {
+      roomId: room && (room.roomId || room._id),
+      fileList,
+      err,
+    });
+    return {
+      success: false,
+      deletedFileCount: 0,
+      fileList: [],
+      remainingFileIds: fileList,
+      error: String((err && (err.errMsg || err.message)) || err),
+    };
+  }
 }
 
 async function getCommandRecord(scopeKey, commandId) {
@@ -218,7 +287,7 @@ function buildProfileDto(profile, openid) {
   return {
     profileCompleted: Boolean(profile && profile.profileCompleted),
     displayName: (profile && (profile.defaultDisplayName || profile.displayName)) || fallbackName,
-    avatarUrl: (profile && profile.avatarUrl) || "",
+    avatarUrl: "",
     updatedAt: profile && profile.updatedAt ? new Date(profile.updatedAt).toISOString() : "",
   };
 }
@@ -235,7 +304,11 @@ async function saveUserProfile(payload, openid) {
       return normalized.error;
     }
 
-    await upsertProfile(openid, normalized.data);
+    await upsertProfile(openid, {
+      defaultDisplayName: normalized.data.defaultDisplayName,
+      profileCompleted: normalized.data.profileCompleted,
+      updatedAt: normalized.data.updatedAt,
+    });
     const profile = await getProfile(openid);
     return ok(buildProfileDto(profile, openid));
   });
@@ -257,12 +330,15 @@ async function clearActiveRoomForProfile(profile, updatedAt) {
 }
 
 async function expireLobbyRoom(room, updatedAt) {
+  const assetStats = await deleteRoomAssets(room);
+
   await db.collection("rooms").doc(room.roomId || room._id).update({
     data: {
       status: "expired",
       playerCount: 0,
       hostMemberId: null,
       expireAt: updatedAt,
+      assetFileIds: assetStats.remainingFileIds,
       updatedAt,
       version: _.inc(1),
     },
@@ -431,7 +507,8 @@ async function createRoom(payload, openid) {
       (profileData && profileData.defaultDisplayName) ||
       (profile && (profile.defaultDisplayName || profile.displayName)) ||
       `玩家${openid.slice(-4)}`;
-    const avatarUrl = (profileData && profileData.avatarUrl) || (profile && profile.avatarUrl) || "";
+    const avatarUrl = (profileData && profileData.avatarUrl) || "";
+    const assetFileIds = mergeRoomAssetFileIds([], avatarUrl);
     const createdAt = new Date();
     const expireAt = new Date(Date.now() + ROOM_TTL_LOBBY_MS);
 
@@ -451,6 +528,7 @@ async function createRoom(payload, openid) {
         startedAt: null,
         endedAt: null,
         expireAt,
+        assetFileIds,
       },
     });
 
@@ -474,7 +552,12 @@ async function createRoom(payload, openid) {
     });
 
     await upsertProfile(openid, {
-      ...(profileData || {}),
+      ...(profileData
+        ? {
+            defaultDisplayName: profileData.defaultDisplayName,
+            profileCompleted: profileData.profileCompleted,
+          }
+        : {}),
       activeRoomId: roomId,
       activeMemberId: memberId,
       activeRoomStatus: "lobby",
@@ -550,7 +633,8 @@ async function joinRoom(payload, openid) {
       (profileData && profileData.defaultDisplayName) ||
       (profile && (profile.defaultDisplayName || profile.displayName)) ||
       `玩家${openid.slice(-4)}`;
-    const avatarUrl = (profileData && profileData.avatarUrl) || (profile && profile.avatarUrl) || "";
+    const avatarUrl = (profileData && profileData.avatarUrl) || "";
+    const assetFileIds = mergeRoomAssetFileIds(room.assetFileIds, avatarUrl);
     const memberId = createId("mem");
     const joinedAt = new Date();
 
@@ -576,13 +660,19 @@ async function joinRoom(payload, openid) {
     await db.collection("rooms").doc(roomId).update({
       data: {
         playerCount: members.length + 1,
+        assetFileIds,
         version: _.inc(1),
         updatedAt: joinedAt,
       },
     });
 
     await upsertProfile(openid, {
-      ...(profileData || {}),
+      ...(profileData
+        ? {
+            defaultDisplayName: profileData.defaultDisplayName,
+            profileCompleted: profileData.profileCompleted,
+          }
+        : {}),
       activeRoomId: roomId,
       activeMemberId: memberId,
       activeRoomStatus: "lobby",
@@ -726,12 +816,15 @@ async function leaveRoom(payload, openid) {
     const remainingMembers = (await getActiveRoomMembers(roomId)).filter((item) => getMemberId(item) !== memberId);
 
     if (!remainingMembers.length) {
+      const assetStats = await deleteRoomAssets(room);
+
       await db.collection("rooms").doc(roomId).update({
         data: {
           status: "expired",
           playerCount: 0,
           hostMemberId: null,
           expireAt: updatedAt,
+          assetFileIds: assetStats.remainingFileIds,
           updatedAt,
           version: _.inc(1),
         },

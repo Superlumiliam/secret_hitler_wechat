@@ -99,9 +99,27 @@ const ALL_ROOM_AVATAR_FILE_IDS = [
   `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`,
 ];
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
+const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 
 function createCommandId() {
   return `cmd_create_room_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isCloudFileId(fileId) {
+  return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
+
+function getFileExtension(filePath) {
+  const cleanPath = String(filePath || "").split("?")[0];
+  const matched = cleanPath.match(/\.([a-zA-Z0-9]+)$/);
+  return matched ? matched[1].toLowerCase() : "jpg";
+}
+
+function buildRoomAvatarCloudPath(commandId, filePath) {
+  const ext = getFileExtension(filePath);
+  return `room_assets/pending/${commandId}/avatars/avatar_${Date.now()}_${Math.random()
+    .toString(36)
+    .slice(2, 10)}.${ext}`;
 }
 
 function getCachedUserProfile() {
@@ -192,6 +210,42 @@ Page({
     });
   },
 
+  async uploadRoomAvatarIfNeeded(profile, commandId) {
+    const avatarUrl = profile && profile.avatarUrl;
+    if (!avatarUrl || avatarUrl === DEFAULT_AVATAR_FILE_ID || isCloudFileId(avatarUrl)) {
+      return "";
+    }
+
+    if (!wx.cloud || !wx.cloud.uploadFile) {
+      throw new Error("当前基础库不支持头像上传");
+    }
+
+    const res = await wx.cloud.uploadFile({
+      cloudPath: buildRoomAvatarCloudPath(commandId, avatarUrl),
+      filePath: avatarUrl,
+    });
+
+    if (!res.fileID) {
+      throw new Error("头像上传失败");
+    }
+
+    return res.fileID;
+  },
+
+  async deleteUploadedAvatar(fileID) {
+    if (!fileID || !wx.cloud || !wx.cloud.deleteFile) {
+      return;
+    }
+
+    try {
+      await wx.cloud.deleteFile({
+        fileList: [fileID],
+      });
+    } catch (err) {
+      console.error("清理未使用房间头像失败", err);
+    }
+  },
+
   onBackHome() {
     wx.navigateBack({
       delta: 1,
@@ -215,6 +269,7 @@ Page({
       isSubmitting: true,
     });
 
+    let uploadedAvatarFileId = "";
     try {
       const profile = getCachedUserProfile();
       if (!profile) {
@@ -224,21 +279,26 @@ Page({
         return;
       }
 
+      const commandId = createCommandId();
+      uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
+
       const res = await wx.cloud.callFunction({
         name: "roomService",
         data: {
           action: "createRoom",
           payload: {
-            commandId: createCommandId(),
+            commandId,
             targetPlayerCount: this.data.selectedCount,
             displayName: profile.displayName,
-            avatarUrl: profile.avatarUrl || "",
+            avatarUrl: uploadedAvatarFileId,
           },
         },
       });
       const result = res.result || {};
 
       if (!result.success) {
+        await this.deleteUploadedAvatar(uploadedAvatarFileId);
+        uploadedAvatarFileId = "";
         throw new Error((result.error && result.error.message) || "创建房间失败");
       }
 

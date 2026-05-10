@@ -15,21 +15,6 @@ function readCachedProfile() {
   }
 }
 
-function getFileExtension(filePath) {
-  const cleanPath = String(filePath || "").split("?")[0];
-  const matched = cleanPath.match(/\.([a-zA-Z0-9]+)$/);
-  return matched ? matched[1].toLowerCase() : "jpg";
-}
-
-function buildCloudPath(filePath) {
-  const ext = getFileExtension(filePath);
-  return `user_avatars/avatar_${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
-}
-
-function createCommandId() {
-  return `cmd_save_profile_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
 }
@@ -147,53 +132,13 @@ Page({
     });
   },
 
-  async uploadAvatarIfNeeded() {
+  getProfileAvatarUrl() {
     const avatarUrl = this.data.avatarUrl;
     if (!this.data.avatarDirty) {
       return avatarUrl || DEFAULT_AVATAR_FILE_ID;
     }
 
-    if (!wx.cloud || !wx.cloud.uploadFile) {
-      throw new Error("当前基础库不支持头像上传");
-    }
-
-    const res = await wx.cloud.uploadFile({
-      cloudPath: buildCloudPath(avatarUrl),
-      filePath: avatarUrl,
-    });
-
-    if (!res.fileID) {
-      throw new Error("头像上传失败");
-    }
-
-    return res.fileID;
-  },
-
-  async saveProfileToCloud(profile) {
-    if (!wx.cloud) {
-      return profile;
-    }
-
-    const res = await wx.cloud.callFunction({
-      name: "roomService",
-      data: {
-        action: "saveProfile",
-        payload: {
-          commandId: createCommandId(),
-          displayName: profile.displayName,
-          avatarUrl: profile.avatarUrl,
-        },
-      },
-    });
-    const result = res.result || {};
-    if (!result.success) {
-      throw new Error((result.error && result.error.message) || "保存用户资料失败");
-    }
-
-    return {
-      ...profile,
-      ...(result.data || {}),
-    };
+    return avatarUrl || DEFAULT_AVATAR_FILE_ID;
   },
 
   async onSubmitProfile(event) {
@@ -216,13 +161,12 @@ Page({
     });
 
     try {
-      const avatarUrl = await this.uploadAvatarIfNeeded();
-      const savedProfile = await this.saveProfileToCloud({
+      const savedProfile = {
         profileCompleted: true,
         displayName,
-        avatarUrl,
+        avatarUrl: this.getProfileAvatarUrl(),
         updatedAt: new Date().toISOString(),
-      });
+      };
 
       wx.setStorageSync(PROFILE_STORAGE_KEY, savedProfile);
       wx.showToast({

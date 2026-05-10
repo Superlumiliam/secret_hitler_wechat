@@ -1,7 +1,7 @@
 const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
-const LOBBY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}bacnground-room-prepare.webp`;
+const LOBBY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-room-prepare.webp`;
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 
 function createCommandId(prefix) {
@@ -10,6 +10,19 @@ function createCommandId(prefix) {
 
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
+
+function getFileExtension(filePath) {
+  const cleanPath = String(filePath || "").split("?")[0];
+  const matched = cleanPath.match(/\.([a-zA-Z0-9]+)$/);
+  return matched ? matched[1].toLowerCase() : "jpg";
+}
+
+function buildRoomAvatarCloudPath(commandId, filePath) {
+  const ext = getFileExtension(filePath);
+  return `room_assets/pending/${commandId}/avatars/avatar_${Date.now()}_${Math.random()
+    .toString(36)
+    .slice(2, 10)}.${ext}`;
 }
 
 function readCachedProfile() {
@@ -26,6 +39,7 @@ function createServiceError(result, fallbackMessage) {
   const err = new Error(error.message || fallbackMessage);
   err.code = error.code || "";
   err.retryable = Boolean(error.retryable);
+  err.isBusinessFailure = true;
   return err;
 }
 
@@ -261,12 +275,16 @@ Page({
       return;
     }
 
+    let uploadedAvatarFileId = "";
     try {
+      const commandId = createCommandId("join_room");
+      uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
+
       const result = await this.callRoomService("joinRoom", {
-        commandId: createCommandId("join_room"),
+        commandId,
         roomId: this.data.roomId,
         displayName: profile.displayName,
-        avatarUrl: profile.avatarUrl || "",
+        avatarUrl: uploadedAvatarFileId,
       });
 
       this.setData({
@@ -277,6 +295,10 @@ Page({
         isLoading: false,
       });
     } catch (err) {
+      if (err.isBusinessFailure) {
+        await this.deleteUploadedAvatar(uploadedAvatarFileId);
+        uploadedAvatarFileId = "";
+      }
       console.error("加入房间失败", err);
       if (err.code === "GAME_ALREADY_STARTED") {
         this.redirectToBoard();
@@ -292,6 +314,42 @@ Page({
       this.setData({
         isLoading: false,
       });
+    }
+  },
+
+  async uploadRoomAvatarIfNeeded(profile, commandId) {
+    const avatarUrl = profile && profile.avatarUrl;
+    if (!avatarUrl || avatarUrl === DEFAULT_AVATAR_FILE_ID || isCloudFileId(avatarUrl)) {
+      return "";
+    }
+
+    if (!wx.cloud || !wx.cloud.uploadFile) {
+      throw new Error("当前基础库不支持头像上传");
+    }
+
+    const res = await wx.cloud.uploadFile({
+      cloudPath: buildRoomAvatarCloudPath(commandId, avatarUrl),
+      filePath: avatarUrl,
+    });
+
+    if (!res.fileID) {
+      throw new Error("头像上传失败");
+    }
+
+    return res.fileID;
+  },
+
+  async deleteUploadedAvatar(fileID) {
+    if (!fileID || !wx.cloud || !wx.cloud.deleteFile) {
+      return;
+    }
+
+    try {
+      await wx.cloud.deleteFile({
+        fileList: [fileID],
+      });
+    } catch (err) {
+      console.error("清理未使用房间头像失败", err);
     }
   },
 

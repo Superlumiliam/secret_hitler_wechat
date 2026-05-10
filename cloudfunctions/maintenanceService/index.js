@@ -25,6 +25,63 @@ function getRoomId(room) {
   return room.roomId || room._id;
 }
 
+function isCloudFileId(fileId) {
+  return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
+
+function isRoomAssetFileId(fileId) {
+  return isCloudFileId(fileId) && fileId.indexOf("/room_assets/") !== -1;
+}
+
+function getRoomAssetFileIds(room) {
+  return Array.from(new Set(((room && room.assetFileIds) || []).filter(isRoomAssetFileId)));
+}
+
+async function deleteRoomAssets(room) {
+  const fileList = getRoomAssetFileIds(room);
+  if (!fileList.length) {
+    return {
+      success: true,
+      deletedFileCount: 0,
+      fileList: [],
+    };
+  }
+
+  try {
+    const res = await cloud.deleteFile({
+      fileList,
+    });
+    const resultFileList = res.fileList || [];
+    const failedFiles = resultFileList.filter((file) => file && file.status !== 0);
+    if (failedFiles.length || resultFileList.length !== fileList.length) {
+      return {
+        success: false,
+        deletedFileCount: resultFileList.length - failedFiles.length,
+        fileList: resultFileList,
+        error: "部分房间资源删除失败",
+      };
+    }
+
+    return {
+      success: true,
+      deletedFileCount: fileList.length,
+      fileList: resultFileList,
+    };
+  } catch (err) {
+    console.error("delete room assets failed", {
+      roomId: getRoomId(room),
+      fileList,
+      err,
+    });
+    return {
+      success: false,
+      deletedFileCount: 0,
+      fileList: [],
+      error: String((err && (err.errMsg || err.message)) || err),
+    };
+  }
+}
+
 function isRoomExpired(room, now) {
   const status = room.status;
   const updatedAt = toDate(room.updatedAt) || toDate(room.createdAt);
@@ -135,6 +192,20 @@ async function removeRoomData(room) {
     return {
       roomId: "",
       removed: false,
+      assetStats: null,
+      memberStats: null,
+      snapshotStats: null,
+      profileStats: null,
+      roomStats: null,
+    };
+  }
+
+  const assetStats = await deleteRoomAssets(room);
+  if (!assetStats.success) {
+    return {
+      roomId,
+      removed: false,
+      assetStats,
       memberStats: null,
       snapshotStats: null,
       profileStats: null,
@@ -175,6 +246,7 @@ async function removeRoomData(room) {
   return {
     roomId,
     removed: true,
+    assetStats,
     memberStats: memberRes.stats || null,
     snapshotStats: snapshotRes.stats || null,
     profileStats: profileRes.stats || null,
@@ -245,6 +317,6 @@ exports.main = async () => {
     serverTime: new Date().toISOString(),
     ...roomResult,
     ...commandRecordResult,
-    pendingWork: ["room_asset_file_cleanup"],
+    pendingWork: [],
   };
 };
