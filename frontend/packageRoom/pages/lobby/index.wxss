@@ -175,13 +175,13 @@ page {
   margin-top: 92rpx;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 30rpx 22rpx;
+  gap: 24rpx 14rpx;
 }
 
 .seat-card {
   position: relative;
-  height: 224rpx;
-  padding: 26rpx 12rpx 18rpx;
+  height: 238rpx;
+  padding: 28rpx 8rpx 16rpx;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -200,44 +200,61 @@ page {
 
 .seat-index {
   position: absolute;
-  left: 16rpx;
-  top: 10rpx;
+  left: 12rpx;
+  top: 8rpx;
+  z-index: 1;
   color: #d8b37a;
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: 700;
+  pointer-events: none;
 }
 
-.seat-share {
+.seat-body {
+  position: relative;
+  z-index: 2;
   width: 100%;
   height: 100%;
-  padding: 0;
-  margin: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: 0;
-  line-height: 1;
+  box-sizing: border-box;
+  min-width: 0;
+  padding-top: 10rpx;
 }
 
-.seat-share::after {
+.seat-share-hitarea {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  opacity: 0;
+}
+
+.seat-share-hitarea::after {
   border: 0;
 }
 
 .seat-avatar {
-  width: 96rpx;
-  height: 96rpx;
-  border: 6rpx solid rgba(190, 150, 94, 0.9);
+  display: block;
+  flex: 0 0 86rpx;
+  width: 86rpx;
+  height: 86rpx;
+  border: 5rpx solid rgba(190, 150, 94, 0.9);
   border-radius: 50%;
   background: rgba(3, 28, 34, 0.84);
 }
 
 .seat-name {
   width: 100%;
-  margin-top: 18rpx;
+  margin-top: 14rpx;
   color: #d6aa6b;
-  font-size: 26rpx;
+  font-size: 22rpx;
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
@@ -247,8 +264,8 @@ page {
 }
 
 .seat-tags {
-  height: 26rpx;
-  margin-top: 8rpx;
+  height: 24rpx;
+  margin-top: 6rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -257,9 +274,9 @@ page {
 
 .host-tag,
 .ready-tag {
-  padding: 3rpx 8rpx;
+  padding: 3rpx 6rpx;
   color: #041114;
-  font-size: 18rpx;
+  font-size: 16rpx;
   font-weight: 800;
   line-height: 1.1;
   background: #d8a766;

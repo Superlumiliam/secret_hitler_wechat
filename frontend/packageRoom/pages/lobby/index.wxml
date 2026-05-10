@@ -38,17 +38,20 @@
       <view wx:for="{{seats}}" wx:key="seatIndex" class="seat-card {{item.isReady ? 'is-ready' : ''}}">
         <view class="seat-index">{{item.seatIndex}}</view>
         <block wx:if="{{item.isEmpty}}">
-          <button class="seat-share" open-type="share" hover-class="seat-hover" aria-label="邀请好友">
-            <image class="seat-avatar" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
+          <view class="seat-body">
+            <image class="seat-avatar" src="{{item.avatarSrc}}" mode="aspectFit" webp="{{true}}"></image>
             <view class="seat-name">邀请好友</view>
-          </button>
+          </view>
+          <button class="seat-share-hitarea" open-type="share" hover-class="seat-hover" aria-label="邀请好友"></button>
         </block>
         <block wx:else>
-          <image class="seat-avatar" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
-          <view class="seat-name">{{item.displayName}}</view>
-          <view class="seat-tags">
-            <view wx:if="{{item.isHost}}" class="host-tag">房主</view>
-            <view wx:if="{{item.isReady}}" class="ready-tag">已准备</view>
+          <view class="seat-body">
+            <image class="seat-avatar" src="{{item.avatarSrc}}" mode="aspectFit" webp="{{true}}"></image>
+            <view class="seat-name">{{item.displayName}}</view>
+            <view class="seat-tags">
+              <view wx:if="{{item.isHost}}" class="host-tag">房主</view>
+              <view wx:if="{{item.isReady}}" class="ready-tag">已准备</view>
+            </view>
           </view>
         </block>
       </view>
