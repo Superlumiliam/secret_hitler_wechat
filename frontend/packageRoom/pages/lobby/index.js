@@ -43,6 +43,22 @@ function createServiceError(result, fallbackMessage) {
   return err;
 }
 
+function takeInitialLobbySnapshot(roomId) {
+  const app = getApp();
+  const snapshots = app.globalData.initialLobbySnapshots || {};
+  const cached = snapshots[roomId];
+  if (!cached) {
+    return null;
+  }
+
+  delete snapshots[roomId];
+  if (cached.expiresAt && cached.expiresAt < Date.now()) {
+    return null;
+  }
+
+  return cached;
+}
+
 Page({
   refreshTimer: null,
   hasTriedJoinRoom: false,
@@ -61,11 +77,23 @@ Page({
   },
 
   onLoad(options) {
+    const roomId = options.roomId || "";
+    const initialLobby = takeInitialLobbySnapshot(roomId);
     this.setData({
-      roomId: options.roomId || "",
-      memberId: options.memberId || "",
+      roomId,
+      memberId: (initialLobby && initialLobby.memberId) || options.memberId || "",
     });
     this.loadPageAssets();
+    if (initialLobby && initialLobby.lobbySnapshot) {
+      this.hydrateLobby(initialLobby.lobbySnapshot).then(() => {
+        this.setData({
+          isLoading: false,
+        });
+      });
+      this.loadLobbySnapshot({ silent: true });
+      return;
+    }
+
     this.loadLobbySnapshot();
   },
 

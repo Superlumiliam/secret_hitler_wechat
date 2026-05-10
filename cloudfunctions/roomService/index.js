@@ -8,13 +8,6 @@ cloud.init({
 const db = cloud.database();
 const _ = db.command;
 
-const COLLECTIONS = [
-  "rooms",
-  "room_members",
-  "room_public_snapshots",
-  "user_profiles",
-  "command_records",
-];
 const MIN_PLAYER_COUNT = 5;
 const MAX_PLAYER_COUNT = 10;
 const ROOM_CODE_LENGTH = 6;
@@ -76,18 +69,6 @@ function payloadHash(payload) {
   return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
-function isCollectionAlreadyExistsError(err) {
-  const errCode = err && (err.errCode || err.code);
-  const errMessage = String((err && (err.errMsg || err.message)) || "");
-  return (
-    errCode === -501001 ||
-    errMessage.includes("already exists") ||
-    errMessage.includes("ResourceExist") ||
-    errMessage.includes("Table exist") ||
-    errMessage.includes("DATABASE_COLLECTION_ALREADY_EXIST")
-  );
-}
-
 function isDocumentNotFoundError(err) {
   const errCode = err && (err.errCode || err.code);
   const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
@@ -125,20 +106,6 @@ function normalizeProfilePayload(payload) {
       updatedAt: new Date(),
     },
   };
-}
-
-async function ensureCollections() {
-  await Promise.all(
-    COLLECTIONS.map(async (name) => {
-      try {
-        await db.createCollection(name);
-      } catch (err) {
-        if (!isCollectionAlreadyExistsError(err)) {
-          throw err;
-        }
-      }
-    }),
-  );
 }
 
 function isCloudFileId(fileId) {
@@ -451,37 +418,29 @@ async function assertNoActiveRoom(profile, openid) {
   return null;
 }
 
-async function buildLobbySnapshot(roomId, openid) {
-  const roomRes = await db.collection("rooms").doc(roomId).get();
-  const room = roomRes.data;
+function buildLobbySnapshotFromData(room, members, openid) {
   if (!room) {
     return null;
   }
 
-  const membersRes = await db
-    .collection("room_members")
-    .where({
-      roomId,
-    })
-    .orderBy("seatIndex", "asc")
-    .get();
-  const members = membersRes.data.filter(isActiveMember);
-  const myMember = members.find((member) => getMemberOpenId(member) === openid) || null;
+  const roomId = room.roomId || room._id;
+  const activeMembers = members.filter(isActiveMember);
+  const myMember = activeMembers.find((member) => getMemberOpenId(member) === openid) || null;
   const isHost = Boolean(myMember && getMemberId(myMember) === room.hostMemberId);
   const isLobby = room.status === "lobby";
-  const isFull = members.length === room.targetPlayerCount;
-  const allReady = members.length > 0 && members.every((member) => Boolean(member.isReady));
+  const isFull = activeMembers.length === room.targetPlayerCount;
+  const allReady = activeMembers.length > 0 && activeMembers.every((member) => Boolean(member.isReady));
 
   return {
     roomId,
     roomCode: room.roomCode,
     roomStatus: room.status,
     hostMemberId: room.hostMemberId,
-    playerCount: members.length,
+    playerCount: activeMembers.length,
     targetPlayerCount: room.targetPlayerCount,
     minPlayerCount: MIN_PLAYER_COUNT,
     maxPlayerCount: MAX_PLAYER_COUNT,
-    seatOrder: members.map((member) => ({
+    seatOrder: activeMembers.map((member) => ({
       memberId: getMemberId(member),
       displayName: member.displayName,
       avatarUrl: member.avatarUrl || "",
@@ -496,6 +455,23 @@ async function buildLobbySnapshot(roomId, openid) {
     version: room.version || 1,
     updatedAt: room.updatedAt ? new Date(room.updatedAt).toISOString() : nowIso(),
   };
+}
+
+async function buildLobbySnapshot(roomId, openid) {
+  const roomRes = await db.collection("rooms").doc(roomId).get();
+  const room = roomRes.data;
+  if (!room) {
+    return null;
+  }
+
+  const membersRes = await db
+    .collection("room_members")
+    .where({
+      roomId,
+    })
+    .orderBy("seatIndex", "asc")
+    .get();
+  return buildLobbySnapshotFromData(room, membersRes.data, openid);
 }
 
 async function saveLobbySnapshot(snapshot) {
@@ -543,43 +519,46 @@ async function createRoom(payload, openid) {
     const createdAt = new Date();
     const expireAt = createExpireAt(createdAt, ROOM_TTL_LOBBY_MS);
 
+    const roomData = {
+      roomId,
+      roomCode,
+      status: "lobby",
+      hostMemberId: memberId,
+      currentGameId: null,
+      targetPlayerCount,
+      playerCount: 1,
+      version: 1,
+      createdByOpenId: openid,
+      createdAt,
+      updatedAt: createdAt,
+      startedAt: null,
+      endedAt: null,
+      expireAt,
+      assetFileIds,
+    };
+    const memberData = {
+      memberId,
+      roomId,
+      openId: openid,
+      displayName,
+      avatarUrl,
+      seatIndex: 1,
+      isHost: true,
+      isReady: false,
+      memberStatus: "active",
+      joinedAt: createdAt,
+      leftAt: null,
+      lastSeenAt: createdAt,
+      createdAt,
+      updatedAt: createdAt,
+    };
+
     await db.collection("rooms").doc(roomId).set({
-      data: {
-        roomId,
-        roomCode,
-        status: "lobby",
-        hostMemberId: memberId,
-        currentGameId: null,
-        targetPlayerCount,
-        playerCount: 1,
-        version: 1,
-        createdByOpenId: openid,
-        createdAt,
-        updatedAt: createdAt,
-        startedAt: null,
-        endedAt: null,
-        expireAt,
-        assetFileIds,
-      },
+      data: roomData,
     });
 
     await db.collection("room_members").doc(memberId).set({
-      data: {
-        memberId,
-        roomId,
-        openId: openid,
-        displayName,
-        avatarUrl,
-        seatIndex: 1,
-        isHost: true,
-        isReady: false,
-        memberStatus: "active",
-        joinedAt: createdAt,
-        leftAt: null,
-        lastSeenAt: createdAt,
-        createdAt,
-        updatedAt: createdAt,
-      },
+      data: memberData,
     });
 
     await upsertProfile(openid, {
@@ -595,7 +574,7 @@ async function createRoom(payload, openid) {
       updatedAt: createdAt,
     });
 
-    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+    const lobbySnapshot = buildLobbySnapshotFromData(roomData, [memberData], openid);
     await saveLobbySnapshot(lobbySnapshot);
 
     return ok({
@@ -1031,7 +1010,6 @@ async function startGame(payload, openid) {
 
 exports.main = async (event) => {
   try {
-    await ensureCollections();
     const wxContext = cloud.getWXContext();
     const openid = wxContext.OPENID;
     const action = event && event.action;

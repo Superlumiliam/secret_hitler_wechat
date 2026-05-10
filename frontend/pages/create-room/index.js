@@ -100,6 +100,7 @@ const ALL_ROOM_AVATAR_FILE_IDS = [
 ];
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
+const INITIAL_LOBBY_SNAPSHOT_TTL_MS = 30 * 1000;
 
 function createCommandId() {
   return `cmd_create_room_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -132,6 +133,20 @@ function getCachedUserProfile() {
     console.error("读取用户资料缓存失败", err);
   }
   return null;
+}
+
+function cacheInitialLobbySnapshot(room) {
+  if (!room || !room.roomId || !room.lobbySnapshot) {
+    return;
+  }
+
+  const app = getApp();
+  app.globalData.initialLobbySnapshots = app.globalData.initialLobbySnapshots || {};
+  app.globalData.initialLobbySnapshots[room.roomId] = {
+    memberId: room.memberId || "",
+    lobbySnapshot: room.lobbySnapshot,
+    expiresAt: Date.now() + INITIAL_LOBBY_SNAPSHOT_TTL_MS,
+  };
 }
 
 function hydrateCards(cards, urlByFileId) {
@@ -303,6 +318,7 @@ Page({
       }
 
       const room = result.data || {};
+      cacheInitialLobbySnapshot(room);
       wx.redirectTo({
         url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}`,
       });

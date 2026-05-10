@@ -7,10 +7,148 @@ cloud.init({
 const db = cloud.database();
 const _ = db.command;
 
+const COLLECTIONS = [
+  "rooms",
+  "room_members",
+  "room_public_snapshots",
+  "user_profiles",
+  "command_records",
+  "maintenance_state",
+];
 const BATCH_LIMIT = 100;
 const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
 const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
 const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
+const MAINTENANCE_STATE_COLLECTION = "maintenance_state";
+const COLLECTION_INIT_STATE_DOC_ID = "collection_init_daily";
+const CHINA_TIMEZONE_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function getChinaDateKey(date) {
+  return new Date(date.getTime() + CHINA_TIMEZONE_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function isCollectionAlreadyExistsError(err) {
+  const errCode = err && (err.errCode || err.code);
+  const errMessage = String((err && (err.errMsg || err.message)) || "");
+  return (
+    errCode === -501001 ||
+    errMessage.includes("already exists") ||
+    errMessage.includes("ResourceExist") ||
+    errMessage.includes("Table exist") ||
+    errMessage.includes("DATABASE_COLLECTION_ALREADY_EXIST")
+  );
+}
+
+function isCollectionNotFoundError(err) {
+  const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
+  return (
+    errMessage.includes("collection not exist") ||
+    errMessage.includes("collection_not_exist") ||
+    errMessage.includes("database_collection_not_exist") ||
+    errMessage.includes("table not exist")
+  );
+}
+
+function isDocumentNotFoundError(err) {
+  const errCode = err && (err.errCode || err.code);
+  const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
+  return (
+    errCode === -502005 ||
+    errMessage.includes("document not exist") ||
+    errMessage.includes("document_not_exist") ||
+    errMessage.includes("database_document_not_exist") ||
+    errMessage.includes("does not exist") ||
+    errMessage.includes("doesn't exist")
+  );
+}
+
+async function ensureCollection(name) {
+  try {
+    await db.createCollection(name);
+    return {
+      name,
+      created: true,
+      alreadyExists: false,
+    };
+  } catch (err) {
+    if (isCollectionAlreadyExistsError(err)) {
+      return {
+        name,
+        created: false,
+        alreadyExists: true,
+      };
+    }
+    throw err;
+  }
+}
+
+async function readCollectionInitState() {
+  try {
+    const res = await db.collection(MAINTENANCE_STATE_COLLECTION).doc(COLLECTION_INIT_STATE_DOC_ID).get();
+    return res.data || null;
+  } catch (err) {
+    if (isCollectionNotFoundError(err)) {
+      await ensureCollection(MAINTENANCE_STATE_COLLECTION);
+      return null;
+    }
+
+    if (isDocumentNotFoundError(err)) {
+      return null;
+    }
+
+    throw err;
+  }
+}
+
+async function saveCollectionInitState(data) {
+  try {
+    await db.collection(MAINTENANCE_STATE_COLLECTION).doc(COLLECTION_INIT_STATE_DOC_ID).set({
+      data,
+    });
+  } catch (err) {
+    if (!isCollectionNotFoundError(err)) {
+      throw err;
+    }
+
+    await ensureCollection(MAINTENANCE_STATE_COLLECTION);
+    await db.collection(MAINTENANCE_STATE_COLLECTION).doc(COLLECTION_INIT_STATE_DOC_ID).set({
+      data,
+    });
+  }
+}
+
+async function ensureCollectionsDaily(now) {
+  const todayKey = getChinaDateKey(now);
+  const state = await readCollectionInitState();
+  if (state && state.lastCheckedDate === todayKey) {
+    return {
+      collectionInitSkipped: true,
+      collectionInitDate: todayKey,
+      checkedCollections: state.checkedCollections || [],
+    };
+  }
+
+  const collectionResults = [];
+  for (const name of COLLECTIONS) {
+    collectionResults.push(await ensureCollection(name));
+  }
+
+  await saveCollectionInitState({
+    stateId: COLLECTION_INIT_STATE_DOC_ID,
+    lastCheckedDate: todayKey,
+    lastCheckedAt: now,
+    checkedCollections: COLLECTIONS,
+    collectionResults,
+    updatedAt: now,
+  });
+
+  return {
+    collectionInitSkipped: false,
+    collectionInitDate: todayKey,
+    checkedCollections: COLLECTIONS,
+    collectionResults,
+  };
+}
 
 function toDate(value) {
   if (!value) {
@@ -309,12 +447,14 @@ async function cleanupCommandRecords(now) {
 
 exports.main = async () => {
   const startedAt = new Date();
+  const collectionInitResult = await ensureCollectionsDaily(startedAt);
   const roomResult = await cleanupRooms(startedAt);
   const commandRecordResult = await cleanupCommandRecords(startedAt);
 
   return {
     success: true,
     serverTime: new Date().toISOString(),
+    ...collectionInitResult,
     ...roomResult,
     ...commandRecordResult,
     pendingWork: [],
