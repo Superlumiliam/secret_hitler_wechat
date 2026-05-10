@@ -4,6 +4,7 @@ page {
 }
 
 .board-page {
+  position: relative;
   min-height: 100vh;
   padding: calc(160rpx + env(safe-area-inset-top)) 40rpx 40rpx;
   box-sizing: border-box;
@@ -13,6 +14,25 @@ page {
   color: #e0b06d;
   background: linear-gradient(180deg, #06171c 0%, #01080a 100%);
   font-family: "Songti SC", STSong, SimSun, serif;
+}
+
+.back-control {
+  position: absolute;
+  left: 32rpx;
+  top: calc(48rpx + env(safe-area-inset-top));
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d8a766;
+  font-size: 92rpx;
+  line-height: 66rpx;
+  text-shadow: 0 0 12rpx rgba(0, 0, 0, 0.75);
+}
+
+.back-control-hover {
+  opacity: 0.72;
 }
 
 .board-title {

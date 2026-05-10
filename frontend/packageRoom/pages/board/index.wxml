@@ -1,4 +1,5 @@
 <view class="board-page">
+  <view class="back-control" bindtap="onBackHome" hover-class="back-control-hover" role="button" aria-label="返回首页">‹</view>
   <view class="board-title">对局桌面页</view>
   <view class="board-room">房间 {{roomId}}</view>
 </view>

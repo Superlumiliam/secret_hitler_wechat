@@ -65,6 +65,7 @@ Page({
     lobby: null,
     isLoading: true,
     isSubmitting: false,
+    isDevActionSubmitting: false,
     isLeaving: false,
     defaultAvatarSrc: "",
     backgroundSrc: "",
@@ -385,6 +386,62 @@ Page({
     } finally {
       this.setData({
         isSubmitting: false,
+      });
+    }
+  },
+
+  async onDevFillVirtualPlayers() {
+    if (this.data.isDevActionSubmitting || !this.data.lobby || !this.data.lobby.isDevRoom) {
+      return;
+    }
+
+    this.setData({
+      isDevActionSubmitting: true,
+    });
+
+    try {
+      const snapshot = await this.callRoomService("devFillVirtualPlayers", {
+        commandId: createCommandId("dev_fill_virtual_players"),
+        roomId: this.data.roomId,
+      });
+      await this.hydrateLobby(snapshot);
+    } catch (err) {
+      console.error("补齐虚拟玩家失败", err);
+      wx.showToast({
+        title: err.code === "DEV_MODE_DISABLED" ? "开发者模式未启用" : err.message || "补齐失败",
+        icon: "none",
+      });
+    } finally {
+      this.setData({
+        isDevActionSubmitting: false,
+      });
+    }
+  },
+
+  async onDevReadyAllVirtualPlayers() {
+    if (this.data.isDevActionSubmitting || !this.data.lobby || !this.data.lobby.isDevRoom) {
+      return;
+    }
+
+    this.setData({
+      isDevActionSubmitting: true,
+    });
+
+    try {
+      const snapshot = await this.callRoomService("devReadyAllVirtualPlayers", {
+        commandId: createCommandId("dev_ready_virtual_players"),
+        roomId: this.data.roomId,
+      });
+      await this.hydrateLobby(snapshot);
+    } catch (err) {
+      console.error("虚拟玩家准备失败", err);
+      wx.showToast({
+        title: err.code === "DEV_MODE_DISABLED" ? "开发者模式未启用" : err.message || "准备失败",
+        icon: "none",
+      });
+    } finally {
+      this.setData({
+        isDevActionSubmitting: false,
       });
     }
   },

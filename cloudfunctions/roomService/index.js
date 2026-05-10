@@ -18,6 +18,8 @@ const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const MIN_DISPLAY_NAME_LENGTH = 2;
 const MAX_DISPLAY_NAME_LENGTH = 12;
 const REQUIRED_COLLECTIONS = ["rooms", "room_members", "user_profiles", "command_records"];
+const ROOM_MODE_NORMAL = "normal";
+const ROOM_MODE_DEV = "dev";
 
 function nowIso() {
   return new Date().toISOString();
@@ -52,6 +54,43 @@ function createId(prefix) {
 function createExpireAt(baseTime, ttlMs) {
   const base = baseTime instanceof Date ? baseTime.getTime() : Date.now();
   return new Date(base + ttlMs);
+}
+
+function splitEnvList(value) {
+  return String(value || "")
+    .split(/[\s,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getAllowedDevEnvIds() {
+  return Array.from(
+    new Set([
+      ...splitEnvList(process.env.DEV_CLOUD_ENV_IDS),
+      ...splitEnvList(process.env.DEV_CLOUD_ENV_ID),
+      ...splitEnvList(process.env.CURRENT_DEV_CLOUD_ENV_ID),
+    ]),
+  );
+}
+
+function getCurrentCloudEnvId(wxContext) {
+  return (
+    (wxContext && (wxContext.ENV || wxContext.TCB_ENV || wxContext.SCF_NAMESPACE)) ||
+    process.env.TCB_ENV ||
+    process.env.SCF_NAMESPACE ||
+    process.env.WX_CLOUD_ENV ||
+    process.env.CURRENT_CLOUD_ENV_ID ||
+    ""
+  );
+}
+
+function assertDevModeAvailable(wxContext) {
+  const currentEnvId = getCurrentCloudEnvId(wxContext);
+  const allowedEnvIds = getAllowedDevEnvIds();
+  if (!currentEnvId || !allowedEnvIds.includes(currentEnvId)) {
+    return fail("DEV_MODE_DISABLED", "开发者模式未启用");
+  }
+  return null;
 }
 
 function getMemberId(member) {
@@ -382,6 +421,49 @@ async function expireLobbyRoom(room, updatedAt) {
   });
 }
 
+async function expireDevRoomWithVirtualMembers(room, members, openid, updatedAt) {
+  const roomId = room.roomId || room._id;
+  const canExpireDevRoom =
+    (room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_DEV &&
+    room.createdByOpenId === openid &&
+    members.length > 0 &&
+    members.every((member) => getMemberOpenId(member) === openid || member.isVirtual);
+
+  if (!canExpireDevRoom) {
+    return false;
+  }
+
+  await Promise.all(
+    members.map((member) =>
+      db
+        .collection("room_members")
+        .doc(getMemberId(member))
+        .update({
+          data: {
+            memberStatus: "left",
+            isReady: false,
+            leftAt: updatedAt,
+            updatedAt,
+            lastSeenAt: updatedAt,
+          },
+        }),
+    ),
+  );
+
+  await db.collection("rooms").doc(roomId).update({
+    data: {
+      status: "expired",
+      playerCount: 0,
+      hostMemberId: null,
+      expireAt: updatedAt,
+      updatedAt,
+      version: _.inc(1),
+    },
+  });
+
+  return true;
+}
+
 async function assertNoActiveRoom(profile, openid) {
   if (!profile || !profile.activeRoomId) {
     return null;
@@ -399,6 +481,16 @@ async function assertNoActiveRoom(profile, openid) {
     if (expireAt && new Date(expireAt).getTime() <= Date.now()) {
       await clearActiveRoomForProfile(openid, new Date());
       return null;
+    }
+
+    if ((room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_DEV) {
+      const members = await getActiveRoomMembers(profile.activeRoomId);
+      const updatedAt = new Date();
+      const expiredDevRoom = await expireDevRoomWithVirtualMembers(room, members, openid, updatedAt);
+      if (expiredDevRoom) {
+        await clearActiveRoomForProfile(openid, updatedAt);
+        return null;
+      }
     }
 
     if (room.status === "lobby") {
@@ -442,6 +534,7 @@ function buildLobbySnapshotFromData(room, members, openid) {
   }
 
   const roomId = room.roomId || room._id;
+  const roomMode = room.mode || ROOM_MODE_NORMAL;
   const activeMembers = members.filter(isActiveMember);
   const myMember = activeMembers.find((member) => getMemberOpenId(member) === openid) || null;
   const isHost = Boolean(myMember && getMemberId(myMember) === room.hostMemberId);
@@ -453,6 +546,8 @@ function buildLobbySnapshotFromData(room, members, openid) {
     roomId,
     roomCode: room.roomCode,
     roomStatus: room.status,
+    roomMode,
+    isDevRoom: roomMode === ROOM_MODE_DEV,
     hostMemberId: room.hostMemberId,
     playerCount: activeMembers.length,
     targetPlayerCount: room.targetPlayerCount,
@@ -465,6 +560,8 @@ function buildLobbySnapshotFromData(room, members, openid) {
       seatIndex: member.seatIndex,
       isHost: Boolean(member.isHost || getMemberId(member) === room.hostMemberId),
       isReady: member.isReady,
+      isVirtual: Boolean(member.isVirtual),
+      controlledByCurrentViewer: Boolean(member.isVirtual && member.controlledByOpenId === openid),
     })),
     viewerState: {
       myMemberId: myMember ? getMemberId(myMember) : "",
@@ -494,7 +591,8 @@ async function buildLobbySnapshot(roomId, openid) {
   return buildLobbySnapshotFromData(room, membersRes.data, openid);
 }
 
-async function createRoom(payload, openid) {
+async function createRoom(payload, openid, options = {}) {
+  const roomMode = options.mode === ROOM_MODE_DEV ? ROOM_MODE_DEV : ROOM_MODE_NORMAL;
   const targetPlayerCount = Number(payload.targetPlayerCount);
   if (
     !Number.isInteger(targetPlayerCount) ||
@@ -532,6 +630,7 @@ async function createRoom(payload, openid) {
     const roomData = {
       roomId,
       roomCode,
+      mode: roomMode,
       status: "lobby",
       hostMemberId: memberId,
       currentGameId: null,
@@ -555,6 +654,7 @@ async function createRoom(payload, openid) {
       seatIndex: 1,
       isHost: true,
       isReady: false,
+      isVirtual: false,
       memberStatus: "active",
       joinedAt: createdAt,
       leftAt: null,
@@ -816,6 +916,28 @@ async function leaveRoom(payload, openid) {
     const updatedAt = new Date();
 
     if (room.status === "in_game") {
+      const isDevRoom = (room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_DEV;
+      const leavingDevHost = isDevRoom && (memberId === room.hostMemberId || room.createdByOpenId === openid);
+
+      if (leavingDevHost) {
+        const activeMembers = await getActiveRoomMembers(roomId);
+        const expiredDevRoom = await expireDevRoomWithVirtualMembers(room, activeMembers, openid, updatedAt);
+
+        if (expiredDevRoom) {
+          await clearActiveRoomForProfile(openid, updatedAt);
+
+          return ok({
+            roomId,
+            roomStatus: "expired",
+            memberId,
+            leaveMode: "expired_dev_room",
+            newHostMemberId: null,
+            roomExpired: true,
+            routeHint: "home",
+          });
+        }
+      }
+
       await db.collection("room_members").doc(memberId).update({
         data: {
           memberStatus: "offline",
@@ -1034,7 +1156,185 @@ async function startGame(payload, openid) {
   });
 }
 
-async function dispatchAction(action, payload, openid) {
+async function assertDevRoomHost(roomId, openid) {
+  if (!roomId || typeof roomId !== "string") {
+    return {
+      error: fail("INVALID_PAYLOAD", "缺少 roomId"),
+    };
+  }
+
+  const roomRes = await db.collection("rooms").doc(roomId).get();
+  const room = roomRes.data;
+  if (!room) {
+    return {
+      error: fail("ROOM_NOT_FOUND", "房间不存在"),
+    };
+  }
+
+  if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_DEV) {
+    return {
+      error: fail("ACTION_NOT_ALLOWED", "当前房间不是开发者房间"),
+    };
+  }
+
+  if (room.status !== "lobby") {
+    return {
+      error: fail("ACTION_NOT_ALLOWED", "房间已开局"),
+    };
+  }
+
+  const member = await getRoomMember(roomId, openid);
+  if (!member) {
+    return {
+      error: fail("NOT_ROOM_MEMBER", "当前用户不在房间中"),
+    };
+  }
+
+  if (getMemberId(member) !== room.hostMemberId) {
+    return {
+      error: fail("ACTION_NOT_ALLOWED", "只有房主可以使用开发者操作"),
+    };
+  }
+
+  return {
+    room,
+    member,
+  };
+}
+
+async function devCreateRoom(payload, openid, wxContext) {
+  const disabled = assertDevModeAvailable(wxContext);
+  if (disabled) {
+    return disabled;
+  }
+
+  return await createRoom(payload, openid, {
+    mode: ROOM_MODE_DEV,
+  });
+}
+
+async function devFillVirtualPlayers(payload, openid, wxContext) {
+  const disabled = assertDevModeAvailable(wxContext);
+  if (disabled) {
+    return disabled;
+  }
+
+  const roomId = payload && payload.roomId;
+  return withCommandIdempotency(openid, payload, async () => {
+    const resolved = await assertDevRoomHost(roomId, openid);
+    if (resolved.error) {
+      return resolved.error;
+    }
+
+    const room = resolved.room;
+    const members = await getActiveRoomMembers(roomId);
+    if (members.length >= room.targetPlayerCount) {
+      const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+      return ok(lobbySnapshot);
+    }
+
+    const occupiedSeats = members.map((member) => member.seatIndex);
+    const createdAt = new Date();
+    const virtualMembers = [];
+
+    for (let seatIndex = 1; seatIndex <= room.targetPlayerCount; seatIndex += 1) {
+      if (occupiedSeats.includes(seatIndex)) {
+        continue;
+      }
+
+      const memberId = createId("mem");
+      virtualMembers.push({
+        memberId,
+        roomId,
+        openId: "",
+        displayName: `虚拟玩家${seatIndex}`,
+        avatarUrl: "",
+        seatIndex,
+        isHost: false,
+        isReady: false,
+        isVirtual: true,
+        controlledByOpenId: openid,
+        memberStatus: "active",
+        joinedAt: createdAt,
+        leftAt: null,
+        lastSeenAt: createdAt,
+        createdAt,
+        updatedAt: createdAt,
+      });
+    }
+
+    await Promise.all(
+      virtualMembers.map((member) =>
+        db.collection("room_members").doc(member.memberId).set({
+          data: member,
+        }),
+      ),
+    );
+
+    await db.collection("rooms").doc(roomId).update({
+      data: {
+        playerCount: members.length + virtualMembers.length,
+        expireAt: createExpireAt(createdAt, ROOM_TTL_LOBBY_MS),
+        version: _.inc(1),
+        updatedAt: createdAt,
+      },
+    });
+
+    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+    return ok(lobbySnapshot);
+  });
+}
+
+async function devReadyAllVirtualPlayers(payload, openid, wxContext) {
+  const disabled = assertDevModeAvailable(wxContext);
+  if (disabled) {
+    return disabled;
+  }
+
+  const roomId = payload && payload.roomId;
+  return withCommandIdempotency(openid, payload, async () => {
+    const resolved = await assertDevRoomHost(roomId, openid);
+    if (resolved.error) {
+      return resolved.error;
+    }
+
+    const updatedAt = new Date();
+    const members = await getActiveRoomMembers(roomId);
+    const readyMembers = members.filter(
+      (member) =>
+        getMemberId(member) === resolved.room.hostMemberId ||
+        (member.isVirtual && member.controlledByOpenId === openid),
+    );
+
+    await Promise.all(
+      readyMembers.map((member) =>
+        db
+          .collection("room_members")
+          .doc(getMemberId(member))
+          .update({
+            data: {
+              isReady: true,
+              updatedAt,
+              lastSeenAt: updatedAt,
+            },
+          }),
+      ),
+    );
+
+    await db.collection("rooms").doc(roomId).update({
+      data: {
+        expireAt: createExpireAt(updatedAt, ROOM_TTL_LOBBY_MS),
+        version: _.inc(1),
+        updatedAt,
+      },
+    });
+
+    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+    return ok(lobbySnapshot);
+  });
+}
+
+async function dispatchAction(action, payload, openid, wxContext) {
   switch (action) {
     case "getProfile":
       return await getSavedProfile(openid);
@@ -1052,6 +1352,12 @@ async function dispatchAction(action, payload, openid) {
       return await setReady(payload, openid);
     case "startGame":
       return await startGame(payload, openid);
+    case "devCreateRoom":
+      return await devCreateRoom(payload, openid, wxContext);
+    case "devFillVirtualPlayers":
+      return await devFillVirtualPlayers(payload, openid, wxContext);
+    case "devReadyAllVirtualPlayers":
+      return await devReadyAllVirtualPlayers(payload, openid, wxContext);
     default:
       return fail("INVALID_ACTION", "未知 action");
   }
@@ -1069,14 +1375,14 @@ exports.main = async (event) => {
     }
 
     try {
-      return await dispatchAction(action, payload, openid);
+      return await dispatchAction(action, payload, openid, wxContext);
     } catch (err) {
       if (!isCollectionNotFoundError(err)) {
         throw err;
       }
 
       await ensureRequiredCollections();
-      return await dispatchAction(action, payload, openid);
+      return await dispatchAction(action, payload, openid, wxContext);
     }
   } catch (err) {
     console.error("roomService error", err);

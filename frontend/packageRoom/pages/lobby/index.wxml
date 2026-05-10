@@ -34,6 +34,28 @@
 
     <view class="room-meta">目标 {{lobby.targetPlayerCount}} 人 · 当前 {{lobby.playerCount}} 人</view>
 
+    <view wx:if="{{lobby.isDevRoom}}" class="dev-panel">
+      <view class="dev-label">开发者房间</view>
+      <view class="dev-actions">
+        <view
+          class="dev-action {{isDevActionSubmitting ? 'is-disabled' : ''}}"
+          bindtap="onDevFillVirtualPlayers"
+          role="button"
+          aria-label="补齐虚拟玩家"
+        >
+          一键补齐
+        </view>
+        <view
+          class="dev-action {{isDevActionSubmitting ? 'is-disabled' : ''}}"
+          bindtap="onDevReadyAllVirtualPlayers"
+          role="button"
+          aria-label="虚拟玩家全员准备"
+        >
+          全员准备
+        </view>
+      </view>
+    </view>
+
     <view class="seat-grid">
       <view wx:for="{{seats}}" wx:key="seatIndex" class="seat-card {{item.isReady ? 'is-ready' : ''}}">
         <view class="seat-index">{{item.seatIndex}}</view>
@@ -50,6 +72,7 @@
             <view class="seat-name">{{item.displayName}}</view>
             <view class="seat-tags">
               <view wx:if="{{item.isHost}}" class="host-tag">房主</view>
+              <view wx:if="{{item.isVirtual}}" class="virtual-tag">虚拟</view>
               <view wx:if="{{item.isReady}}" class="ready-tag">已准备</view>
             </view>
           </view>

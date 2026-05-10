@@ -37,6 +37,34 @@
       加入房间
       <text class="join-arrow">›</text>
     </button>
+
+    <view
+      wx:if="{{developerModeEnabled}}"
+      class="dev-panel"
+    >
+      <view class="dev-count-row">
+        <view
+          wx:for="{{devPlayerCounts}}"
+          wx:key="value"
+          class="dev-count-option {{selectedDevPlayerCount === item.value ? 'is-selected' : ''}}"
+          data-count="{{item.value}}"
+          bindtap="onSelectDevPlayerCount"
+          role="button"
+          aria-label="选择 {{item.value}} 人开发者房间"
+        >
+          {{item.value}}
+        </view>
+      </view>
+      <view
+        class="dev-entry {{isCreatingDevRoom ? 'is-disabled' : ''}}"
+        bindtap="onCreateDevRoom"
+        hover-class="dev-entry-hover"
+        role="button"
+        aria-label="创建开发者房间"
+      >
+        {{isCreatingDevRoom ? '创建中...' : '开发者模式'}}
+      </view>
+    </view>
   </view>
 
   <view wx:if="{{joinDialogVisible}}" class="join-dialog-layer">
