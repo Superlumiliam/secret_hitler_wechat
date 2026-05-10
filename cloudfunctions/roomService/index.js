@@ -589,24 +589,58 @@ async function createRoom(payload, openid) {
 
 async function joinRoom(payload, openid) {
   const roomId = payload && payload.roomId;
-  if (!roomId || typeof roomId !== "string") {
-    return fail("INVALID_PAYLOAD", "缺少 roomId");
+  const roomCode = String((payload && payload.roomCode) || "").trim();
+  if ((!roomId || typeof roomId !== "string") && !/^\d{6}$/.test(roomCode)) {
+    return fail("INVALID_PAYLOAD", "请输入 6 位房间号");
   }
 
   return withCommandIdempotency(openid, payload, async () => {
-    const roomRes = await db.collection("rooms").doc(roomId).get();
-    const room = roomRes.data;
+    let room = null;
+    if (roomId && typeof roomId === "string") {
+      try {
+        const roomRes = await db.collection("rooms").doc(roomId).get();
+        room = roomRes.data || null;
+      } catch (err) {
+        if (!isDocumentNotFoundError(err)) {
+          throw err;
+        }
+      }
+    } else {
+      const roomRes = await db
+        .collection("rooms")
+        .where({
+          roomCode,
+          status: _.in(["lobby", "in_game"]),
+        })
+        .limit(1)
+        .get();
+      room = roomRes.data[0] || null;
+    }
+
     if (!room) {
       return fail("ROOM_NOT_FOUND", "房间不存在");
     }
 
-    if (room.status !== "lobby") {
-      return fail("ACTION_NOT_ALLOWED", "房间已开局");
+    const resolvedRoomId = room.roomId || room._id;
+    const expireAt = room.expireAt || room.expiresAt;
+    if (expireAt && new Date(expireAt).getTime() <= Date.now()) {
+      return fail("ROOM_EXPIRED", "房间已过期");
     }
 
-    const existingMember = await getRoomMember(roomId, openid);
+    if (room.status !== "lobby") {
+      return fail("ROOM_NOT_JOINABLE", "房间不可加入");
+    }
+
+    const existingMember = await getRoomMember(resolvedRoomId, openid);
     if (existingMember) {
-      return fail("ACTION_NOT_ALLOWED", "你已在该房间中");
+      const lobbySnapshot = await buildLobbySnapshot(resolvedRoomId, openid);
+      return ok({
+        roomId: resolvedRoomId,
+        roomCode: room.roomCode,
+        roomStatus: "lobby",
+        memberId: getMemberId(existingMember),
+        lobbySnapshot,
+      });
     }
 
     const profile = await getProfile(openid);
@@ -623,7 +657,7 @@ async function joinRoom(payload, openid) {
     const membersRes = await db
       .collection("room_members")
       .where({
-        roomId,
+        roomId: resolvedRoomId,
       })
       .orderBy("seatIndex", "asc")
       .get();
@@ -651,7 +685,7 @@ async function joinRoom(payload, openid) {
     await db.collection("room_members").doc(memberId).set({
       data: {
         memberId,
-        roomId,
+        roomId: resolvedRoomId,
         openId: openid,
         displayName,
         avatarUrl,
@@ -667,7 +701,7 @@ async function joinRoom(payload, openid) {
       },
     });
 
-    await db.collection("rooms").doc(roomId).update({
+    await db.collection("rooms").doc(resolvedRoomId).update({
       data: {
         playerCount: members.length + 1,
         assetFileIds,
@@ -684,17 +718,17 @@ async function joinRoom(payload, openid) {
             profileCompleted: profileData.profileCompleted,
           }
         : {}),
-      activeRoomId: roomId,
+      activeRoomId: resolvedRoomId,
       activeMemberId: memberId,
       activeRoomStatus: "lobby",
       updatedAt: joinedAt,
     });
 
-    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+    const lobbySnapshot = await buildLobbySnapshot(resolvedRoomId, openid);
     await saveLobbySnapshot(lobbySnapshot);
 
     return ok({
-      roomId,
+      roomId: resolvedRoomId,
       roomCode: room.roomCode,
       roomStatus: "lobby",
       memberId,

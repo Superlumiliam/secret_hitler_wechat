@@ -230,7 +230,7 @@ frontend/
 
 | 页面 | 路径 | 作用 |
 | --- | --- | --- |
-| 首页 | `pages/home/index` | 展示左上角圆形头像入口、创建房间入口、加入房间、恢复活跃房间 |
+| 首页 | `pages/home/index` | 展示左上角圆形头像入口、创建房间入口、加入房间入口、恢复活跃房间 |
 | 创建用户 | `pages/user-profile/index` | 首次创建或后续修改用户头像与用户名 |
 | 创建房间 | `pages/create-room/index` | 选择对局人数、确认创建房间 |
 | 房间大厅 | `packageRoom/pages/lobby/index` | 展示房间、座位、准备、开始、分享 |
@@ -802,7 +802,7 @@ ${memberId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}
 
 - 展示左上角圆形头像按钮
 - 展示创建房间入口
-- 输入房号加入
+- 展示加入房间入口，并在弹框中输入房号加入
 - 恢复活跃房间
 
 ### `data` 字段
@@ -811,7 +811,8 @@ ${memberId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}
 interface HomePageData {
   userProfileReady: boolean
   avatarUrl: string
-  roomCode: string
+  joinDialogVisible: boolean
+  joinRoomCode: string
   joining: boolean
   recovering: boolean
   canRecover: boolean
@@ -822,21 +823,26 @@ interface HomePageData {
 
 ### 主要方法
 
-- `onRoomCodeInput`
 - `handleOpenUserProfile`
 - `handleGoCreateRoom`
+- `handleOpenJoinDialog`
+- `handleCloseJoinDialog`
+- `onJoinRoomCodeInput`
 - `handleJoinRoom`
 - `handleRecoverRoom`
 - `handleShareEntry`
 
 ### 实现细节
 
-1. 页面重点是“创建房间入口”和“输入房号加入”，参考 `reference/01-首页入口.png`。
-2. 房号输入统一转大写、去空格。
-3. 加入 / 恢复共用 `state-feedback` 组件展示 loading 与错误。
-4. 恢复房间只依赖后端 `recoverActiveRoom()` 结果，不信任本地缓存单独跳转。
-5. 左上角头像使用圆形按钮：已有用户头像时展示头像，没有时展示默认头像；点击进入 `pages/user-profile/index`。
-6. `handleGoCreateRoom` 与 `handleJoinRoom` 都必须先执行 `ensureUserProfileReady()`：本地缺少 `profileCompleted` 时，跳转创建用户页；创建用户页保存成功后只回首页，不自动继续创建或加入。
+1. 首页常驻内容只保留左上角圆形头像按钮、“创建房间”和“加入房间”两个入口按钮，参考 `reference/01-首页入口.png`，不在首页首屏直接展示房号输入框。
+2. 点击“加入房间”后打开输入弹框；弹框内只包含房号输入、取消和确定，不提供“粘贴”按钮。用户可通过系统输入能力手动填写或复制后粘贴到输入框。
+3. 房号输入在提交前统一去空格和连字符，只接受 6 位房号字符串；不在首页 UI 中暴露 `roomId` 加入入口。
+4. 点击弹框“确定”后执行 `handleJoinRoom`：先校验房号，再检查本地用户资料，再上传房间临时头像并调用 `roomService.joinRoom(roomCode, localUserProfile)`。
+5. 分享卡片带回 `roomCode` 时，首页只预填弹框输入值或在用户点击“加入房间”时带入该房号，不自动提交加入；用户仍需在弹框中点击“确定”确认。
+6. 加入提交期间弹框确定按钮进入 loading / disabled 状态；失败时保留弹框并展示 toast 或就地错误，成功后关闭弹框并 `wx.redirectTo` 到大厅页。
+7. 恢复房间只依赖后端 `recoverActiveRoom()` 结果，不信任本地缓存单独跳转。
+8. 左上角头像使用圆形按钮：已有用户头像时展示头像，没有时展示默认头像；点击进入 `pages/user-profile/index`。
+9. `handleGoCreateRoom` 与 `handleJoinRoom` 都必须先执行 `ensureUserProfileReady()`：本地缺少 `profileCompleted` 时，跳转创建用户页；创建用户页保存成功后只回首页，不自动继续创建或加入。若当前来自带 `roomCode` 的分享入口，返回首页时应保留该房号，用户再次点击“加入房间”后可继续确认加入。
 
 ## 12.2 创建用户页 `user-profile`
 

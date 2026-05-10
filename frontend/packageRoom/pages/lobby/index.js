@@ -2,7 +2,6 @@ const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const LOBBY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-room-prepare.webp`;
-const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 
 function createCommandId(prefix) {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -10,28 +9,6 @@ function createCommandId(prefix) {
 
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
-}
-
-function getFileExtension(filePath) {
-  const cleanPath = String(filePath || "").split("?")[0];
-  const matched = cleanPath.match(/\.([a-zA-Z0-9]+)$/);
-  return matched ? matched[1].toLowerCase() : "jpg";
-}
-
-function buildRoomAvatarCloudPath(commandId, filePath) {
-  const ext = getFileExtension(filePath);
-  return `room_assets/pending/${commandId}/avatars/avatar_${Date.now()}_${Math.random()
-    .toString(36)
-    .slice(2, 10)}.${ext}`;
-}
-
-function readCachedProfile() {
-  try {
-    return wx.getStorageSync(PROFILE_STORAGE_KEY) || null;
-  } catch (err) {
-    console.error("读取用户资料缓存失败", err);
-    return null;
-  }
 }
 
 function createServiceError(result, fallbackMessage) {
@@ -61,7 +38,6 @@ function takeInitialLobbySnapshot(roomId) {
 
 Page({
   refreshTimer: null,
-  hasTriedJoinRoom: false,
 
   data: {
     roomId: "",
@@ -115,7 +91,7 @@ Page({
     const roomCode = this.data.lobby && this.data.lobby.roomCode;
     return {
       title: `加入 secret hitler 房间 ${roomCode || ""}`.trim(),
-      path: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(this.data.roomId)}`,
+      path: `/pages/home/index?roomCode=${encodeURIComponent(roomCode || "")}`,
     };
   },
 
@@ -274,11 +250,6 @@ Page({
         return;
       }
 
-      if (err.code === "NOT_ROOM_MEMBER" && !this.hasTriedJoinRoom) {
-        await this.joinRoom(options);
-        return;
-      }
-
       if (!options.silent) {
         wx.showToast({
           title: err.message || "获取大厅失败",
@@ -288,96 +259,6 @@ Page({
       this.setData({
         isLoading: false,
       });
-    }
-  },
-
-  async joinRoom(options = {}) {
-    this.hasTriedJoinRoom = true;
-    const profile = readCachedProfile();
-    if (!profile || !profile.profileCompleted || !profile.displayName) {
-      wx.redirectTo({
-        url: `/pages/user-profile/index?redirect=${encodeURIComponent(
-          `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(this.data.roomId)}`,
-        )}`,
-      });
-      return;
-    }
-
-    let uploadedAvatarFileId = "";
-    try {
-      const commandId = createCommandId("join_room");
-      uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
-
-      const result = await this.callRoomService("joinRoom", {
-        commandId,
-        roomId: this.data.roomId,
-        displayName: profile.displayName,
-        avatarUrl: uploadedAvatarFileId,
-      });
-
-      this.setData({
-        memberId: result.memberId || "",
-      });
-      await this.hydrateLobby(result.lobbySnapshot);
-      this.setData({
-        isLoading: false,
-      });
-    } catch (err) {
-      if (err.isBusinessFailure) {
-        await this.deleteUploadedAvatar(uploadedAvatarFileId);
-        uploadedAvatarFileId = "";
-      }
-      console.error("加入房间失败", err);
-      if (err.code === "GAME_ALREADY_STARTED") {
-        this.redirectToBoard();
-        return;
-      }
-
-      if (!options.silent) {
-        wx.showToast({
-          title: err.message || "加入房间失败",
-          icon: "none",
-        });
-      }
-      this.setData({
-        isLoading: false,
-      });
-    }
-  },
-
-  async uploadRoomAvatarIfNeeded(profile, commandId) {
-    const avatarUrl = profile && profile.avatarUrl;
-    if (!avatarUrl || avatarUrl === DEFAULT_AVATAR_FILE_ID || isCloudFileId(avatarUrl)) {
-      return "";
-    }
-
-    if (!wx.cloud || !wx.cloud.uploadFile) {
-      throw new Error("当前基础库不支持头像上传");
-    }
-
-    const res = await wx.cloud.uploadFile({
-      cloudPath: buildRoomAvatarCloudPath(commandId, avatarUrl),
-      filePath: avatarUrl,
-    });
-
-    if (!res.fileID) {
-      throw new Error("头像上传失败");
-    }
-
-    return res.fileID;
-  },
-
-  async deleteUploadedAvatar(fileID) {
-    if (!fileID || !wx.cloud || !wx.cloud.deleteFile) {
-      return;
-    }
-
-    try {
-      await wx.cloud.deleteFile({
-        fileList: [fileID],
-      });
-    } catch (err) {
-      console.error("清理未使用房间头像失败", err);
     }
   },
 

@@ -102,6 +102,11 @@ page {
   border: none;
 }
 
+.join-button[disabled] {
+  color: rgba(233, 200, 153, 0.72);
+  background: transparent;
+}
+
 .join-button-hover {
   opacity: 0.72;
 }
@@ -109,4 +114,106 @@ page {
 .join-arrow {
   margin-left: 14rpx;
   font-size: 40rpx;
+}
+
+.join-dialog-layer {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx;
+}
+
+.join-dialog-mask {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(2, 8, 10, 0.64);
+}
+
+.join-dialog {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 600rpx;
+  padding: 42rpx 42rpx 34rpx;
+  border: 2rpx solid rgba(217, 170, 106, 0.78);
+  background: rgba(7, 19, 22, 0.94);
+  box-shadow:
+    0 18rpx 42rpx rgba(0, 0, 0, 0.58),
+    inset 0 0 0 2rpx rgba(59, 235, 240, 0.16);
+  font-family: "Songti SC", STSong, SimSun, serif;
+}
+
+.join-dialog-title {
+  color: #e9c899;
+  font-size: 34rpx;
+  line-height: 1.25;
+  text-align: center;
+  text-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.78);
+}
+
+.join-dialog-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 78rpx;
+  margin-top: 34rpx;
+  padding: 0 26rpx;
+  border: 2rpx solid rgba(217, 170, 106, 0.72);
+  color: #f1d7ad;
+  background: rgba(2, 9, 11, 0.78);
+  font-size: 30rpx;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.join-dialog-placeholder {
+  color: rgba(233, 200, 153, 0.58);
+}
+
+.join-dialog-actions {
+  display: flex;
+  margin-top: 34rpx;
+}
+
+.dialog-action {
+  box-sizing: border-box;
+  height: 64rpx;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid rgba(217, 170, 106, 0.66);
+  color: #e9c899;
+  font-size: 28rpx;
+  text-shadow: 0 3rpx 8rpx rgba(0, 0, 0, 0.58);
+}
+
+.dialog-action + .dialog-action {
+  margin-left: 18rpx;
+}
+
+.dialog-action.primary {
+  color: #09282d;
+  background: #d9aa6a;
+  text-shadow: none;
+}
+
+.dialog-action.secondary {
+  background: rgba(5, 17, 21, 0.58);
+}
+
+.dialog-action.is-disabled {
+  opacity: 0.62;
+}
+
+.dialog-action-hover {
+  opacity: 0.78;
 }
