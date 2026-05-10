@@ -36,6 +36,26 @@ function takeInitialLobbySnapshot(roomId) {
   return cached;
 }
 
+function normalizeLobbyView(lobby) {
+  if (!lobby) {
+    return lobby;
+  }
+
+  if (lobby.viewerState) {
+    return lobby;
+  }
+
+  return {
+    ...lobby,
+    viewerState: {
+      myMemberId: lobby.myMemberId || "",
+      isHost: Boolean(lobby.isHost),
+      myIsReady: Boolean(lobby.myIsReady),
+      canStart: Boolean(lobby.canStart),
+    },
+  };
+}
+
 Page({
   refreshTimer: null,
 
@@ -179,14 +199,15 @@ Page({
   },
 
   async hydrateLobby(lobby) {
-    const cloudFileIds = ((lobby && lobby.seatOrder) || [])
+    const lobbyView = normalizeLobbyView(lobby);
+    const cloudFileIds = ((lobbyView && lobbyView.seatOrder) || [])
       .map((member) => member.avatarUrl)
       .filter((avatarUrl) => isCloudFileId(avatarUrl));
 
     if (!cloudFileIds.length || !wx.cloud) {
       this.setData({
-        lobby,
-        seats: this.buildSeats(lobby),
+        lobby: lobbyView,
+        seats: this.buildSeats(lobbyView),
       });
       return;
     }
@@ -203,14 +224,14 @@ Page({
       });
 
       this.setData({
-        lobby,
-        seats: this.buildSeats(lobby, avatarUrlByFileId),
+        lobby: lobbyView,
+        seats: this.buildSeats(lobbyView, avatarUrlByFileId),
       });
     } catch (err) {
       console.error("大厅头像临时链接获取失败", err);
       this.setData({
-        lobby,
-        seats: this.buildSeats(lobby),
+        lobby: lobbyView,
+        seats: this.buildSeats(lobbyView),
       });
     }
   },
@@ -332,11 +353,12 @@ Page({
 
   async onReadyAction() {
     const lobby = this.data.lobby;
+    const viewerState = (lobby && lobby.viewerState) || {};
     if (!lobby || this.data.isSubmitting) {
       return;
     }
 
-    if (lobby.isHost && lobby.myIsReady) {
+    if (viewerState.isHost && viewerState.myIsReady) {
       await this.onStartGame();
       return;
     }
@@ -346,7 +368,7 @@ Page({
     });
 
     try {
-      const nextReady = lobby.isHost ? true : !lobby.myIsReady;
+      const nextReady = viewerState.isHost ? true : !viewerState.myIsReady;
       const snapshot = await this.callRoomService("setReady", {
         commandId: createCommandId("set_ready"),
         roomId: this.data.roomId,
@@ -369,7 +391,8 @@ Page({
 
   async onStartGame() {
     const lobby = this.data.lobby;
-    if (!lobby || !lobby.canStart || this.data.isSubmitting) {
+    const viewerState = (lobby && lobby.viewerState) || {};
+    if (!lobby || !viewerState.canStart || this.data.isSubmitting) {
       return;
     }
 

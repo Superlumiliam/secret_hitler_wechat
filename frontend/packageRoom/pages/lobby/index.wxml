@@ -58,12 +58,12 @@
     </view>
 
     <button
-      class="primary-action {{lobby.isHost && lobby.myIsReady && !lobby.canStart ? 'is-disabled' : ''}}"
+      class="primary-action {{lobby.viewerState.isHost && lobby.viewerState.myIsReady && !lobby.viewerState.canStart ? 'is-disabled' : ''}}"
       bindtap="onReadyAction"
       loading="{{isSubmitting}}"
-      disabled="{{isSubmitting || (lobby.isHost && lobby.myIsReady && !lobby.canStart)}}"
+      disabled="{{isSubmitting || (lobby.viewerState.isHost && lobby.viewerState.myIsReady && !lobby.viewerState.canStart)}}"
     >
-      {{lobby.isHost && lobby.myIsReady ? '开始' : (lobby.myIsReady ? '已准备' : '准备')}}
+      {{lobby.viewerState.isHost && lobby.viewerState.myIsReady ? '开始' : (lobby.viewerState.myIsReady ? '已准备' : '准备')}}
     </button>
   </view>
 

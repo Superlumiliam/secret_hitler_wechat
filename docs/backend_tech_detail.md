@@ -10,7 +10,7 @@
 - 每个字段存什么
 - 状态机如何推进
 - 命令如何做幂等、鉴权、版本控制
-- 快照如何生成
+- 大厅视图与对局快照如何生成
 - 异常恢复、房间过期、测试怎么做
 
 ## 2. 设计结论总览
@@ -22,16 +22,16 @@
 - 微信云开发云函数
 - 微信云数据库
 - TypeScript 编写后端核心逻辑
-- `命令处理 + 纯领域状态机 + 快照投影 + 事件日志` 架构
-- `云函数读写快照` 作为 MVP 默认读取方式
+- `命令处理 + 纯领域状态机 + 对局快照投影 + 事件日志` 架构
+- `云函数读取大厅视图 / 对局快照` 作为 MVP 默认读取方式
 
 ### 2.2 明确取舍
 
 本方案做出以下明确取舍：
 
-1. MVP 不开放前端直接读取或监听数据库快照，统一通过云函数轮询读取快照。
+1. MVP 不开放前端直接读取或监听数据库集合，统一通过云函数轮询读取大厅视图或对局快照。
 2. 核心真相只保存在后端内部集合，前端永远不拿完整真相。
-3. 每次成功写入后同步重建公共快照和全部私密快照，优先保证一致性，暂不优先优化写放大。
+3. 大厅阶段不维护公共 / 私密快照，直接由 `rooms + room_members` 实时组装大厅视图响应；对局阶段每次成功写入后同步重建公共快照和全部私密快照，优先保证一致性，暂不优先优化写放大。
 4. 游戏内所有写操作统一走 `gameService.submitCommand`，大厅阶段写操作统一走 `roomService`。
 
 ### 2.3 为什么不用数据库直读或监听
@@ -43,13 +43,14 @@
 
 MVP 阶段为了降低泄露风险和权限配置复杂度，固定采用：
 
-- 后端持续维护 `room_public_snapshots` 与 `player_private_snapshots`
-- 前端通过 `getLobbySnapshot`、`getGameSnapshot`、`getResultSnapshot` 等云函数 action 读取快照
+- 大厅阶段不写投影快照，`getLobbySnapshot` 实时读取 `rooms` 与 `room_members` 后返回大厅视图
+- 对局阶段后端持续维护 `room_public_snapshots` 与 `player_private_snapshots`
+- 前端通过 `getLobbySnapshot`、`getGameSnapshot`、`getResultSnapshot` 等云函数 action 读取后端视图
 - 前端页面按固定间隔轮询，命令成功后立即补拉一次
 
 这样可以同时满足：
 
-- 快照模型不变
+- 对局快照模型不变
 - 前后端接口稳定
 - 前端无需任何数据库集合读权限或监听权限
 
@@ -294,8 +295,8 @@ export type WinReason =
 | `rooms` | 房间主记录 | 否 | 否 |
 | `room_members` | 房间成员与座位信息 | 否 | 否 |
 | `game_core` | 游戏完整真相 | 否 | 否 |
-| `room_public_snapshots` | 公共快照缓存 | 否，MVP 通过云函数读 | 否 |
-| `player_private_snapshots` | 玩家私密快照缓存 | 否，MVP 通过云函数读 | 否 |
+| `room_public_snapshots` | 对局 / 结果公共快照缓存 | 否，MVP 通过云函数读 | 否 |
+| `player_private_snapshots` | 对局玩家私密快照缓存 | 否，MVP 通过云函数读 | 否 |
 | `game_events` | 事件日志与复盘依据 | 否 | 否 |
 | `command_records` | 幂等记录与请求审计 | 否 | 否 |
 
@@ -482,8 +483,8 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 
 作用：
 
-- 保存大厅或对局公共视图
-- 供 `getLobbySnapshot` / `getGameSnapshot` 直接读取
+- 保存对局或结果阶段公共视图
+- 供 `getGameSnapshot` / `getResultSnapshot` 合并返回
 
 推荐结构：
 
@@ -503,8 +504,9 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 
 说明：
 
-- `snapshotType` 可取 `lobby`、`game_public`、`result_public`
+- `snapshotType` 可取 `game_public`、`result_public`
 - `payload` 内部字段由 projector 严格生成
+- 大厅阶段不写入该集合；`getLobbySnapshot` 直接读取 `rooms` 与 `room_members` 组装响应
 
 ## 7.7 `player_private_snapshots`
 
@@ -726,8 +728,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 6. 使用请求中的 `displayName/avatarUrl` 创建房主成员资料快照，并登记房间临时头像到该房间资源清理清单
 7. 创建 `rooms`
 8. 创建首个 `room_members`
-9. 写 `room_public_snapshots`
-10. 返回房间与房主成员快照
+9. 即时组装并返回大厅视图响应
 
 约束：
 
@@ -746,8 +747,8 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 3. 校验房间存在、未过期、仍在大厅；同一 openid 回流只允许恢复自己已有成员身份
 4. 若同一 openid 已在该房间有有效成员，则直接返回该成员记录；不因本次请求覆盖既有成员快照
 5. 若房间是大厅且未满，则使用请求中的 `displayName/avatarUrl` 创建新成员资料快照，并登记房间临时头像到该房间资源清理清单
-6. 更新房间 `playerCount` 与大厅快照
-7. 返回房间与当前成员快照
+6. 更新房间 `playerCount`
+7. 即时组装并返回大厅视图响应
 
 关键约束：
 
@@ -789,7 +790,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 
 - 按数组顺序重写各成员 `seatIndex`
 - `rooms.version + 1`
-- 重建大厅快照
+- 即时组装并返回大厅视图响应
 
 ### 8.2.6 `setReady`
 
@@ -802,7 +803,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 
 - 修改 `room_members.isReady`
 - `rooms.version + 1`
-- 重建大厅快照
+- 即时组装并返回大厅视图响应
 
 ### 8.2.7 `startGame`
 
@@ -1457,9 +1458,9 @@ type ApplyCommandResult = {
 
 ## 13. 投影与快照生成
 
-## 13.1 大厅快照生成
+## 13.1 大厅视图生成
 
-`buildLobbySnapshot(room, members, myMemberId)` 输出必须至少包含：
+大厅准备阶段不生成或保存公共 / 私密快照。`buildLobbyView(room, members, viewerMember)` 只负责把 `rooms` 与 `room_members` 即时组装成 API 响应，输出必须至少包含：
 
 - `roomId`
 - `roomCode`
@@ -1470,14 +1471,21 @@ type ApplyCommandResult = {
 - `minPlayerCount`
 - `maxPlayerCount`
 - `seatOrder`
-- `myMemberId`
-- `canStart`
+- `viewerState.myMemberId`
+- `viewerState.isHost`
+- `viewerState.myIsReady`
+- `viewerState.canStart`
 - `version`
 
-`canStart` 计算方式：
+`viewerState.canStart` 计算方式：
 
 - 房主本人查看时：人数合法且所有有效成员已准备
 - 非房主查看时：仅作展示，不赋予操作权限
+
+约束：
+
+- `viewerState` 只存在于 API 响应，不写入数据库。
+- `startGame`、`setReady` 等写操作必须基于 `rooms` 与 `room_members` 重新做权限校验，不能依赖返回给前端的 `viewerState`。
 
 ## 13.2 游戏公共快照生成
 

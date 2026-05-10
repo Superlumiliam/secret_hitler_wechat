@@ -6,9 +6,9 @@
 
 - 云函数 action 划分
 - 请求与响应 envelope
-- 大厅 / 对局 / 结果快照 DTO
+- 大厅视图响应、对局 / 结果快照 DTO
 - 游戏命令结构与幂等规则
-- 快照轮询读取方式
+- 轮询读取方式
 - 错误码与联调边界
 
 后续所有前后端实现都必须以本文档为准；若请求字段、响应字段、命令类型、错误码发生变化，必须先更新本文档，再更新实现。
@@ -27,17 +27,19 @@
 - 加入房间
 - 修改大厅状态
 - 发起游戏命令
-- 主动拉取快照
+- 主动拉取大厅视图或对局快照
 
-MVP 阶段前端不直接读取或监听任何数据库集合，包括已裁剪的投影视图集合。所有快照读取都必须通过云函数 action 完成。
+MVP 阶段前端不直接读取或监听任何数据库集合，包括已裁剪的投影视图集合。大厅视图与对局快照都必须通过云函数 action 获取。
 
-## 2.2 命令与快照分离
+## 2.2 命令与读取视图分离
 
-本项目必须采用“命令写入，快照读取”的模式：
+本项目必须采用“命令写入，读取后端确认视图”的模式：
 
 - 前端提交的是意图
 - 后端返回的是已确认状态
 - 前端不能用本地按钮点击直接推断状态已推进
+
+大厅等待阶段不存在角色、手牌、牌堆、投票等私密游戏真相，也不区分公共视图与个人私密视图。大厅页读取的是由 `rooms` 与 `room_members` 实时组装的大厅视图响应，不写入 `room_public_snapshots`。
 
 ## 2.3 前端禁止直接写核心集合
 
@@ -51,9 +53,9 @@ MVP 阶段前端不直接读取或监听任何数据库集合，包括已裁剪�
 
 所有状态变更必须通过云函数完成。
 
-## 2.4 公共视图与私密视图分离
+## 2.4 对局公共视图与私密视图分离
 
-后端对前端暴露的数据必须分为：
+进入对局后，后端对前端暴露的数据必须分为：
 
 - 公共快照
 - 当前玩家私密快照
@@ -214,11 +216,13 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 字段约束：
 
 - `routeHint` 只允许为 `lobby`、`board`、`result`
-- `version` 为当前房间对应快照版本；大厅时对应大厅快照版本，对局时对应游戏版本
+- `version` 为当前房间版本；大厅时对应 `rooms.version`，对局时对应游戏版本
 
-## 4.2 `LobbySnapshot`
+## 4.2 `LobbyView`
 
-`roomService.getLobbySnapshot` 返回的 `data`、以及 `createRoom` / `joinRoom` / 大厅写操作返回中的 `lobbySnapshot`，都必须使用以下结构：
+`roomService.getLobbySnapshot` 返回的 `data`、以及 `createRoom` / `joinRoom` / 大厅写操作返回中的 `lobbySnapshot`，都必须使用以下结构。
+
+说明：这里沿用 `getLobbySnapshot` 与 `lobbySnapshot` 命名是为了保持前后端接口稳定；它表示“大厅视图响应”，不是落库的公共快照文档。
 
 ```json
 {
@@ -240,8 +244,12 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
       "isReady": true
     }
   ],
-  "myMemberId": "mem_host",
-  "canStart": true,
+  "viewerState": {
+    "myMemberId": "mem_host",
+    "isHost": true,
+    "myIsReady": true,
+    "canStart": true
+  },
   "version": 3,
   "updatedAt": "2026-04-12T12:00:00.000Z"
 }
@@ -251,8 +259,10 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 - `targetPlayerCount` 来自创建房间页选择，用于大厅展示目标人数
 - `seatOrder` 只包含当前有效大厅成员，MVP 顺序由加入顺序初始化
-- `canStart` 仅表示“从当前查看者视角是否满足开始条件”，不额外授予权限
-- 大厅快照绝不包含角色、党派、牌堆、投票等游戏真相
+- `viewerState` 由后端根据当前 openid 与房间成员即时派生，只存在于 API 响应，不写入数据库
+- `viewerState.canStart` 仅表示“从当前查看者视角是否满足开始条件”，不额外授予权限
+- 大厅视图绝不包含角色、党派、牌堆、投票等游戏真相
+- 大厅阶段不维护 `room_public_snapshots` 或 `player_private_snapshots`
 
 ## 4.3 `GameSnapshot`
 
@@ -779,7 +789,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 }
 ```
 
-其中 `data` 必须完整符合 `LobbySnapshot` 结构。
+其中 `data` 必须完整符合 `LobbyView` 结构。
 
 主要失败错误码：
 
@@ -1151,11 +1161,11 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 3. 若存在且 `payloadHash` 完全一致，返回幂等成功，`deduplicated = true`
 4. 若存在但 `payloadHash` 不一致，返回 `DUPLICATE_COMMAND`
 
-## 9. 快照轮询读取与投影文档约束
+## 9. 轮询读取与投影文档约束
 
-## 9.1 快照读取准则
+## 9.1 读取准则
 
-MVP 阶段前端只能通过云函数读取快照：
+MVP 阶段前端只能通过云函数读取大厅视图或对局快照：
 
 - 大厅页轮询 `roomService.getLobbySnapshot`
 - 对局页轮询 `gameService.getGameSnapshot`
@@ -1170,25 +1180,21 @@ MVP 阶段前端只能通过云函数读取快照：
 - `command_records`
 - 任何后端数据库集合
 
-## 9.2 `room_public_snapshots` 文档结构
+## 9.2 大厅视图不落投影文档
 
-大厅阶段：
+大厅准备阶段不维护 `room_public_snapshots` 或 `player_private_snapshots`。
 
-```json
-{
-  "_id": "room_xxx",
-  "roomId": "room_xxx",
-  "roomCode": "482615",
-  "roomStatus": "lobby",
-  "snapshotType": "lobby",
-  "version": 3,
-  "payload": {},
-  "updatedAt": "2026-04-12T12:00:00.000Z",
-  "expireAt": "2026-04-12T14:00:00.000Z"
-}
-```
+原因：
 
-对局阶段：
+- 大厅阶段没有角色、党派、牌堆、投票、待办等私密游戏真相。
+- `rooms` 与 `room_members` 已经是大厅事实源，二者足以实时组装大厅视图响应。
+- `viewerState` 依赖当前 openid，是 API 响应时的派生结果，不是公共房间事实。
+
+`getLobbySnapshot` 每次读取 `rooms` 与 `room_members`，校验当前 openid 的有效成员身份后，返回 `LobbyView`。
+
+## 9.3 `room_public_snapshots` 文档结构
+
+`room_public_snapshots` 只用于对局和结果阶段的公共投影缓存。
 
 ```json
 {
@@ -1215,10 +1221,10 @@ MVP 阶段前端只能通过云函数读取快照：
 
 约束：
 
-- 大厅时 `payload` 必须是 `LobbySnapshot`
-- 对局时 `payload` 必须是“公共部分的游戏快照”，不包含 `privateState` 和 `pendingTask`
+- `snapshotType` 可取 `game_public`、`result_public`
+- `payload` 必须是“公共部分的游戏快照”或结果公共视图，不包含 `privateState` 和 `pendingTask`
 
-## 9.3 `player_private_snapshots` 文档结构
+## 9.4 `player_private_snapshots` 文档结构
 
 ```json
 {
@@ -1244,9 +1250,9 @@ MVP 阶段前端只能通过云函数读取快照：
 - `_id` 直接使用 `memberId`
 - `payload.privateState` 与 `payload.pendingTask` 共同构成私密视图
 
-## 9.4 轮询读取策略
+## 9.5 轮询读取策略
 
-前端进入相关页面后必须按固定频率轮询对应快照：
+前端进入相关页面后必须按固定频率轮询对应后端视图：
 
 - 大厅页轮询 `getLobbySnapshot`
 - 对局页轮询 `getGameSnapshot`
@@ -1257,7 +1263,7 @@ MVP 阶段前端只能通过云函数读取快照：
 - 前端 mapper 不得绕开 API DTO 直接消费投影文档结构
 - 页面隐藏时应停止轮询，回到前台后立即补拉一次
 
-## 9.5 版本消费规则
+## 9.6 版本消费规则
 
 前端消费快照时必须遵循：
 
@@ -1402,7 +1408,7 @@ MVP 前端交互以 `pendingTask` 为唯一强约束任务来源：
 - 所有写操作都必须带 `commandId`
 - 所有游戏内写操作都必须带 `expectedVersion`
 - 游戏内所有状态变更统一走 `gameService.submitCommand`
-- 前端只消费大厅快照、游戏公共快照和当前玩家私密快照
-- 快照只允许通过 `getLobbySnapshot`、`getGameSnapshot`、`getResultSnapshot` 等云函数 action 读取
+- 前端只消费大厅视图、游戏公共快照和当前玩家私密快照
+- 大厅视图与对局快照只允许通过 `getLobbySnapshot`、`getGameSnapshot`、`getResultSnapshot` 等云函数 action 读取
 - 结果页只能通过 `getResultSnapshot` 获取正式复盘数据
 - 所有接口统一使用标准 envelope 和统一错误码

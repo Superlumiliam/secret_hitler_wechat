@@ -17,6 +17,7 @@ const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
 const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const MIN_DISPLAY_NAME_LENGTH = 2;
 const MAX_DISPLAY_NAME_LENGTH = 12;
+const REQUIRED_COLLECTIONS = ["rooms", "room_members", "user_profiles", "command_records"];
 
 function nowIso() {
   return new Date().toISOString();
@@ -70,16 +71,54 @@ function payloadHash(payload) {
 }
 
 function isDocumentNotFoundError(err) {
-  const errCode = err && (err.errCode || err.code);
   const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
   return (
-    errCode === -502005 ||
     errMessage.includes("document not exist") ||
     errMessage.includes("document_not_exist") ||
     errMessage.includes("database_document_not_exist") ||
     errMessage.includes("does not exist") ||
     errMessage.includes("doesn't exist")
   );
+}
+
+function isCollectionNotFoundError(err) {
+  const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
+  return (
+    errMessage.includes("collection not exist") ||
+    errMessage.includes("collection_not_exist") ||
+    errMessage.includes("database_collection_not_exist") ||
+    errMessage.includes("table not exist") ||
+    errMessage.includes("db or table not exist")
+  );
+}
+
+function isCollectionAlreadyExistsError(err) {
+  const errCode = err && (err.errCode || err.code);
+  const errMessage = String((err && (err.errMsg || err.message)) || "");
+  return (
+    errCode === -501001 ||
+    errMessage.includes("already exists") ||
+    errMessage.includes("ResourceExist") ||
+    errMessage.includes("Table exist") ||
+    errMessage.includes("DATABASE_COLLECTION_ALREADY_EXIST")
+  );
+}
+
+async function ensureCollection(name) {
+  try {
+    await db.createCollection(name);
+  } catch (err) {
+    if (isCollectionAlreadyExistsError(err)) {
+      return;
+    }
+    throw err;
+  }
+}
+
+async function ensureRequiredCollections() {
+  for (const name of REQUIRED_COLLECTIONS) {
+    await ensureCollection(name);
+  }
 }
 
 function normalizeProfilePayload(payload) {
@@ -341,27 +380,6 @@ async function expireLobbyRoom(room, updatedAt) {
       version: _.inc(1),
     },
   });
-
-  await db.collection("room_public_snapshots").doc(room.roomId || room._id).set({
-    data: {
-      roomId: room.roomId || room._id,
-      roomCode: room.roomCode,
-      roomStatus: "expired",
-      hostMemberId: null,
-      playerCount: 0,
-      targetPlayerCount: room.targetPlayerCount,
-      minPlayerCount: MIN_PLAYER_COUNT,
-      maxPlayerCount: MAX_PLAYER_COUNT,
-      seatOrder: [],
-      myMemberId: "",
-      isHost: false,
-      myIsReady: false,
-      canStart: false,
-      version: (room.version || 1) + 1,
-      snapshotType: "lobby",
-      updatedAt,
-    },
-  });
 }
 
 async function assertNoActiveRoom(profile, openid) {
@@ -448,10 +466,12 @@ function buildLobbySnapshotFromData(room, members, openid) {
       isHost: Boolean(member.isHost || getMemberId(member) === room.hostMemberId),
       isReady: member.isReady,
     })),
-    myMemberId: myMember ? getMemberId(myMember) : "",
-    isHost,
-    myIsReady: Boolean(myMember && myMember.isReady),
-    canStart: Boolean(isHost && isLobby && isFull && allReady),
+    viewerState: {
+      myMemberId: myMember ? getMemberId(myMember) : "",
+      isHost,
+      myIsReady: Boolean(myMember && myMember.isReady),
+      canStart: Boolean(isHost && isLobby && isFull && allReady),
+    },
     version: room.version || 1,
     updatedAt: room.updatedAt ? new Date(room.updatedAt).toISOString() : nowIso(),
   };
@@ -472,16 +492,6 @@ async function buildLobbySnapshot(roomId, openid) {
     .orderBy("seatIndex", "asc")
     .get();
   return buildLobbySnapshotFromData(room, membersRes.data, openid);
-}
-
-async function saveLobbySnapshot(snapshot) {
-  await db.collection("room_public_snapshots").doc(snapshot.roomId).set({
-    data: {
-      ...snapshot,
-      snapshotType: "lobby",
-      updatedAt: new Date(snapshot.updatedAt),
-    },
-  });
 }
 
 async function createRoom(payload, openid) {
@@ -575,7 +585,6 @@ async function createRoom(payload, openid) {
     });
 
     const lobbySnapshot = buildLobbySnapshotFromData(roomData, [memberData], openid);
-    await saveLobbySnapshot(lobbySnapshot);
 
     return ok({
       roomId,
@@ -725,7 +734,6 @@ async function joinRoom(payload, openid) {
     });
 
     const lobbySnapshot = await buildLobbySnapshot(resolvedRoomId, openid);
-    await saveLobbySnapshot(lobbySnapshot);
 
     return ok({
       roomId: resolvedRoomId,
@@ -748,7 +756,7 @@ async function getLobbySnapshot(payload, openid) {
     return fail("ROOM_NOT_FOUND", "房间不存在");
   }
 
-  if (!snapshot.myMemberId) {
+  if (!snapshot.viewerState || !snapshot.viewerState.myMemberId) {
     return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
   }
 
@@ -858,27 +866,6 @@ async function leaveRoom(payload, openid) {
         },
       });
 
-      await db.collection("room_public_snapshots").doc(roomId).set({
-        data: {
-          roomId,
-          roomCode: room.roomCode,
-          roomStatus: "expired",
-          hostMemberId: null,
-          playerCount: 0,
-          targetPlayerCount: room.targetPlayerCount,
-          minPlayerCount: MIN_PLAYER_COUNT,
-          maxPlayerCount: MAX_PLAYER_COUNT,
-          seatOrder: [],
-          myMemberId: "",
-          isHost: false,
-          myIsReady: false,
-          canStart: false,
-          version: (room.version || 1) + 1,
-          snapshotType: "lobby",
-          updatedAt,
-        },
-      });
-
       return ok({
         roomId,
         roomStatus: "expired",
@@ -920,9 +907,6 @@ async function leaveRoom(payload, openid) {
         updatedAt,
       },
     });
-
-    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
-    await saveLobbySnapshot(lobbySnapshot);
 
     return ok({
       roomId,
@@ -976,7 +960,6 @@ async function setReady(payload, openid) {
     });
 
     const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
-    await saveLobbySnapshot(lobbySnapshot);
     return ok(lobbySnapshot);
   });
 }
@@ -988,20 +971,29 @@ async function startGame(payload, openid) {
   }
 
   return withCommandIdempotency(openid, payload, async () => {
-    const snapshot = await buildLobbySnapshot(roomId, openid);
-    if (!snapshot) {
+    const roomRes = await db.collection("rooms").doc(roomId).get();
+    const room = roomRes.data;
+    if (!room) {
       return fail("ROOM_NOT_FOUND", "房间不存在");
     }
 
-    if (!snapshot.myMemberId) {
+    if (room.status !== "lobby") {
+      return fail("ACTION_NOT_ALLOWED", "房间已开局");
+    }
+
+    const members = await getActiveRoomMembers(roomId);
+    const member = members.find((item) => getMemberOpenId(item) === openid) || null;
+    if (!member) {
       return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
     }
 
-    if (!snapshot.isHost) {
+    if (getMemberId(member) !== room.hostMemberId) {
       return fail("ACTION_NOT_ALLOWED", "只有房主可以开始游戏");
     }
 
-    if (!snapshot.canStart) {
+    const isFull = members.length === room.targetPlayerCount;
+    const allReady = members.length > 0 && members.every((item) => Boolean(item.isReady));
+    if (!isFull || !allReady) {
       return fail("ACTION_NOT_ALLOWED", "房间坐满且全员准备后才能开始");
     }
 
@@ -1017,12 +1009,12 @@ async function startGame(payload, openid) {
     });
 
     await Promise.all(
-      snapshot.seatOrder.map((member) =>
+      members.map((item) =>
         db
           .collection("user_profiles")
           .where({
             activeRoomId: roomId,
-            activeMemberId: member.memberId,
+            activeMemberId: getMemberId(item),
           })
           .update({
             data: {
@@ -1042,6 +1034,29 @@ async function startGame(payload, openid) {
   });
 }
 
+async function dispatchAction(action, payload, openid) {
+  switch (action) {
+    case "getProfile":
+      return await getSavedProfile(openid);
+    case "saveProfile":
+      return await saveUserProfile(payload, openid);
+    case "createRoom":
+      return await createRoom(payload, openid);
+    case "joinRoom":
+      return await joinRoom(payload, openid);
+    case "leaveRoom":
+      return await leaveRoom(payload, openid);
+    case "getLobbySnapshot":
+      return await getLobbySnapshot(payload, openid);
+    case "setReady":
+      return await setReady(payload, openid);
+    case "startGame":
+      return await startGame(payload, openid);
+    default:
+      return fail("INVALID_ACTION", "未知 action");
+  }
+}
+
 exports.main = async (event) => {
   try {
     const wxContext = cloud.getWXContext();
@@ -1053,25 +1068,15 @@ exports.main = async (event) => {
       return fail("UNAUTHORIZED", "无法获取用户身份");
     }
 
-    switch (action) {
-      case "getProfile":
-        return await getSavedProfile(openid);
-      case "saveProfile":
-        return await saveUserProfile(payload, openid);
-      case "createRoom":
-        return await createRoom(payload, openid);
-      case "joinRoom":
-        return await joinRoom(payload, openid);
-      case "leaveRoom":
-        return await leaveRoom(payload, openid);
-      case "getLobbySnapshot":
-        return await getLobbySnapshot(payload, openid);
-      case "setReady":
-        return await setReady(payload, openid);
-      case "startGame":
-        return await startGame(payload, openid);
-      default:
-        return fail("INVALID_ACTION", "未知 action");
+    try {
+      return await dispatchAction(action, payload, openid);
+    } catch (err) {
+      if (!isCollectionNotFoundError(err)) {
+        throw err;
+      }
+
+      await ensureRequiredCollections();
+      return await dispatchAction(action, payload, openid);
     }
   } catch (err) {
     console.error("roomService error", err);

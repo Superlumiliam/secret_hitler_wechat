@@ -7,7 +7,7 @@
 - 小程序目录与模块划分
 - 页面路由与分包
 - 状态管理
-- 云函数调用与快照同步
+- 云函数调用与大厅视图 / 对局快照同步
 - 页面 / 组件协议
 - 阶段任务 UI 实现
 - 隐私保护、异常恢复、性能与测试
@@ -28,7 +28,7 @@
 
 1. 前端不是裁判，不负责规则真相、胜负判定、身份分配、牌堆逻辑。
 2. 所有写操作只能通过 `wx.cloud.callFunction` 发起命令。
-3. 页面只能渲染大厅快照、游戏公共快照、当前玩家私密快照，不能持有完整真相。
+3. 页面只能渲染大厅视图、游戏公共快照、当前玩家私密快照，不能持有完整真相。
 4. 前端只能展示当前用户有权查看的私密切片；身份页不做额外遮罩、定时隐藏或特殊保密逻辑。
 5. 前端不能直接读写或监听任何后端数据库集合。
 6. 所有写操作都必须携带 `commandId`，其中游戏内写操作还必须携带 `expectedVersion`。
@@ -51,7 +51,7 @@
 - 语言：TypeScript
 - 样式：WXSS
 - 云能力：`wx.cloud`
-- 数据同步：`云函数命令 + 云函数轮询读取快照`
+- 数据同步：`云函数命令 + 云函数轮询读取大厅视图 / 对局快照`
 
 ### 3.2 依赖策略
 
@@ -490,7 +490,7 @@ interface SessionState {
 
 ```ts
 interface RoomState {
-  lobbySnapshot: LobbySnapshot | null
+  lobbyView: LobbyView | null
   lobbyVm: LobbyViewModel | null
   syncMode: 'polling' | 'idle'
   loading: boolean
@@ -643,15 +643,17 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 - `party`
 - `seatIndex`
 
-## 10. 快照同步设计
+## 10. 大厅视图与快照同步设计
 
 ## 10.1 同步策略结论
 
-采用“轮询优先”的单一方案。MVP 阶段不直接读取或监听数据库投影文档，所有快照都通过云函数 action 拉取。
+采用“轮询优先”的单一方案。MVP 阶段不直接读取或监听数据库投影文档，大厅视图与对局快照都通过云函数 action 拉取。
+
+大厅准备阶段不维护公共 / 私密快照。大厅页调用 `roomService.getLobbySnapshot(roomId)` 时，后端实时读取 `rooms + room_members` 并返回大厅视图响应；其中 `viewerState` 只表示当前 openid 的派生视角，不是数据库字段。
 
 ### 10.2 轮询读取入口
 
-前端只通过以下 service 方法读取快照：
+前端只通过以下 service 方法读取后端视图：
 
 - 大厅：`roomService.getLobbySnapshot(roomId)`
 - 对局：`gameService.getGameSnapshot(roomId)`
@@ -660,7 +662,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 这样做的原因：
 
 1. 不需要向前端开放数据库集合读取或监听权限。
-2. 私密快照始终由云函数按当前微信身份合并返回。
+2. 对局私密快照始终由云函数按当前微信身份合并返回。
 3. 前端读取来源单一，mapper 不需要为监听数据和接口数据分叉。
 
 ### 10.3 大厅同步流程
@@ -668,7 +670,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 1. 进入大厅页先主动调用一次 `getLobbySnapshot`
 2. 页面可见时启动大厅轮询
 3. 页面隐藏时停止大厅轮询
-4. 命令提交成功后立即补拉一次最新快照
+4. 命令提交成功后立即补拉一次最新大厅视图
 
 轮询间隔建议：
 
@@ -1097,11 +1099,11 @@ interface RuleSection {
 - `mode = enact_one` 时显示“选择要颁布的 1 张”
 - 只显示当前用户在当前阶段可操作的牌
 
-## 14. 快照到 ViewModel 的映射
+## 14. 后端视图到 ViewModel 的映射
 
 ## 14.1 为什么必须加 mapper
 
-后端快照是“领域视图”，页面需要的是“渲染视图”。两者不能混用。
+后端返回的是“领域视图”，页面需要的是“渲染视图”。两者不能混用。
 
 例如：
 
@@ -1120,6 +1122,7 @@ interface LobbyViewModel {
   roomCode: string
   myMemberId: string
   isHost: boolean
+  myIsReady: boolean
   canStart: boolean
   players: Array<{
     memberId: string
@@ -1133,6 +1136,8 @@ interface LobbyViewModel {
   summaryText: string
 }
 ```
+
+其中 `myMemberId / isHost / myIsReady / canStart` 来自大厅响应中的 `viewerState`，前端不得把它们视为房间公共事实。
 
 ## 14.3 `gameMapper`
 
