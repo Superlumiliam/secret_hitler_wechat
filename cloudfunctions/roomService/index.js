@@ -19,7 +19,9 @@ const MIN_PLAYER_COUNT = 5;
 const MAX_PLAYER_COUNT = 10;
 const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_RETRY_LIMIT = 10;
-const ROOM_TTL_LOBBY_MS = 2 * 60 * 60 * 1000;
+const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
+const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
+const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const MIN_DISPLAY_NAME_LENGTH = 2;
 const MAX_DISPLAY_NAME_LENGTH = 12;
 
@@ -53,6 +55,11 @@ function createId(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 14)}`;
 }
 
+function createExpireAt(baseTime, ttlMs) {
+  const base = baseTime instanceof Date ? baseTime.getTime() : Date.now();
+  return new Date(base + ttlMs);
+}
+
 function getMemberId(member) {
   return member.memberId || member._id;
 }
@@ -78,6 +85,19 @@ function isCollectionAlreadyExistsError(err) {
     errMessage.includes("ResourceExist") ||
     errMessage.includes("Table exist") ||
     errMessage.includes("DATABASE_COLLECTION_ALREADY_EXIST")
+  );
+}
+
+function isDocumentNotFoundError(err) {
+  const errCode = err && (err.errCode || err.code);
+  const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
+  return (
+    errCode === -502005 ||
+    errMessage.includes("document not exist") ||
+    errMessage.includes("document_not_exist") ||
+    errMessage.includes("database_document_not_exist") ||
+    errMessage.includes("does not exist") ||
+    errMessage.includes("doesn't exist")
   );
 }
 
@@ -204,7 +224,7 @@ async function saveCommandRecord(scopeKey, commandId, hash, response) {
       payloadHash: hash,
       response,
       createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + COMMAND_RECORD_TTL_MS),
     },
   });
 }
@@ -252,26 +272,30 @@ async function generateRoomCode() {
 }
 
 async function getProfile(openid) {
-  const res = await db
-    .collection("user_profiles")
-    .where({
-      openid,
-    })
-    .limit(1)
-    .get();
-  return res.data[0] || null;
+  try {
+    const res = await db.collection("user_profiles").doc(openid).get();
+    return res.data || null;
+  } catch (err) {
+    if (isDocumentNotFoundError(err)) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 async function upsertProfile(openid, data) {
   const profile = await getProfile(openid);
   if (profile) {
-    await db.collection("user_profiles").doc(profile._id).update({
-      data,
+    await db.collection("user_profiles").doc(openid).update({
+      data: {
+        openid,
+        ...data,
+      },
     });
-    return profile._id;
+    return openid;
   }
 
-  const addRes = await db.collection("user_profiles").add({
+  await db.collection("user_profiles").doc(openid).set({
     data: {
       openid,
       defaultDisplayName: `玩家${openid.slice(-4)}`,
@@ -279,7 +303,7 @@ async function upsertProfile(openid, data) {
       createdAt: new Date(),
     },
   });
-  return addRes._id;
+  return openid;
 }
 
 function buildProfileDto(profile, openid) {
@@ -314,19 +338,26 @@ async function saveUserProfile(payload, openid) {
   });
 }
 
-async function clearActiveRoomForProfile(profile, updatedAt) {
-  if (!profile || !profile._id) {
+async function clearActiveRoomForProfile(openid, updatedAt) {
+  if (!openid) {
     return;
   }
 
-  await db.collection("user_profiles").doc(profile._id).update({
-    data: {
-      activeRoomId: null,
-      activeMemberId: null,
-      activeRoomStatus: null,
-      updatedAt,
-    },
-  });
+  try {
+    await db.collection("user_profiles").doc(openid).update({
+      data: {
+        openid,
+        activeRoomId: null,
+        activeMemberId: null,
+        activeRoomStatus: null,
+        updatedAt,
+      },
+    });
+  } catch (err) {
+    if (!isDocumentNotFoundError(err)) {
+      throw err;
+    }
+  }
 }
 
 async function expireLobbyRoom(room, updatedAt) {
@@ -376,12 +407,12 @@ async function assertNoActiveRoom(profile, openid) {
     const room = roomRes.data;
     const expireAt = room && (room.expireAt || room.expiresAt);
     if (!room || !["lobby", "in_game"].includes(room.status)) {
-      await clearActiveRoomForProfile(profile, new Date());
+      await clearActiveRoomForProfile(openid, new Date());
       return null;
     }
 
     if (expireAt && new Date(expireAt).getTime() <= Date.now()) {
-      await clearActiveRoomForProfile(profile, new Date());
+      await clearActiveRoomForProfile(openid, new Date());
       return null;
     }
 
@@ -389,7 +420,7 @@ async function assertNoActiveRoom(profile, openid) {
       const members = await getActiveRoomMembers(profile.activeRoomId);
       const myMember = members.find((member) => getMemberOpenId(member) === openid);
       if (!myMember) {
-        await clearActiveRoomForProfile(profile, new Date());
+        await clearActiveRoomForProfile(openid, new Date());
         return null;
       }
 
@@ -405,7 +436,7 @@ async function assertNoActiveRoom(profile, openid) {
           },
         });
         await expireLobbyRoom(room, updatedAt);
-        await clearActiveRoomForProfile(profile, updatedAt);
+        await clearActiveRoomForProfile(openid, updatedAt);
         return null;
       }
     }
@@ -510,7 +541,7 @@ async function createRoom(payload, openid) {
     const avatarUrl = (profileData && profileData.avatarUrl) || "";
     const assetFileIds = mergeRoomAssetFileIds([], avatarUrl);
     const createdAt = new Date();
-    const expireAt = new Date(Date.now() + ROOM_TTL_LOBBY_MS);
+    const expireAt = createExpireAt(createdAt, ROOM_TTL_LOBBY_MS);
 
     await db.collection("rooms").doc(roomId).set({
       data: {
@@ -661,6 +692,7 @@ async function joinRoom(payload, openid) {
       data: {
         playerCount: members.length + 1,
         assetFileIds,
+        expireAt: createExpireAt(joinedAt, ROOM_TTL_LOBBY_MS),
         version: _.inc(1),
         updatedAt: joinedAt,
       },
@@ -737,23 +769,6 @@ async function getRoomMember(roomId, openid) {
   return membersRes.data.find(isActiveMember) || null;
 }
 
-async function clearActiveRoomForMember(roomId, memberId, updatedAt) {
-  await db
-    .collection("user_profiles")
-    .where({
-      activeRoomId: roomId,
-      activeMemberId: memberId,
-    })
-    .update({
-      data: {
-        activeRoomId: null,
-        activeMemberId: null,
-        activeRoomStatus: null,
-        updatedAt,
-      },
-    });
-}
-
 async function leaveRoom(payload, openid) {
   const roomId = payload && payload.roomId;
   if (!roomId || typeof roomId !== "string") {
@@ -788,7 +803,7 @@ async function leaveRoom(payload, openid) {
         },
       });
 
-      await clearActiveRoomForMember(roomId, memberId, updatedAt);
+      await clearActiveRoomForProfile(openid, updatedAt);
 
       return ok({
         roomId,
@@ -811,7 +826,7 @@ async function leaveRoom(payload, openid) {
       },
     });
 
-    await clearActiveRoomForMember(roomId, memberId, updatedAt);
+    await clearActiveRoomForProfile(openid, updatedAt);
 
     const remainingMembers = (await getActiveRoomMembers(roomId)).filter((item) => getMemberId(item) !== memberId);
 
@@ -887,6 +902,7 @@ async function leaveRoom(payload, openid) {
       data: {
         hostMemberId: newHostMemberId,
         playerCount: remainingMembers.length,
+        expireAt: createExpireAt(updatedAt, ROOM_TTL_LOBBY_MS),
         version: _.inc(1),
         updatedAt,
       },
@@ -940,6 +956,7 @@ async function setReady(payload, openid) {
 
     await db.collection("rooms").doc(roomId).update({
       data: {
+        expireAt: createExpireAt(updatedAt, ROOM_TTL_LOBBY_MS),
         version: _.inc(1),
         updatedAt,
       },
@@ -980,6 +997,7 @@ async function startGame(payload, openid) {
       data: {
         status: "in_game",
         startedAt: updatedAt,
+        expireAt: createExpireAt(updatedAt, ROOM_TTL_ACTIVE_MS),
         updatedAt,
         version: _.inc(1),
       },

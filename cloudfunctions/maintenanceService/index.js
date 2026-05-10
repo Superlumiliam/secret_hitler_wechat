@@ -8,9 +8,9 @@ const db = cloud.database();
 const _ = db.command;
 
 const BATCH_LIMIT = 100;
-const ROOM_TTL_LOBBY_MS = 1 * 60 * 60 * 1000;/* 1 hour */
-const ROOM_TTL_ACTIVE_MS = 4 * 60 * 60 * 1000;/* 4 hours */
-const ROOM_TTL_RESULT_MS = 1 * 60 * 60 * 1000;/* 1 hour */
+const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
+const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
+const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 
 function toDate(value) {
   if (!value) {

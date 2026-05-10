@@ -213,10 +213,10 @@ export const MAX_PLAYER_COUNT = 10;
 export const ROOM_CODE_LENGTH = 6;
 export const ROOM_CODE_RETRY_LIMIT = 10;
 export const MAX_DISPLAY_NAME_LENGTH = 20;
-export const ROOM_TTL_LOBBY_MS = 2 * 60 * 60 * 1000;
-export const ROOM_TTL_ACTIVE_MS = 12 * 60 * 60 * 1000;
-export const ROOM_TTL_RESULT_MS = 24 * 60 * 60 * 1000;
-export const COMMAND_RECORD_TTL_MS = 24 * 60 * 60 * 1000;
+export const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
+export const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
+export const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
+export const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 export const GAME_POLL_INTERVAL_MS = 1500;
 export const LOBBY_POLL_INTERVAL_MS = 3000;
 ```
@@ -301,13 +301,15 @@ export type WinReason =
 
 ## 7.2 用户资料存储边界
 
-MVP 后端不建立长期 `user_profiles` 集合。
+MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或账号资料库，只保存当前微信用户的资料完成状态和活跃房间绑定。`user_profiles` 的文档 `_id` 必须使用当前微信 `openid`，并在文档内冗余保存 `openid` 便于排查。
 
 原因：
 
-- 用户可能只使用一次小程序，长期保存头像与用户名会造成数据只增不减
+- `openid` 在当前小程序内唯一且稳定，适合作为一人一条状态记录的主键
+- 创建房间前需要服务端判断当前账号是否已有 `lobby` 或 `in_game` 房间
+- 用户可能只使用一次小程序，长期保存头像会造成数据只增不减
 - MVP 不支持换设备、清缓存、重装后恢复用户名头像
-- 用户资料只服务于房间内展示，不是账号体系
+- 用户资料只服务于房间内展示和活跃房间恢复，不是账号体系
 
 实现约束：
 
@@ -315,9 +317,10 @@ MVP 后端不建立长期 `user_profiles` 集合。
 - 创建用户页点击“保存形象”只更新小程序本地缓存并回到首页，不触发后端写操作
 - `createRoom` / `joinRoom` 请求必须携带本地用户资料
 - 前端在创建 / 加入房间时把自定义头像上传为房间临时头像，后端只把请求中的 `displayName/avatarUrl` 写入当前房间的 `room_members` 成员快照
+- `user_profiles` 只允许保存 `openid`、`defaultDisplayName`、`profileCompleted`、`activeRoomId`、`activeMemberId`、`activeRoomStatus` 等低敏状态字段；不得保存长期头像资源
 - 房间临时头像不在游戏刚结束时删除；`ended` 复盘保留期内继续可用，房间进入 `expired`、大厅空房间销毁或维护任务清理房间数据时再删除关联头像资源
-- 房间过期或销毁后，成员快照随房间数据清理，不保留跨局用户资料
-- 恢复活跃房间时，通过 `room_members.openId` 查询当前 openid 仍有效的房间成员，不依赖用户资料表
+- 房间过期或销毁后，成员快照随房间数据清理，`user_profiles` 只清空活跃房间绑定，不保留跨局成员快照
+- 恢复活跃房间时，优先通过 `user_profiles.activeRoomId/activeMemberId` 定位，再以 `room_members.openId` 校验当前 openid 仍是有效成员
 
 ## 7.3 `rooms`
 
@@ -599,7 +602,7 @@ MVP 后端不建立长期 `user_profiles` 集合。
   "errorCode": null,
   "createdAt": "2026-04-12T12:20:00.000Z",
   "resolvedAt": "2026-04-12T12:20:00.200Z",
-  "expireAt": "2026-04-13T12:20:00.000Z"
+  "expireAt": "2026-04-12T12:30:00.000Z"
 }
 ```
 
@@ -1771,9 +1774,9 @@ MVP 不做自动托管或自动跳过。
 
 ## 16.1 房间过期规则
 
-- `lobby`：最后一次有效操作后 2 小时过期
-- `in_game`：最后一次有效操作后 12 小时过期
-- `ended`：结束后保留 24 小时，再转 `expired`
+- `lobby`：最后一次有效操作后 30 分钟过期。正常组局通常 5-15 分钟，30 分钟足够覆盖拉人、掉线重进和临时等待。
+- `in_game`：最后一次有效操作后 2 小时过期。正常对局多在 45-90 分钟内结束，2 小时可覆盖 10 人局、慢节奏讨论和短暂中断。
+- `ended`：结束后保留 30 分钟，再转 `expired`。结果页复盘通常是短时查看，30 分钟足够用户截图、回看关键结果。
 
 ## 16.2 过期处理动作
 
@@ -1792,7 +1795,7 @@ MVP 不做自动托管或自动跳过。
 建议：
 
 - `game_events` 额外保留 24 小时用于排障
-- `command_records` 额外保留 24 小时用于幂等审计
+- `command_records` 额外保留 10 分钟用于幂等与短时重试审计
 
 ## 17. 测试方案
 
@@ -1845,6 +1848,19 @@ export interface RandomProvider {
 ```
 
 生产环境使用真实随机，测试环境使用固定 seed。
+
+## 17.4 开发者调试模式
+
+个人开发阶段需要支持手动验收完整对局流程。具体方案以 `/docs/develop_mode.md` 为准。
+
+后端实现时必须遵守：
+
+- 开发者调试能力只允许在开发云环境启用。
+- 调试 action 必须校验房间 `mode === 'dev'`。
+- 普通房间不得接受虚拟玩家、席位切换、调试审计等能力。
+- 虚拟玩家控制权必须由后端基于云函数上下文校验，不能只信任前端传入的 `memberId` 或 `playerId`。
+- 游戏内玩家行为仍走正常状态机、幂等和 `expectedVersion` 校验。
+- 生产环境必须拒绝所有调试 action，不能只依赖前端编译宏隔离。
 
 ## 18. 开发顺序建议
 
