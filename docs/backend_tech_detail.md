@@ -1863,10 +1863,14 @@ export interface RandomProvider {
 
 后端实现时必须遵守：
 
-- 开发者调试能力只允许在开发云环境启用。
+- 开发者调试能力只允许在明确 allowlist 的开发云环境启用，例如通过 `DEV_CLOUD_ENV_IDS` 配置。
+- 未配置 allowlist、当前云环境不在 allowlist、或无法识别当前环境时，所有 `dev*` action 必须返回 `DEV_MODE_DISABLED`。
 - 调试 action 必须校验房间 `mode === 'dev'`。
-- 普通房间不得接受虚拟玩家、席位切换、调试审计等能力。
+- 普通房间不得接受虚拟玩家、本地席位代操作、调试控制条等能力。
 - 虚拟玩家控制权必须由后端基于云函数上下文校验，不能只信任前端传入的 `memberId` 或 `playerId`。
+- 开发者快照读取和 `submitCommand` 应通过 `resolveActingMember(openId, roomId, controlledMemberId)` 统一解析真实成员或虚拟行动成员。
+- 虚拟玩家只写入 `room_members`，不得写入或覆盖真实用户的 `user_profiles.activeRoomId / activeMemberId`。
+- 虚拟玩家准备应使用 `devSetVirtualReady` 或 `devReadyAllVirtualPlayers`，不要复用普通 `setReady` 加额外参数。
 - 游戏内玩家行为仍走正常状态机、幂等和 `expectedVersion` 校验。
 - 生产环境必须拒绝所有调试 action，不能只依赖前端编译宏隔离。
 
