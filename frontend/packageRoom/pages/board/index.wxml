@@ -1,5 +1,127 @@
 <view class="board-page">
-  <view class="back-control" bindtap="onBackHome" hover-class="back-control-hover" role="button" aria-label="返回首页">‹</view>
-  <view class="board-title">对局桌面页</view>
-  <view class="board-room">房间 {{roomId}}</view>
+  <view class="board-noise"></view>
+
+  <block wx:if="{{board}}">
+    <view class="top-bar">
+      <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回首页">‹</view>
+      <view class="room-head">
+        <view class="room-title">
+          <text class="room-label">房间号</text>
+          <text class="room-code">{{board.roomCode}}</text>
+        </view>
+        <view class="round-pill">{{board.targetPlayerCount}}人局</view>
+        <view class="round-pill">第{{board.roundNo}}轮</view>
+      </view>
+      <view class="top-actions">
+        <view class="tool-control" bindtap="onTapSettings" role="button" aria-label="设置">
+          <view class="tool-icon gear-icon"></view>
+          <view class="tool-text">设置</view>
+        </view>
+        <view class="tool-control" bindtap="onTapRules" role="button" aria-label="规则说明">
+          <view class="tool-icon rules-icon"></view>
+          <view class="tool-text">规则说明</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="board-layout">
+      <view class="seat-column">
+        <view wx:for="{{leftSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
+          <view class="seat-no">{{item.seatNo}}</view>
+          <view class="avatar {{item.alignment == 'fascist' ? 'is-fascist' : ''}}">
+            <text wx:if="{{!item.isEmpty}}">{{item.avatarInitial}}</text>
+          </view>
+          <view class="seat-name">{{item.name}}</view>
+          <view wx:if="{{!item.isEmpty}}" class="vote-badge {{item.voteStatus == '未投票' ? 'is-pending' : ''}}">{{item.voteStatus}}</view>
+          <view wx:if="{{item.roleLabel}}" class="role-badge">{{item.roleLabel}}</view>
+        </view>
+      </view>
+
+      <view class="center-board">
+        <view class="phase-banner">
+          <view class="eagle-mark"></view>
+          <view class="phase-title">{{board.phaseName}}</view>
+        </view>
+
+        <view class="track-panel liberal-panel">
+          <view class="track-title">自由派政策轨（5格）</view>
+          <view class="policy-row liberal-row">
+            <view wx:for="{{liberalTrack}}" wx:key="slot" class="{{item.cellClass}}">
+              <text>{{item.label}}</text>
+            </view>
+          </view>
+          <view class="track-progress">已颁布 <text>{{board.liberalPolicyCount}}</text> / 5</view>
+        </view>
+
+        <view class="track-panel fascist-panel">
+          <view class="track-title fascist-title">极权派政策轨（6格）</view>
+          <view class="policy-row fascist-row">
+            <view wx:for="{{fascistTrack}}" wx:key="slot" class="{{item.cellClass}}">
+              <text>{{item.label}}</text>
+            </view>
+          </view>
+          <view class="power-row">
+            <view wx:for="{{fascistTrack}}" wx:key="slot" class="power-cell {{item.isVictory ? 'is-victory' : ''}}">
+              <view class="power-icon">{{item.powerIcon}}</view>
+              <view class="power-label">{{item.power}}</view>
+            </view>
+          </view>
+          <view class="track-progress fascist-progress">已颁布 <text>{{board.fascistPolicyCount}}</text> / 6</view>
+          <view wx:if="{{board.fascistPolicyCount >= 5}}" class="veto-note">第5张后，立法阶段永久解锁否决权</view>
+        </view>
+
+        <view class="election-panel">
+          <view class="track-title">选举轨（3格）</view>
+          <view class="election-row">
+            <view wx:for="{{electionTrack}}" wx:key="slot" class="{{item.cellClass}}">{{item.slot}}</view>
+          </view>
+          <view class="election-progress">当前进度 {{board.electionTracker}} / 3</view>
+        </view>
+
+        <view class="status-strip">
+          <view class="status-icon">♟</view>
+          <view class="status-text">{{statusText}}</view>
+        </view>
+
+        <view class="action-panel">
+          <view class="vote-action ja-action" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">赞成 Ja</view>
+          <view class="vote-action nein-action" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">反对 Nein</view>
+        </view>
+
+        <view class="secondary-actions">
+          <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="查看身份">查看身份</view>
+          <view class="secondary-action" bindtap="onTapHistory" hover-class="secondary-hover" role="button" aria-label="历史记录">历史记录</view>
+        </view>
+
+        <view class="count-switch" aria-label="人数模拟切换">
+          <view class="count-label">模拟人数</view>
+          <view
+            wx:for="{{targetOptions}}"
+            wx:key="*this"
+            class="count-option {{targetPlayerCount == item ? 'is-active' : ''}}"
+            data-count="{{item}}"
+            bindtap="onSelectTargetCount"
+            role="button"
+            aria-label="模拟{{item}}人局"
+          >
+            {{item}}
+          </view>
+        </view>
+      </view>
+
+      <view class="seat-column">
+        <view wx:for="{{rightSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
+          <view class="seat-no">{{item.seatNo}}</view>
+          <view class="avatar {{item.alignment == 'fascist' ? 'is-fascist' : ''}}">
+            <text wx:if="{{!item.isEmpty}}">{{item.avatarInitial}}</text>
+          </view>
+          <view class="seat-name">{{item.name}}</view>
+          <view wx:if="{{!item.isEmpty}}" class="vote-badge {{item.voteStatus == '未投票' ? 'is-pending' : ''}}">{{item.voteStatus}}</view>
+          <view wx:if="{{item.roleLabel}}" class="role-badge">{{item.roleLabel}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="board-loading">正在布置桌面...</view>
 </view>

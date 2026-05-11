@@ -6,43 +6,676 @@ page {
 .board-page {
   position: relative;
   min-height: 100vh;
-  padding: calc(160rpx + env(safe-area-inset-top)) 40rpx 40rpx;
+  padding: calc(116rpx + env(safe-area-inset-top)) 18rpx calc(30rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: #e0b06d;
-  background: linear-gradient(180deg, #06171c 0%, #01080a 100%);
+  overflow-x: hidden;
+  color: #e1b373;
+  background:
+    radial-gradient(circle at 50% 16%, rgba(20, 52, 55, 0.62), transparent 34%),
+    linear-gradient(180deg, #071719 0%, #02090a 100%);
   font-family: "Songti SC", STSong, SimSun, serif;
 }
 
-.back-control {
+.board-noise {
   position: absolute;
-  left: 32rpx;
-  top: calc(48rpx + env(safe-area-inset-top));
+  inset: 12rpx;
+  pointer-events: none;
+  border: 1rpx solid rgba(186, 129, 62, 0.52);
+  box-shadow: inset 0 0 0 2rpx rgba(6, 22, 24, 0.78), inset 0 0 84rpx rgba(0, 0, 0, 0.8);
+}
+
+.board-noise::before,
+.board-noise::after {
+  content: "";
+  position: absolute;
+  left: 18rpx;
+  right: 18rpx;
+  height: 1rpx;
+  background: rgba(186, 129, 62, 0.34);
+}
+
+.board-noise::before {
+  top: 116rpx;
+}
+
+.board-noise::after {
+  bottom: 20rpx;
+}
+
+.top-bar {
+  position: relative;
+  z-index: 2;
+  min-height: 92rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.back-control {
+  flex: 0 0 72rpx;
   width: 72rpx;
   height: 72rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d8a766;
+  color: #e3b36e;
   font-size: 92rpx;
   line-height: 66rpx;
   text-shadow: 0 0 12rpx rgba(0, 0, 0, 0.75);
 }
 
-.back-control-hover {
+.icon-hover,
+.action-hover,
+.secondary-hover {
   opacity: 0.72;
 }
 
-.board-title {
-  color: #20d8dc;
-  font-size: 44rpx;
-  font-weight: 900;
+.room-head {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
-.board-room {
-  margin-top: 28rpx;
-  color: rgba(240, 212, 164, 0.82);
+.room-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+}
+
+.room-label {
+  color: #e4af6e;
+  font-size: 32rpx;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.room-code {
+  max-width: 190rpx;
+  color: #f0b160;
+  font-size: 38rpx;
+  font-weight: 800;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.round-pill {
+  flex: 0 0 auto;
+  min-width: 98rpx;
+  height: 54rpx;
+  padding: 0 14rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(190, 129, 65, 0.66);
+  border-radius: 28rpx;
+  color: #e6bd83;
+  font-size: 24rpx;
+  background: rgba(9, 21, 23, 0.78);
+  white-space: nowrap;
+}
+
+.top-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.tool-control {
+  width: 76rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #d9ad73;
+}
+
+.tool-icon {
+  position: relative;
+  width: 48rpx;
+  height: 48rpx;
+  margin-bottom: 6rpx;
+}
+
+.gear-icon {
+  border-radius: 50%;
+  border: 12rpx solid #d9ad73;
+  box-sizing: border-box;
+  box-shadow: 0 0 12rpx rgba(217, 173, 115, 0.22);
+}
+
+.gear-icon::after {
+  content: "";
+  position: absolute;
+  left: 9rpx;
+  top: 9rpx;
+  width: 6rpx;
+  height: 6rpx;
+  border: 5rpx solid #061416;
+  border-radius: 50%;
+  background: #d9ad73;
+}
+
+.rules-icon {
+  display: flex;
+  border-left: 7rpx solid #d9ad73;
+  border-right: 7rpx solid #d9ad73;
+  border-radius: 5rpx;
+  box-sizing: border-box;
+}
+
+.rules-icon::before,
+.rules-icon::after {
+  content: "";
+  flex: 1;
+  border: 2rpx solid #d9ad73;
+  border-top-width: 5rpx;
+  box-sizing: border-box;
+}
+
+.tool-text {
+  color: #e0b373;
+  font-size: 20rpx;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.count-switch {
+  position: relative;
+  z-index: 2;
+  margin: 12rpx auto 0;
+  max-width: 100%;
+  min-height: 36rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  opacity: 0.74;
+}
+
+.count-label {
+  color: rgba(224, 179, 115, 0.72);
+  font-size: 18rpx;
+  white-space: nowrap;
+}
+
+.count-option {
+  width: 34rpx;
+  height: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(189, 139, 82, 0.42);
+  color: rgba(226, 182, 123, 0.78);
+  font-size: 18rpx;
+  background: rgba(9, 23, 25, 0.68);
+}
+
+.count-option.is-active {
+  color: #041014;
+  border-color: #1bd5df;
+  background: #1bd5df;
+  box-shadow: 0 0 16rpx rgba(27, 213, 223, 0.5);
+}
+
+.board-layout {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 122rpx minmax(0, 1fr) 122rpx;
+  gap: 12rpx;
+  align-items: start;
+}
+
+.seat-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  min-height: 1rpx;
+}
+
+.seat-card {
+  position: relative;
+  min-height: 164rpx;
+  padding: 16rpx 8rpx 12rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1rpx solid rgba(181, 127, 67, 0.62);
+  background: rgba(10, 18, 18, 0.86);
+  box-shadow: inset 0 0 28rpx rgba(223, 164, 87, 0.08);
+}
+
+.seat-card::before {
+  content: "";
+  position: absolute;
+  inset: 6rpx;
+  border: 1rpx solid rgba(181, 127, 67, 0.28);
+  pointer-events: none;
+}
+
+.seat-card.is-current {
+  border-color: #16d5df;
+  box-shadow: inset 0 0 34rpx rgba(22, 213, 223, 0.2), 0 0 18rpx rgba(22, 213, 223, 0.32);
+}
+
+.seat-card.is-nominee {
+  border-color: #d8a248;
+  box-shadow: inset 0 0 32rpx rgba(216, 162, 72, 0.2), 0 0 14rpx rgba(216, 162, 72, 0.22);
+}
+
+.seat-card.is-empty {
+  justify-content: center;
+  opacity: 0.58;
+}
+
+.seat-no {
+  position: absolute;
+  left: 10rpx;
+  top: 6rpx;
+  z-index: 1;
+  color: #deb073;
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.avatar {
+  width: 70rpx;
+  height: 70rpx;
+  margin-top: 10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid #b57c42;
+  border-radius: 50%;
+  color: #031014;
+  font-size: 32rpx;
+  font-weight: 800;
+  background: linear-gradient(135deg, #d9c29a 0%, #74502c 100%);
+  overflow: hidden;
+}
+
+.avatar.is-fascist {
+  color: #f2c08a;
+  background: linear-gradient(135deg, #171818 0%, #51301e 100%);
+}
+
+.seat-card.is-empty .avatar {
+  border-color: rgba(180, 139, 88, 0.34);
+  background: rgba(203, 173, 128, 0.18);
+}
+
+.seat-name {
+  width: 100%;
+  margin-top: 8rpx;
+  color: #e9bf83;
+  font-size: 20rpx;
+  line-height: 1.15;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+
+.vote-badge,
+.role-badge {
+  width: 82rpx;
+  min-height: 30rpx;
+  margin-top: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(219, 163, 86, 0.72);
+  color: #f1bd76;
+  font-size: 18rpx;
+  line-height: 1.1;
+  background: rgba(20, 20, 16, 0.72);
+  text-align: center;
+}
+
+.vote-badge.is-pending {
+  color: #f6ca79;
+}
+
+.role-badge {
+  width: 96rpx;
+  border-color: rgba(22, 213, 223, 0.72);
+  color: #27dbe5;
+  background: rgba(4, 45, 51, 0.8);
+}
+
+.seat-card.is-nominee .role-badge {
+  border-color: rgba(219, 163, 86, 0.84);
+  color: #f1bd76;
+  background: rgba(62, 44, 13, 0.82);
+}
+
+.center-board {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.phase-banner {
+  height: 126rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-top: 1rpx solid rgba(161, 110, 56, 0.42);
+  border-bottom: 1rpx solid rgba(161, 110, 56, 0.42);
+}
+
+.eagle-mark {
+  width: 130rpx;
+  height: 28rpx;
+  border-top: 5rpx solid #b17d45;
+  border-bottom: 3rpx solid rgba(177, 125, 69, 0.72);
+  opacity: 0.82;
+}
+
+.phase-title {
+  margin-top: 8rpx;
+  color: #e0a668;
+  font-size: 42rpx;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.track-panel {
+  margin-top: 12rpx;
+  padding: 18rpx 14rpx 14rpx;
+  border: 1rpx solid rgba(159, 102, 48, 0.48);
+  background: rgba(4, 20, 22, 0.72);
+  box-shadow: inset 0 0 42rpx rgba(10, 33, 36, 0.8);
+}
+
+.liberal-panel {
+  border-color: rgba(20, 176, 188, 0.36);
+}
+
+.fascist-panel {
+  background: rgba(23, 11, 8, 0.7);
+}
+
+.track-title {
+  position: relative;
+  color: #18d3dd;
   font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
+.fascist-title {
+  color: #e95138;
+}
+
+.policy-row {
+  margin-top: 24rpx;
+  display: grid;
+  gap: 8rpx;
+}
+
+.liberal-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.fascist-row,
+.power-row {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.policy-cell {
+  position: relative;
+  height: 86rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid rgba(158, 111, 59, 0.64);
+  color: rgba(226, 188, 139, 0.76);
+  font-size: 38rpx;
+  font-weight: 800;
+  background: rgba(12, 18, 17, 0.82);
+  text-align: center;
+}
+
+.policy-cell text {
+  max-width: 92%;
+  line-height: 1.08;
+}
+
+.policy-cell.is-enacted {
+  color: #032024;
+  border-color: #16d5df;
+  background: linear-gradient(180deg, #1dd8e4 0%, #087582 100%);
+  box-shadow: 0 0 18rpx rgba(22, 213, 223, 0.4);
+}
+
+.fascist-cell.is-enacted {
+  color: #240703;
+  border-color: #ef6048;
+  background: linear-gradient(180deg, #f06c50 0%, #8e2117 100%);
+  box-shadow: 0 0 18rpx rgba(239, 96, 72, 0.38);
+}
+
+.policy-cell.is-victory {
+  font-size: 22rpx;
+  color: #e4bd84;
+  background: rgba(10, 14, 13, 0.9);
+}
+
+.track-progress,
+.election-progress {
+  margin-top: 14rpx;
+  color: rgba(221, 190, 143, 0.76);
+  font-size: 22rpx;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.track-progress text {
+  color: #1bd5df;
+  font-weight: 800;
+}
+
+.fascist-progress text {
+  color: #ef6048;
+}
+
+.power-row {
+  margin-top: 14rpx;
+  display: grid;
+  gap: 8rpx;
+}
+
+.power-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: rgba(218, 170, 105, 0.86);
+}
+
+.power-icon {
+  width: 42rpx;
+  height: 42rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bd8752;
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.power-label {
+  width: 100%;
+  margin-top: 4rpx;
+  min-height: 40rpx;
+  color: #dca766;
+  font-size: 18rpx;
+  line-height: 1.08;
+  text-align: center;
+  word-break: break-all;
+}
+
+.power-cell.is-victory .power-label {
+  color: #e0b373;
+}
+
+.veto-note {
+  margin-top: 8rpx;
+  color: #f1bd76;
+  font-size: 20rpx;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.election-panel {
+  margin-top: 12rpx;
+  padding: 16rpx 18rpx 14rpx;
+  border: 1rpx solid rgba(159, 102, 48, 0.46);
+  background: rgba(5, 20, 20, 0.74);
+}
+
+.election-row {
+  margin-top: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 72rpx;
+}
+
+.election-dot {
+  width: 54rpx;
+  height: 54rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(166, 116, 59, 0.62);
+  border-radius: 50%;
+  color: rgba(216, 171, 110, 0.72);
+  font-size: 30rpx;
+  background: #071314;
+}
+
+.election-dot.is-active {
+  color: #031014;
+  border-color: #e9bc72;
+  background: #e7b769;
+  box-shadow: 0 0 18rpx rgba(233, 188, 114, 0.36);
+}
+
+.status-strip {
+  min-height: 64rpx;
+  margin-top: 12rpx;
+  padding: 10rpx 18rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  border: 1rpx solid rgba(161, 110, 56, 0.5);
+  background: rgba(9, 17, 16, 0.82);
+}
+
+.status-icon {
+  flex: 0 0 auto;
+  color: #d9ad73;
+  font-size: 26rpx;
+}
+
+.status-text {
+  min-width: 0;
+  color: #e9bf83;
+  font-size: 22rpx;
+  line-height: 1.25;
+}
+
+.action-panel {
+  margin-top: 14rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.vote-action {
+  height: 78rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid currentColor;
+  border-radius: 36rpx;
+  color: #041014;
+  font-size: 32rpx;
+  font-weight: 900;
+  letter-spacing: 0;
+  box-shadow: inset 0 0 22rpx rgba(255, 255, 255, 0.14), 0 0 22rpx rgba(0, 0, 0, 0.34);
+}
+
+.ja-action {
+  background: linear-gradient(180deg, #28dbe8 0%, #0a8f9b 100%);
+}
+
+.nein-action {
+  background: linear-gradient(180deg, #f06b4f 0%, #96231a 100%);
+}
+
+.secondary-actions {
+  margin-top: 12rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.secondary-action {
+  height: 58rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(185, 128, 66, 0.72);
+  color: #e0b373;
+  font-size: 26rpx;
+  background: rgba(7, 24, 24, 0.86);
+}
+
+.board-loading {
+  position: relative;
+  z-index: 2;
+  margin-top: 320rpx;
+  color: rgba(224, 179, 115, 0.76);
+  font-size: 28rpx;
+  text-align: center;
+}
+
+@media (max-width: 360px) {
+  .board-layout {
+    grid-template-columns: 112rpx minmax(0, 1fr) 112rpx;
+    gap: 8rpx;
+  }
+
+  .seat-card {
+    min-height: 154rpx;
+  }
+
+  .avatar {
+    width: 62rpx;
+    height: 62rpx;
+  }
+
+  .policy-cell {
+    height: 78rpx;
+    font-size: 32rpx;
+  }
 }
