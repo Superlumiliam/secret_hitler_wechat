@@ -28,11 +28,10 @@
       <view class="seat-column">
         <view wx:for="{{leftSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
           <view class="seat-no">{{item.seatNo}}</view>
-          <view class="avatar {{item.alignment == 'fascist' ? 'is-fascist' : ''}}">
-            <text wx:if="{{!item.isEmpty}}">{{item.avatarInitial}}</text>
+          <view class="avatar">
+            <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
           </view>
           <view class="seat-name">{{item.name}}</view>
-          <view wx:if="{{!item.isEmpty}}" class="vote-badge {{item.voteStatus == '未投票' ? 'is-pending' : ''}}">{{item.voteStatus}}</view>
           <view wx:if="{{item.roleLabel}}" class="role-badge">{{item.roleLabel}}</view>
         </view>
       </view>
@@ -83,7 +82,7 @@
           <view class="status-text">{{statusText}}</view>
         </view>
 
-        <view class="action-panel">
+        <view wx:if="{{canVote}}" class="action-panel">
           <view class="vote-action ja-action" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">赞成 Ja</view>
           <view class="vote-action nein-action" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">反对 Nein</view>
         </view>
@@ -93,35 +92,21 @@
           <view class="secondary-action" bindtap="onTapHistory" hover-class="secondary-hover" role="button" aria-label="历史记录">历史记录</view>
         </view>
 
-        <view class="count-switch" aria-label="人数模拟切换">
-          <view class="count-label">模拟人数</view>
-          <view
-            wx:for="{{targetOptions}}"
-            wx:key="*this"
-            class="count-option {{targetPlayerCount == item ? 'is-active' : ''}}"
-            data-count="{{item}}"
-            bindtap="onSelectTargetCount"
-            role="button"
-            aria-label="模拟{{item}}人局"
-          >
-            {{item}}
-          </view>
-        </view>
       </view>
 
       <view class="seat-column">
         <view wx:for="{{rightSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
           <view class="seat-no">{{item.seatNo}}</view>
-          <view class="avatar {{item.alignment == 'fascist' ? 'is-fascist' : ''}}">
-            <text wx:if="{{!item.isEmpty}}">{{item.avatarInitial}}</text>
+          <view class="avatar">
+            <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
           </view>
           <view class="seat-name">{{item.name}}</view>
-          <view wx:if="{{!item.isEmpty}}" class="vote-badge {{item.voteStatus == '未投票' ? 'is-pending' : ''}}">{{item.voteStatus}}</view>
           <view wx:if="{{item.roleLabel}}" class="role-badge">{{item.roleLabel}}</view>
         </view>
       </view>
     </view>
   </block>
 
+  <view wx:elif="{{errorText}}" class="board-loading">{{errorText}}</view>
   <view wx:else class="board-loading">正在布置桌面...</view>
 </view>

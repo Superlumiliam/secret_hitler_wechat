@@ -16,21 +16,31 @@ const POWER_ICON_MAP = {
   极权派胜利: "冠",
 };
 
-const SAMPLE_PLAYERS = [
-  { seatNo: 1, name: "xz1", voteStatus: "已投票", avatarInitial: "X", alignment: "liberal" },
-  { seatNo: 2, name: "墨染", voteStatus: "已投票", avatarInitial: "墨", alignment: "fascist" },
-  { seatNo: 3, name: "Echo", voteStatus: "已投票", avatarInitial: "E", roleLabel: "总统候选人", isCurrent: true, alignment: "liberal" },
-  { seatNo: 4, name: "老K", voteStatus: "已投票", avatarInitial: "K", alignment: "fascist" },
-  { seatNo: 5, name: "白夜行者", voteStatus: "未投票", avatarInitial: "白", roleLabel: "总理候选人", isNominee: true, alignment: "liberal" },
-  { seatNo: 6, name: "冷静的观察者", voteStatus: "未投票", avatarInitial: "冷", alignment: "liberal" },
-];
+const PHASE_NAME_MAP = {
+  nomination: "总统候选人提名总理",
+  voting: "政府投票",
+  hitler_check: "独裁者当选检查",
+  legislative_president: "总统立法",
+  legislative_chancellor: "总理立法",
+  veto_response: "总统回应否决",
+  executive_action: "总统执行权力",
+  round_result: "回合结算",
+  game_ended: "对局结束",
+};
+
+function isCloudFileId(fileId) {
+  return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
 
 Page({
+  refreshTimer: null,
+
   data: {
     roomId: "",
+    isLoading: true,
+    errorText: "",
     isLeaving: false,
-    targetPlayerCount: 6,
-    targetOptions: [5, 6, 7, 8, 9, 10],
+    snapshot: null,
     board: null,
     leftSeats: [],
     rightSeats: [],
@@ -38,86 +48,173 @@ Page({
     fascistTrack: [],
     electionTrack: [],
     statusText: "",
+    canVote: false,
   },
 
   onLoad(options) {
-    const targetPlayerCount = this.normalizeTargetCount(options.targetPlayerCount || options.playerCount || 6);
-
-    this.setData(
-      {
-        roomId: options.roomId || "C040E007",
-        targetPlayerCount,
-      },
-      () => this.refreshBoard()
-    );
+    this.setData({
+      roomId: options.roomId || "",
+    });
+    this.loadGameSnapshot();
   },
 
-  normalizeTargetCount(value) {
-    const count = Number(value);
-    if (count < 5) {
-      return 5;
+  onShow() {
+    if (this.data.roomId) {
+      this.startRefreshTimer();
     }
-    if (count > 10) {
-      return 10;
-    }
-    return Number.isFinite(count) ? Math.round(count) : 6;
   },
 
-  refreshBoard() {
-    const board = this.createMockBoard(this.data.targetPlayerCount);
-    const seats = this.createSeats(board.targetPlayerCount);
+  onHide() {
+    this.stopRefreshTimer();
+  },
+
+  onUnload() {
+    this.stopRefreshTimer();
+  },
+
+  startRefreshTimer() {
+    this.stopRefreshTimer();
+    this.refreshTimer = setInterval(() => {
+      this.loadGameSnapshot({ silent: true });
+    }, 3000);
+  },
+
+  stopRefreshTimer() {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  },
+
+  async loadGameSnapshot(options = {}) {
+    if (!this.data.roomId || !wx.cloud) {
+      this.setData({
+        isLoading: false,
+      });
+      return;
+    }
+
+    if (!options.silent) {
+      this.setData({
+        isLoading: true,
+        errorText: "",
+      });
+    }
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: "roomService",
+        data: {
+          action: "getGameSnapshot",
+          payload: {
+            roomId: this.data.roomId,
+          },
+        },
+      });
+      const result = res.result || {};
+      if (!result.success) {
+        throw this.createServiceError(result, "获取对局数据失败");
+      }
+
+      await this.hydrateSnapshot(result.data);
+    } catch (err) {
+      console.error("获取对局数据失败", err);
+      if (!options.silent) {
+        this.setData({
+          board: null,
+          errorText: err.message || "获取对局数据失败",
+        });
+        wx.showToast({
+          title: err.message || "获取对局数据失败",
+          icon: "none",
+        });
+      }
+    } finally {
+      this.setData({
+        isLoading: false,
+      });
+    }
+  },
+
+  async hydrateSnapshot(snapshot) {
+    const publicState = (snapshot && snapshot.publicState) || {};
+    const seatOrder = publicState.seatOrder || [];
+    const cloudFileIds = seatOrder.map((member) => member.avatarUrl).filter(isCloudFileId);
+    const avatarUrlByFileId = {};
+
+    if (cloudFileIds.length && wx.cloud) {
+      try {
+        const tempRes = await wx.cloud.getTempFileURL({
+          fileList: Array.from(new Set(cloudFileIds)),
+        });
+        (tempRes.fileList || []).forEach((file) => {
+          if (file.status === 0 && file.tempFileURL) {
+            avatarUrlByFileId[file.fileID] = file.tempFileURL;
+          }
+        });
+      } catch (err) {
+        console.error("对局头像临时链接获取失败", err);
+      }
+    }
+
+    const board = this.createBoard(snapshot);
+    const seats = this.createSeats(snapshot, avatarUrlByFileId);
     const splitIndex = Math.min(5, seats.length);
 
     this.setData({
+      snapshot,
       board,
       leftSeats: seats.slice(0, splitIndex),
       rightSeats: seats.slice(splitIndex),
       liberalTrack: this.createLiberalTrack(board.liberalPolicyCount),
       fascistTrack: this.createFascistTrack(board.targetPlayerCount, board.fascistPolicyCount),
       electionTrack: this.createElectionTrack(board.electionTracker),
-      statusText: this.createStatusText(board),
+      statusText: this.createStatusText(snapshot, board),
+      canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
     });
   },
 
-  createMockBoard(targetPlayerCount) {
+  createBoard(snapshot) {
+    const publicState = (snapshot && snapshot.publicState) || {};
+    const seatOrder = publicState.seatOrder || [];
+    const president = seatOrder.find((member) => member.memberId === publicState.currentPresidentCandidateId);
+    const chancellor = seatOrder.find((member) => member.memberId === publicState.currentChancellorCandidateId);
+
     return {
-      roomCode: this.data.roomId || "C040E007",
-      targetPlayerCount,
-      roundNo: 4,
-      phaseName: "议会进程",
-      presidentSeatNo: 3,
-      presidentName: "Echo",
-      chancellorSeatNo: 5,
-      chancellorName: "白夜行者",
-      liberalPolicyCount: 2,
-      fascistPolicyCount: 3,
-      electionTracker: 1,
-      pendingTaskText: "等待全员完成投票",
-      vetoUnlocked: false,
+      roomCode: snapshot.roomCode || "",
+      targetPlayerCount: seatOrder.length,
+      roundNo: snapshot.round || 1,
+      phaseName: PHASE_NAME_MAP[snapshot.currentPhase] || "议会进程",
+      presidentSeatNo: president ? president.seatIndex : "",
+      presidentName: president ? president.displayName : "待定",
+      chancellorSeatNo: chancellor ? chancellor.seatIndex : "",
+      chancellorName: chancellor ? chancellor.displayName : "待提名",
+      liberalPolicyCount: publicState.liberalPolicyCount || 0,
+      fascistPolicyCount: publicState.fascistPolicyCount || 0,
+      electionTracker: publicState.electionTracker || 0,
+      vetoUnlocked: Boolean(publicState.vetoUnlocked),
     };
   },
 
-  createSeats(targetPlayerCount) {
-    return Array.from({ length: targetPlayerCount }, (_, index) => {
-      const seatNo = index + 1;
-      const player = SAMPLE_PLAYERS.find((item) => item.seatNo === seatNo);
+  createSeats(snapshot, avatarUrlByFileId) {
+    const publicState = (snapshot && snapshot.publicState) || {};
+    const presidentCandidateId = publicState.currentPresidentCandidateId;
 
-      if (!player) {
-        return {
-          seatNo,
-          isEmpty: true,
-          name: "空位",
-          voteStatus: "",
-          avatarInitial: "",
-          roleLabel: "",
-          seatClass: "seat-card is-empty",
-        };
-      }
+    return (publicState.seatOrder || []).map((member) => {
+      const roleLabel = member.memberId === presidentCandidateId ? "总统候选人" : "";
+      const avatarSrc = avatarUrlByFileId[member.avatarUrl] || "";
 
       return {
-        ...player,
-        isEmpty: false,
-        seatClass: `seat-card ${player.isCurrent ? "is-current" : ""} ${player.isNominee ? "is-nominee" : ""}`,
+        memberId: member.memberId,
+        seatNo: member.seatIndex,
+        name: member.displayName,
+        avatarSrc: isCloudFileId(member.avatarUrl) ? avatarSrc : member.avatarUrl || "",
+        roleLabel,
+        isAlive: member.isAlive,
+        isOffline: member.isOffline,
+        seatClass: `seat-card ${member.memberId === presidentCandidateId ? "is-current" : ""} ${
+          member.isAlive === false ? "is-dead" : ""
+        }`,
       };
     });
   },
@@ -166,19 +263,26 @@ Page({
     });
   },
 
-  createStatusText(board) {
-    return `当前：${board.presidentSeatNo}号总统提名 ${board.chancellorSeatNo}号总理，${board.pendingTaskText}`;
+  createStatusText(snapshot, board) {
+    if (snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR") {
+      return `当前：${board.presidentSeatNo}号 ${board.presidentName} 正在提名总理候选人`;
+    }
+    if (snapshot.currentPhase === "nomination") {
+      return `当前：${board.presidentSeatNo}号 ${board.presidentName} 是总统候选人，等待提名总理候选人`;
+    }
+    if (snapshot.currentPhase === "voting") {
+      return "当前：等待所有存活玩家完成政府投票";
+    }
+    return `当前阶段：${board.phaseName}`;
   },
 
-  onSelectTargetCount(event) {
-    const targetPlayerCount = this.normalizeTargetCount(event.currentTarget.dataset.count);
-
-    this.setData(
-      {
-        targetPlayerCount,
-      },
-      () => this.refreshBoard()
-    );
+  createServiceError(result, fallbackMessage) {
+    const error = (result && result.error) || {};
+    const err = new Error(error.message || fallbackMessage);
+    err.code = error.code || "";
+    err.retryable = Boolean(error.retryable);
+    err.isBusinessFailure = true;
+    return err;
   },
 
   onTapRules() {
@@ -211,14 +315,14 @@ Page({
 
   onVoteJa() {
     wx.showToast({
-      title: "已选择赞成",
+      title: "投票流程待接入",
       icon: "none",
     });
   },
 
   onVoteNein() {
     wx.showToast({
-      title: "已选择反对",
+      title: "投票流程待接入",
       icon: "none",
     });
   },

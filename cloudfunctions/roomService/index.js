@@ -17,9 +17,47 @@ const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
 const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const MIN_DISPLAY_NAME_LENGTH = 2;
 const MAX_DISPLAY_NAME_LENGTH = 12;
-const REQUIRED_COLLECTIONS = ["rooms", "room_members", "user_profiles", "command_records"];
 const ROOM_MODE_NORMAL = "normal";
 const ROOM_MODE_DEV = "dev";
+const GAME_INITIAL_VERSION = 1;
+const ROLE_PRESET_BY_PLAYER_COUNT = {
+  5: ["LIBERAL", "LIBERAL", "LIBERAL", "FASCIST", "HITLER"],
+  6: ["LIBERAL", "LIBERAL", "LIBERAL", "LIBERAL", "FASCIST", "HITLER"],
+  7: ["LIBERAL", "LIBERAL", "LIBERAL", "LIBERAL", "FASCIST", "FASCIST", "HITLER"],
+  8: ["LIBERAL", "LIBERAL", "LIBERAL", "LIBERAL", "LIBERAL", "FASCIST", "FASCIST", "HITLER"],
+  9: ["LIBERAL", "LIBERAL", "LIBERAL", "LIBERAL", "LIBERAL", "FASCIST", "FASCIST", "FASCIST", "HITLER"],
+  10: [
+    "LIBERAL",
+    "LIBERAL",
+    "LIBERAL",
+    "LIBERAL",
+    "LIBERAL",
+    "LIBERAL",
+    "FASCIST",
+    "FASCIST",
+    "FASCIST",
+    "HITLER",
+  ],
+};
+const INITIAL_POLICY_DECK = [
+  "LIBERAL",
+  "LIBERAL",
+  "LIBERAL",
+  "LIBERAL",
+  "LIBERAL",
+  "LIBERAL",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+  "FASCIST",
+];
 
 function nowIso() {
   return new Date().toISOString();
@@ -54,6 +92,286 @@ function createId(prefix) {
 function createExpireAt(baseTime, ttlMs) {
   const base = baseTime instanceof Date ? baseTime.getTime() : Date.now();
   return new Date(base + ttlMs);
+}
+
+function randomInt(max) {
+  return Math.floor(Math.random() * max);
+}
+
+function shuffleCopy(items, pickIndex = randomInt) {
+  const result = items.slice();
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = pickIndex(i + 1);
+    const tmp = result[i];
+    result[i] = result[j];
+    result[j] = tmp;
+  }
+  return result;
+}
+
+function getRolePreset(playerCount) {
+  return ROLE_PRESET_BY_PLAYER_COUNT[playerCount] || null;
+}
+
+function getPartyForRole(role) {
+  return role === "LIBERAL" ? "LIBERAL" : "FASCIST";
+}
+
+function buildRoleAssignments(members, options = {}) {
+  const roles = getRolePreset(members.length);
+  if (!roles) {
+    throw new Error("INVALID_PLAYER_COUNT");
+  }
+
+  const shuffledRoles = shuffleCopy(roles, options.pickIndex);
+  const rawAssignments = {};
+  members.forEach((member, index) => {
+    rawAssignments[getMemberId(member)] = {
+      role: shuffledRoles[index],
+      party: getPartyForRole(shuffledRoles[index]),
+      knownMemberIds: [],
+    };
+  });
+
+  const fascistMemberIds = Object.keys(rawAssignments).filter(
+    (memberId) => rawAssignments[memberId].role === "FASCIST",
+  );
+  const hitlerMemberIds = Object.keys(rawAssignments).filter((memberId) => rawAssignments[memberId].role === "HITLER");
+  const hitlerMemberId = hitlerMemberIds[0] || "";
+
+  Object.keys(rawAssignments).forEach((memberId) => {
+    const assignment = rawAssignments[memberId];
+    if (assignment.role === "FASCIST") {
+      assignment.knownMemberIds = [...fascistMemberIds, hitlerMemberId].filter(
+        (knownMemberId) => knownMemberId && knownMemberId !== memberId,
+      );
+    } else if (assignment.role === "HITLER" && members.length <= 6) {
+      assignment.knownMemberIds = fascistMemberIds.filter((knownMemberId) => knownMemberId !== memberId);
+    }
+  });
+
+  return rawAssignments;
+}
+
+function buildInitialPolicyState(options = {}) {
+  return {
+    drawPile: shuffleCopy(INITIAL_POLICY_DECK, options.pickIndex),
+    discardPile: [],
+    presidentHand: null,
+    chancellorHand: null,
+    peekPile: null,
+  };
+}
+
+function pickInitialPresidentCandidateId(members, options = {}) {
+  if (!members.length) {
+    return "";
+  }
+  return getMemberId(members[(options.pickIndex || randomInt)(members.length)]);
+}
+
+function getEligibleChancellorIdsFromCore(gameCore) {
+  const aliveMemberIds = gameCore.aliveMemberIds || [];
+  const aliveCount = aliveMemberIds.length;
+  return aliveMemberIds.filter((memberId) => {
+    if (memberId === gameCore.currentPresidentCandidateId) {
+      return false;
+    }
+    if (aliveCount > 5 && memberId === gameCore.previousElectedPresidentId) {
+      return false;
+    }
+    if (memberId === gameCore.previousElectedChancellorId) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function buildInitialPublicHistory(gameCore, members, createdAt) {
+  const president = members.find((member) => getMemberId(member) === gameCore.currentPresidentCandidateId);
+  return [
+    {
+      eventId: `evt_${gameCore.gameId}_1`,
+      round: gameCore.round,
+      phase: "nomination",
+      type: "GAME_STARTED",
+      title: "游戏开始",
+      summary: `${gameCore.playerCount}人局开始，身份与政策牌库已秘密初始化`,
+      createdAt: createdAt.toISOString(),
+    },
+    {
+      eventId: `evt_${gameCore.gameId}_2`,
+      round: gameCore.round,
+      phase: "nomination",
+      type: "PRESIDENT_CANDIDATE_SELECTED",
+      title: "首位总统候选人确定",
+      summary: `${president ? president.displayName : "一名玩家"} 成为首位总统候选人`,
+      createdAt: createdAt.toISOString(),
+    },
+  ];
+}
+
+function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, updatedAt) {
+  const roomId = room.roomId || room._id;
+  return {
+    roomId,
+    roomCode: room.roomCode,
+    roomStatus: "in_game",
+    version: gameCore.version,
+    round: gameCore.round,
+    currentPhase: gameCore.phase,
+    publicState: {
+      seatOrder: members.map((member) => ({
+        memberId: getMemberId(member),
+        displayName: member.displayName,
+        avatarUrl: member.avatarUrl || "",
+        seatIndex: member.seatIndex,
+        isAlive: (gameCore.aliveMemberIds || []).includes(getMemberId(member)),
+        isOffline: (member.memberStatus || member.status) === "offline",
+        confirmedNotHitler: (gameCore.confirmedNotHitlerMemberIds || []).includes(getMemberId(member)),
+      })),
+      currentPresidentCandidateId: gameCore.currentPresidentCandidateId,
+      currentChancellorCandidateId: gameCore.currentChancellorCandidateId,
+      currentPresidentId: gameCore.currentPresidentId,
+      currentChancellorId: gameCore.currentChancellorId,
+      previousElectedPresidentId: gameCore.previousElectedPresidentId,
+      previousElectedChancellorId: gameCore.previousElectedChancellorId,
+      electionTracker: gameCore.electionTracker,
+      liberalPolicyCount: gameCore.liberalPolicyCount,
+      fascistPolicyCount: gameCore.fascistPolicyCount,
+      vetoUnlocked: gameCore.vetoUnlocked,
+      executiveActionType: null,
+      voteProgress: null,
+      revealedVotes: null,
+      publicHistory,
+    },
+    updatedAt: updatedAt.toISOString(),
+  };
+}
+
+function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
+  const memberId = getMemberId(member);
+  const assignment = gameCore.roleAssignments[memberId];
+  const memberById = {};
+  members.forEach((item) => {
+    memberById[getMemberId(item)] = item;
+  });
+  const pendingTask =
+    memberId === gameCore.currentPresidentCandidateId
+      ? {
+          taskId: `${gameCore.gameId}:${gameCore.version}:NOMINATE_CHANCELLOR:${memberId}`,
+          taskType: "NOMINATE_CHANCELLOR",
+          required: true,
+          deadline: null,
+          allowedTargets: getEligibleChancellorIdsFromCore(gameCore),
+          meta: {
+            ruleHint: "上一届当选政府成员不能再次组成政府；若仅存活 5 人则放宽总统限制",
+          },
+        }
+      : null;
+
+  return {
+    memberId,
+    privateState: {
+      identity: {
+        role: assignment.role,
+        party: assignment.party,
+        knownMembers: assignment.knownMemberIds.map((knownMemberId) => {
+          const knownMember = memberById[knownMemberId] || {};
+          return {
+            memberId: knownMemberId,
+            displayName: knownMember.displayName || "",
+            avatarUrl: knownMember.avatarUrl || "",
+          };
+        }),
+      },
+      voting: null,
+      legislative: null,
+      investigationResult: null,
+      policyPeek: null,
+    },
+    pendingTask,
+    updatedAt: updatedAt.toISOString(),
+  };
+}
+
+function createInitialGameProjection(room, members, options = {}) {
+  const sortedMembers = members.slice().sort((a, b) => a.seatIndex - b.seatIndex);
+  const roomId = room.roomId || room._id;
+  const gameId = options.gameId || createId("game");
+  const createdAt = options.createdAt || new Date();
+  const expireAt = createExpireAt(createdAt, ROOM_TTL_ACTIVE_MS);
+  const currentPresidentCandidateId = pickInitialPresidentCandidateId(sortedMembers, options);
+  const gameCore = {
+    gameId,
+    roomId,
+    status: "in_game",
+    version: GAME_INITIAL_VERSION,
+    eventSeq: 2,
+    round: 1,
+    phase: "nomination",
+    playerCount: sortedMembers.length,
+    currentPresidentCandidateId,
+    currentChancellorCandidateId: null,
+    currentPresidentId: null,
+    currentChancellorId: null,
+    previousElectedPresidentId: null,
+    previousElectedChancellorId: null,
+    specialElectionCallerId: null,
+    forcedNextPresidentId: null,
+    electionTracker: 0,
+    liberalPolicyCount: 0,
+    fascistPolicyCount: 0,
+    vetoUnlocked: false,
+    roleAssignments: buildRoleAssignments(sortedMembers, options),
+    aliveMemberIds: sortedMembers.map(getMemberId),
+    deadMemberIds: [],
+    confirmedNotHitlerMemberIds: [],
+    investigatedMemberIds: [],
+    roleRevealAckedMemberIds: [],
+    policyState: buildInitialPolicyState(options),
+    phaseData: {
+      presidentCandidateId: currentPresidentCandidateId,
+      eligibleChancellorIds: [],
+    },
+    winner: null,
+    winReason: null,
+    startedAt: createdAt,
+    endedAt: null,
+    updatedAt: createdAt,
+    expireAt,
+  };
+  gameCore.phaseData.eligibleChancellorIds = getEligibleChancellorIdsFromCore(gameCore);
+
+  const publicHistory = buildInitialPublicHistory(gameCore, sortedMembers, createdAt);
+  const publicSnapshotPayload = buildPublicSnapshotPayload(room, gameCore, sortedMembers, publicHistory, createdAt);
+  const privateSnapshotPayloads = sortedMembers.map((member) => ({
+    memberId: getMemberId(member),
+    ownerOpenId: getMemberOpenId(member),
+    payload: buildPrivateSnapshotPayload(gameCore, member, sortedMembers, createdAt),
+  }));
+  const publicEvents = publicHistory.map((historyItem, index) => ({
+    eventId: historyItem.eventId,
+    gameId,
+    roomId,
+    seq: index + 1,
+    type: historyItem.type,
+    actorMemberId: historyItem.type === "PRESIDENT_CANDIDATE_SELECTED" ? currentPresidentCandidateId : null,
+    publicPayload: {
+      title: historyItem.title,
+      summary: historyItem.summary,
+    },
+    privatePayload: null,
+    createdAt,
+  }));
+
+  return {
+    gameCore,
+    publicSnapshotPayload,
+    privateSnapshotPayloads,
+    publicEvents,
+    expireAt,
+  };
 }
 
 function splitEnvList(value) {
@@ -118,46 +436,6 @@ function isDocumentNotFoundError(err) {
     errMessage.includes("does not exist") ||
     errMessage.includes("doesn't exist")
   );
-}
-
-function isCollectionNotFoundError(err) {
-  const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
-  return (
-    errMessage.includes("collection not exist") ||
-    errMessage.includes("collection_not_exist") ||
-    errMessage.includes("database_collection_not_exist") ||
-    errMessage.includes("table not exist") ||
-    errMessage.includes("db or table not exist")
-  );
-}
-
-function isCollectionAlreadyExistsError(err) {
-  const errCode = err && (err.errCode || err.code);
-  const errMessage = String((err && (err.errMsg || err.message)) || "");
-  return (
-    errCode === -501001 ||
-    errMessage.includes("already exists") ||
-    errMessage.includes("ResourceExist") ||
-    errMessage.includes("Table exist") ||
-    errMessage.includes("DATABASE_COLLECTION_ALREADY_EXIST")
-  );
-}
-
-async function ensureCollection(name) {
-  try {
-    await db.createCollection(name);
-  } catch (err) {
-    if (isCollectionAlreadyExistsError(err)) {
-      return;
-    }
-    throw err;
-  }
-}
-
-async function ensureRequiredCollections() {
-  for (const name of REQUIRED_COLLECTIONS) {
-    await ensureCollection(name);
-  }
 }
 
 function normalizeProfilePayload(payload) {
@@ -1093,46 +1371,117 @@ async function startGame(payload, openid) {
   }
 
   return withCommandIdempotency(openid, payload, async () => {
-    const roomRes = await db.collection("rooms").doc(roomId).get();
-    const room = roomRes.data;
-    if (!room) {
-      return fail("ROOM_NOT_FOUND", "房间不存在");
-    }
+    return await db.runTransaction(async (transaction) => {
+      const roomRes = await transaction.collection("rooms").doc(roomId).get();
+      const room = roomRes.data;
+      if (!room) {
+        return fail("ROOM_NOT_FOUND", "房间不存在");
+      }
 
-    if (room.status !== "lobby") {
-      return fail("ACTION_NOT_ALLOWED", "房间已开局");
-    }
+      if (room.status !== "lobby") {
+        return fail("ACTION_NOT_ALLOWED", "房间已开局");
+      }
 
-    const members = await getActiveRoomMembers(roomId);
-    const member = members.find((item) => getMemberOpenId(item) === openid) || null;
-    if (!member) {
-      return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
-    }
+      const membersRes = await transaction
+        .collection("room_members")
+        .where({
+          roomId,
+        })
+        .get();
+      const members = membersRes.data.filter(isActiveMember).sort((a, b) => a.seatIndex - b.seatIndex);
+      const member = members.find((item) => getMemberOpenId(item) === openid) || null;
+      if (!member) {
+        return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+      }
 
-    if (getMemberId(member) !== room.hostMemberId) {
-      return fail("ACTION_NOT_ALLOWED", "只有房主可以开始游戏");
-    }
+      if (getMemberId(member) !== room.hostMemberId) {
+        return fail("ACTION_NOT_ALLOWED", "只有房主可以开始游戏");
+      }
 
-    const isFull = members.length === room.targetPlayerCount;
-    const allReady = members.length > 0 && members.every((item) => Boolean(item.isReady));
-    if (!isFull || !allReady) {
-      return fail("ACTION_NOT_ALLOWED", "房间坐满且全员准备后才能开始");
-    }
+      const isFull = members.length === room.targetPlayerCount;
+      const allReady = members.length > 0 && members.every((item) => Boolean(item.isReady));
+      const hasValidPlayerCount =
+        Number.isInteger(members.length) &&
+        members.length >= MIN_PLAYER_COUNT &&
+        members.length <= MAX_PLAYER_COUNT &&
+        Number.isInteger(room.targetPlayerCount) &&
+        room.targetPlayerCount >= MIN_PLAYER_COUNT &&
+        room.targetPlayerCount <= MAX_PLAYER_COUNT &&
+        Boolean(getRolePreset(members.length));
+      if (!hasValidPlayerCount) {
+        return fail("INVALID_PLAYER_COUNT", "玩家人数不符合开局条件");
+      }
 
-    const updatedAt = new Date();
-    await db.collection("rooms").doc(roomId).update({
-      data: {
-        status: "in_game",
-        startedAt: updatedAt,
-        expireAt: createExpireAt(updatedAt, ROOM_TTL_ACTIVE_MS),
-        updatedAt,
-        version: _.inc(1),
-      },
-    });
+      if (!isFull || !allReady) {
+        return fail("ACTION_NOT_ALLOWED", "房间坐满且全员准备后才能开始");
+      }
 
-    await Promise.all(
-      members.map((item) =>
-        db
+      const updatedAt = new Date();
+      const projection = createInitialGameProjection(room, members, {
+        createdAt: updatedAt,
+      });
+      const { gameCore, publicSnapshotPayload, privateSnapshotPayloads, publicEvents, expireAt } = projection;
+
+      await transaction.collection("game_core").doc(gameCore.gameId).set({
+        data: gameCore,
+      });
+      await transaction.collection("room_public_snapshots").doc(roomId).set({
+        data: {
+          roomId,
+          roomCode: room.roomCode,
+          roomStatus: "in_game",
+          snapshotType: "game_public",
+          version: gameCore.version,
+          payload: publicSnapshotPayload,
+          updatedAt,
+          expireAt,
+        },
+      });
+
+      for (const snapshot of privateSnapshotPayloads) {
+        await transaction
+          .collection("player_private_snapshots")
+          .doc(snapshot.memberId)
+          .set({
+            data: {
+              memberId: snapshot.memberId,
+              roomId,
+              gameId: gameCore.gameId,
+              ownerOpenId: snapshot.ownerOpenId,
+              roomStatus: "in_game",
+              version: gameCore.version,
+              payload: snapshot.payload,
+              pendingTask: snapshot.payload.pendingTask,
+              updatedAt,
+              expireAt,
+            },
+          });
+      }
+
+      for (const event of publicEvents) {
+        await transaction.collection("game_events").doc(event.eventId).set({
+          data: event,
+        });
+      }
+
+      await transaction.collection("rooms").doc(roomId).update({
+        data: {
+          status: "in_game",
+          currentGameId: gameCore.gameId,
+          playerCount: members.length,
+          startedAt: updatedAt,
+          expireAt,
+          updatedAt,
+          version: _.inc(1),
+        },
+      });
+
+      for (const item of members) {
+        const memberOpenId = getMemberOpenId(item);
+        if (!memberOpenId) {
+          continue;
+        }
+        await transaction
           .collection("user_profiles")
           .where({
             activeRoomId: roomId,
@@ -1143,16 +1492,71 @@ async function startGame(payload, openid) {
               activeRoomStatus: "in_game",
               updatedAt,
             },
-          }),
-      ),
-    );
+          });
+      }
 
-    return ok({
-      roomId,
-      roomStatus: "in_game",
-      routeHint: "board",
-      boardPath: `/packageRoom/pages/board/index?roomId=${encodeURIComponent(roomId)}`,
+      return ok({
+        roomId,
+        roomCode: room.roomCode,
+        roomStatus: "in_game",
+        version: gameCore.version,
+        needsRefresh: true,
+        routeHint: "board",
+        boardPath: `/packageRoom/pages/board/index?roomId=${encodeURIComponent(roomId)}`,
+      });
     });
+  });
+}
+
+async function getGameSnapshot(payload, openid) {
+  const roomId = payload && payload.roomId;
+  if (!roomId || typeof roomId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+
+  const roomRes = await db.collection("rooms").doc(roomId).get();
+  const room = roomRes.data;
+  if (!room) {
+    return fail("ROOM_NOT_FOUND", "房间不存在");
+  }
+
+  if (room.status !== "in_game") {
+    return fail("GAME_NOT_STARTED", "房间尚未开局");
+  }
+
+  const member = await getRoomMember(roomId, openid);
+  if (!member) {
+    return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+  }
+
+  const publicRes = await db.collection("room_public_snapshots").doc(roomId).get();
+  const publicSnapshot = publicRes.data;
+  if (!publicSnapshot || publicSnapshot.snapshotType !== "game_public") {
+    return fail("GAME_NOT_STARTED", "对局快照尚未初始化");
+  }
+
+  const memberId = getMemberId(member);
+  const privateRes = await db.collection("player_private_snapshots").doc(memberId).get();
+  const privateSnapshot = privateRes.data;
+  if (!privateSnapshot || privateSnapshot.roomId !== roomId) {
+    return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+  }
+
+  const publicPayload = publicSnapshot.payload || {};
+  const privatePayload = privateSnapshot.payload || {};
+  return ok({
+    roomId,
+    roomCode: publicPayload.roomCode || room.roomCode,
+    roomStatus: "in_game",
+    myMemberId: memberId,
+    version: publicPayload.version || publicSnapshot.version || GAME_INITIAL_VERSION,
+    round: publicPayload.round || 1,
+    currentPhase: publicPayload.currentPhase || "nomination",
+    publicState: publicPayload.publicState || {},
+    privateState: privatePayload.privateState || {},
+    pendingTask: privatePayload.pendingTask || privateSnapshot.pendingTask || null,
+    serverHints: [],
+    updatedAt: publicPayload.updatedAt || nowIso(),
   });
 }
 
@@ -1348,6 +1752,8 @@ async function dispatchAction(action, payload, openid, wxContext) {
       return await leaveRoom(payload, openid);
     case "getLobbySnapshot":
       return await getLobbySnapshot(payload, openid);
+    case "getGameSnapshot":
+      return await getGameSnapshot(payload, openid);
     case "setReady":
       return await setReady(payload, openid);
     case "startGame":
@@ -1363,6 +1769,15 @@ async function dispatchAction(action, payload, openid, wxContext) {
   }
 }
 
+exports.__testHooks = {
+  ROLE_PRESET_BY_PLAYER_COUNT,
+  INITIAL_POLICY_DECK,
+  buildRoleAssignments,
+  buildInitialPolicyState,
+  createInitialGameProjection,
+  getEligibleChancellorIdsFromCore,
+};
+
 exports.main = async (event) => {
   try {
     const wxContext = cloud.getWXContext();
@@ -1374,16 +1789,7 @@ exports.main = async (event) => {
       return fail("UNAUTHORIZED", "无法获取用户身份");
     }
 
-    try {
-      return await dispatchAction(action, payload, openid, wxContext);
-    } catch (err) {
-      if (!isCollectionNotFoundError(err)) {
-        throw err;
-      }
-
-      await ensureRequiredCollections();
-      return await dispatchAction(action, payload, openid, wxContext);
-    }
+    return await dispatchAction(action, payload, openid, wxContext);
   } catch (err) {
     console.error("roomService error", err);
     return fail("INTERNAL_ERROR", "服务异常，请稍后重试", true);

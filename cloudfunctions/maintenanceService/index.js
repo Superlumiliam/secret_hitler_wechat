@@ -13,6 +13,9 @@ const COLLECTIONS = [
   "room_public_snapshots",
   "user_profiles",
   "command_records",
+  "game_core",
+  "player_private_snapshots",
+  "game_events",
   "maintenance_state",
 ];
 const BATCH_LIMIT = 100;
@@ -333,6 +336,9 @@ async function removeRoomData(room) {
       assetStats: null,
       memberStats: null,
       snapshotStats: null,
+      privateSnapshotStats: null,
+      eventStats: null,
+      gameCoreStats: null,
       profileStats: null,
       roomStats: null,
     };
@@ -346,6 +352,9 @@ async function removeRoomData(room) {
       assetStats,
       memberStats: null,
       snapshotStats: null,
+      privateSnapshotStats: null,
+      eventStats: null,
+      gameCoreStats: null,
       profileStats: null,
       roomStats: null,
     };
@@ -360,6 +369,27 @@ async function removeRoomData(room) {
 
   const snapshotRes = await db
     .collection("room_public_snapshots")
+    .where({
+      roomId,
+    })
+    .remove();
+
+  const privateSnapshotRes = await db
+    .collection("player_private_snapshots")
+    .where({
+      roomId,
+    })
+    .remove();
+
+  const eventRes = await db
+    .collection("game_events")
+    .where({
+      roomId,
+    })
+    .remove();
+
+  const gameCoreRes = await db
+    .collection("game_core")
     .where({
       roomId,
     })
@@ -387,6 +417,9 @@ async function removeRoomData(room) {
     assetStats,
     memberStats: memberRes.stats || null,
     snapshotStats: snapshotRes.stats || null,
+    privateSnapshotStats: privateSnapshotRes.stats || null,
+    eventStats: eventRes.stats || null,
+    gameCoreStats: gameCoreRes.stats || null,
     profileStats: profileRes.stats || null,
     roomStats: roomRes.stats || null,
   };
