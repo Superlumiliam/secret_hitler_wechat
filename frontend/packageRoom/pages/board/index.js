@@ -300,9 +300,16 @@ Page({
   },
 
   onTapIdentity() {
-    wx.showToast({
-      title: "身份页待接入",
-      icon: "none",
+    if (!this.data.roomId) {
+      wx.showToast({
+        title: "房间信息缺失",
+        icon: "none",
+      });
+      return;
+    }
+
+    wx.navigateTo({
+      url: `/packageRoom/pages/identity/index?roomId=${encodeURIComponent(this.data.roomId)}`,
     });
   },
 

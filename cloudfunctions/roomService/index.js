@@ -278,10 +278,13 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
         party: assignment.party,
         knownMembers: assignment.knownMemberIds.map((knownMemberId) => {
           const knownMember = memberById[knownMemberId] || {};
+          const knownAssignment = gameCore.roleAssignments[knownMemberId] || {};
           return {
             memberId: knownMemberId,
             displayName: knownMember.displayName || "",
             avatarUrl: knownMember.avatarUrl || "",
+            role: knownAssignment.role || "",
+            party: knownAssignment.party || "",
           };
         }),
       },

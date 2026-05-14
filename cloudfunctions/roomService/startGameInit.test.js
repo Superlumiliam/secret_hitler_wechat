@@ -102,6 +102,18 @@ function assertPrivateVisibility(projection, playerCount) {
       assignments[snapshot.memberId].knownMemberIds.slice().sort(),
       "private knownMembers should mirror allowed visibility",
     );
+    identity.knownMembers.forEach((knownMember) => {
+      assert.strictEqual(
+        knownMember.role,
+        assignments[knownMember.memberId].role,
+        "private knownMembers should include known role",
+      );
+      assert.strictEqual(
+        knownMember.party,
+        assignments[knownMember.memberId].party,
+        "private knownMembers should include known party",
+      );
+    });
   });
 }
 

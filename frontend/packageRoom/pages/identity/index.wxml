@@ -1,0 +1,108 @@
+<view class="identity-page">
+  <image
+    wx:if="{{backgroundVisible}}"
+    class="identity-background"
+    src="{{backgroundSrc}}"
+    mode="aspectFill"
+    webp="{{true}}"
+    binderror="onBackgroundError"
+  />
+  <view class="identity-overlay"></view>
+
+  <block wx:if="{{identity}}">
+    <view class="top-bar">
+      <view class="back-control" bindtap="onBackBoard" hover-class="icon-hover" role="button" aria-label="返回">‹</view>
+      <view class="page-title">身份确认</view>
+      <view class="top-actions">
+        <view class="tool-control" bindtap="onTapRules" role="button" aria-label="规则说明">
+          <view class="tool-icon rules-icon"></view>
+          <view class="tool-text">规则</view>
+        </view>
+        <view class="tool-control" bindtap="onTapPrivacy" role="button" aria-label="保密说明">
+          <view class="tool-icon lock-icon"></view>
+          <view class="tool-text">保密说明</view>
+        </view>
+      </view>
+    </view>
+
+    <view
+      class="card-stage {{isEnvelopeClosed ? 'is-closed' : 'is-open'}} {{isEnvelopeAnimating ? 'is-animating' : ''}}"
+      bindtap="onToggleEnvelope"
+      role="button"
+      aria-label="切换身份信封"
+    >
+      <view class="identity-card-frame {{identity.cardClass}}">
+        <image
+          wx:if="{{identity.cardSrc}}"
+          class="identity-card-image"
+          src="{{identity.cardSrc}}"
+          mode="aspectFit"
+          webp="{{true}}"
+          binderror="onIdentityAssetError"
+        />
+        <view wx:else class="identity-card-missing">{{identity.roleLabel}}</view>
+      </view>
+      <view class="envelope-wrap">
+        <image
+          wx:if="{{envelopeSrc}}"
+          class="envelope-image"
+          src="{{envelopeSrc}}"
+          mode="aspectFit"
+          webp="{{true}}"
+          binderror="onIdentityAssetError"
+        />
+        <view class="envelope-lid"></view>
+        <view class="envelope-front-mask"></view>
+      </view>
+    </view>
+
+    <view class="panel mission-panel">
+      <view class="panel-icon role-panel-icon">{{identity.roleSymbol}}</view>
+      <view class="panel-content">
+        <view class="section-title">你的阵营</view>
+        <view class="mission-line">你属于{{identity.partyLabel}}</view>
+        <view class="mission-line">你的身份是{{identity.roleLabel}}</view>
+        <view class="mission-line">{{identity.missionLine}}</view>
+      </view>
+    </view>
+
+    <view class="panel info-panel">
+      <view class="panel-icon dossier-icon">档</view>
+      <view class="panel-content">
+        <view class="section-title">当前掌握的信息</view>
+        <view wx:for="{{infoLines}}" wx:key="*this" class="info-line">· {{item}}</view>
+        <view wx:if="{{knownMembers.length}}" class="known-list">
+          <view wx:for="{{knownMembers}}" wx:key="memberId" class="known-member">
+            <view class="known-avatar">
+              <image wx:if="{{item.avatarSrc}}" class="known-avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" />
+              <text wx:else>{{item.initial}}</text>
+            </view>
+            <view class="known-main">
+              <view class="known-name">{{item.displayName}}</view>
+              <view class="known-role">{{item.roleLabel}} · {{item.partyLabel}}</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="panel tips-panel">
+      <view class="section-title tips-title">行动提示</view>
+      <view wx:for="{{actionTips}}" wx:key="*this" class="tip-row">
+        <view class="tip-icon">{{index + 1}}</view>
+        <view class="tip-text">{{item}}</view>
+      </view>
+    </view>
+
+    <view class="bottom-actions">
+      <view class="primary-action" bindtap="onBackBoard" hover-class="action-hover" role="button" aria-label="我知道了">我知道了</view>
+      <view class="secondary-action" bindtap="onTapRules" hover-class="action-hover" role="button" aria-label="查看规则">查看规则</view>
+    </view>
+  </block>
+
+  <view wx:elif="{{errorText}}" class="identity-loading">
+    <view>{{errorText}}</view>
+    <view class="retry-action" bindtap="loadIdentitySnapshot" hover-class="action-hover" role="button">重试</view>
+  </view>
+  <view wx:else class="identity-loading">正在调取身份档案...</view>
+</view>

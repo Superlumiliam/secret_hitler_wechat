@@ -9,7 +9,8 @@
       "root": "packageRoom",
       "pages": [
         "pages/lobby/index",
-        "pages/board/index"
+        "pages/board/index",
+        "pages/identity/index"
       ]
     }
   ],
