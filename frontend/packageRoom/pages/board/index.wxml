@@ -25,8 +25,8 @@
     </view>
 
     <view class="board-layout">
-      <view class="seat-column">
-        <view wx:for="{{leftSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
+      <view class="seat-row top-seat-row">
+        <view wx:for="{{topSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
           <view class="seat-no">{{item.seatNo}}</view>
           <view class="avatar">
             <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
@@ -46,26 +46,26 @@
           <view class="track-title">自由派政策轨（5格）</view>
           <view class="policy-row liberal-row">
             <view wx:for="{{liberalTrack}}" wx:key="slot" class="{{item.cellClass}}">
-              <text>{{item.label}}</text>
+              <text class="policy-label">{{item.label}}</text>
             </view>
           </view>
-          <view class="track-progress">已颁布 <text>{{board.liberalPolicyCount}}</text> / 5</view>
+          <view class="track-progress">已颁布 <text class="progress-count">{{board.liberalPolicyCount}}</text> / 5</view>
         </view>
 
         <view class="track-panel fascist-panel">
           <view class="track-title fascist-title">极权派政策轨（6格）</view>
           <view class="policy-row fascist-row">
             <view wx:for="{{fascistTrack}}" wx:key="slot" class="{{item.cellClass}}">
-              <text>{{item.label}}</text>
+              <text class="policy-label">{{item.label}}</text>
             </view>
           </view>
           <view class="power-row">
             <view wx:for="{{fascistTrack}}" wx:key="slot" class="power-cell {{item.isVictory ? 'is-victory' : ''}}">
               <view class="power-icon">{{item.powerIcon}}</view>
-              <view class="power-label">{{item.power}}</view>
+              <view class="power-label {{item.isVictory ? 'power-victory-label' : ''}}">{{item.power}}</view>
             </view>
           </view>
-          <view class="track-progress fascist-progress">已颁布 <text>{{board.fascistPolicyCount}}</text> / 6</view>
+          <view class="track-progress fascist-progress">已颁布 <text class="progress-count fascist-count">{{board.fascistPolicyCount}}</text> / 6</view>
           <view wx:if="{{board.fascistPolicyCount >= 5}}" class="veto-note">第5张后，立法阶段永久解锁否决权</view>
         </view>
 
@@ -81,7 +81,20 @@
           <view class="status-icon">♟</view>
           <view class="status-text">{{statusText}}</view>
         </view>
+      </view>
 
+      <view class="seat-row bottom-seat-row">
+        <view wx:for="{{bottomSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
+          <view class="seat-no">{{item.seatNo}}</view>
+          <view class="avatar">
+            <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
+          </view>
+          <view class="seat-name">{{item.name}}</view>
+          <view wx:if="{{item.roleLabel}}" class="role-badge">{{item.roleLabel}}</view>
+        </view>
+      </view>
+
+      <view class="action-dock">
         <view wx:if="{{canVote}}" class="action-panel">
           <view class="vote-action ja-action" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">赞成 Ja</view>
           <view class="vote-action nein-action" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">反对 Nein</view>
@@ -90,18 +103,6 @@
         <view class="secondary-actions">
           <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="查看身份">查看身份</view>
           <view class="secondary-action" bindtap="onTapHistory" hover-class="secondary-hover" role="button" aria-label="历史记录">历史记录</view>
-        </view>
-
-      </view>
-
-      <view class="seat-column">
-        <view wx:for="{{rightSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
-          <view class="seat-no">{{item.seatNo}}</view>
-          <view class="avatar">
-            <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
-          </view>
-          <view class="seat-name">{{item.name}}</view>
-          <view wx:if="{{item.roleLabel}}" class="role-badge">{{item.roleLabel}}</view>
         </view>
       </view>
     </view>

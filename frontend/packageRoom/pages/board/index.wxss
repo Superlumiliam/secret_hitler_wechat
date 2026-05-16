@@ -1,17 +1,12 @@
-page {
-  min-height: 100vh;
-  background: #031014;
-}
-
 .board-page {
   position: relative;
   min-height: 100vh;
-  padding: calc(116rpx + env(safe-area-inset-top)) 18rpx calc(30rpx + env(safe-area-inset-bottom));
+  padding: calc(36rpx + env(safe-area-inset-top)) 18rpx calc(24rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
   overflow-x: hidden;
   color: #e1b373;
   background:
-    radial-gradient(circle at 50% 16%, rgba(20, 52, 55, 0.62), transparent 34%),
+    radial-gradient(circle at 50% 48%, rgba(20, 52, 55, 0.6), transparent 42%),
     linear-gradient(180deg, #071719 0%, #02090a 100%);
   font-family: "Songti SC", STSong, SimSun, serif;
 }
@@ -35,7 +30,7 @@ page {
 }
 
 .board-noise::before {
-  top: 116rpx;
+  top: 96rpx;
 }
 
 .board-noise::after {
@@ -45,23 +40,23 @@ page {
 .top-bar {
   position: relative;
   z-index: 2;
-  min-height: 92rpx;
+  min-height: 74rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 14rpx;
+  gap: 10rpx;
 }
 
 .back-control {
-  flex: 0 0 72rpx;
-  width: 72rpx;
-  height: 72rpx;
+  flex: 0 0 58rpx;
+  width: 58rpx;
+  height: 58rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #e3b36e;
-  font-size: 92rpx;
-  line-height: 66rpx;
+  font-size: 76rpx;
+  line-height: 52rpx;
   text-shadow: 0 0 12rpx rgba(0, 0, 0, 0.75);
 }
 
@@ -76,27 +71,27 @@ page {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 8rpx;
 }
 
 .room-title {
   min-width: 0;
   display: flex;
   align-items: baseline;
-  gap: 16rpx;
+  gap: 10rpx;
 }
 
 .room-label {
   color: #e4af6e;
-  font-size: 32rpx;
+  font-size: 26rpx;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .room-code {
-  max-width: 190rpx;
+  max-width: 176rpx;
   color: #f0b160;
-  font-size: 38rpx;
+  font-size: 32rpx;
   font-weight: 800;
   letter-spacing: 0;
   overflow: hidden;
@@ -106,9 +101,9 @@ page {
 
 .round-pill {
   flex: 0 0 auto;
-  min-width: 98rpx;
-  height: 54rpx;
-  padding: 0 14rpx;
+  min-width: 84rpx;
+  height: 44rpx;
+  padding: 0 12rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -116,7 +111,7 @@ page {
   border: 1rpx solid rgba(190, 129, 65, 0.66);
   border-radius: 28rpx;
   color: #e6bd83;
-  font-size: 24rpx;
+  font-size: 22rpx;
   background: rgba(9, 21, 23, 0.78);
   white-space: nowrap;
 }
@@ -125,11 +120,11 @@ page {
   flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
-  gap: 16rpx;
+  gap: 10rpx;
 }
 
 .tool-control {
-  width: 76rpx;
+  width: 64rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -138,14 +133,14 @@ page {
 
 .tool-icon {
   position: relative;
-  width: 48rpx;
-  height: 48rpx;
-  margin-bottom: 6rpx;
+  width: 38rpx;
+  height: 38rpx;
+  margin-bottom: 4rpx;
 }
 
 .gear-icon {
   border-radius: 50%;
-  border: 12rpx solid #d9ad73;
+  border: 9rpx solid #d9ad73;
   box-sizing: border-box;
   box-shadow: 0 0 12rpx rgba(217, 173, 115, 0.22);
 }
@@ -153,19 +148,19 @@ page {
 .gear-icon::after {
   content: "";
   position: absolute;
-  left: 9rpx;
-  top: 9rpx;
-  width: 6rpx;
-  height: 6rpx;
-  border: 5rpx solid #061416;
+  left: 7rpx;
+  top: 7rpx;
+  width: 5rpx;
+  height: 5rpx;
+  border: 4rpx solid #061416;
   border-radius: 50%;
   background: #d9ad73;
 }
 
 .rules-icon {
   display: flex;
-  border-left: 7rpx solid #d9ad73;
-  border-right: 7rpx solid #d9ad73;
+  border-left: 6rpx solid #d9ad73;
+  border-right: 6rpx solid #d9ad73;
   border-radius: 5rpx;
   box-sizing: border-box;
 }
@@ -181,7 +176,7 @@ page {
 
 .tool-text {
   color: #e0b373;
-  font-size: 20rpx;
+  font-size: 18rpx;
   line-height: 1.15;
   text-align: center;
   white-space: nowrap;
@@ -190,30 +185,34 @@ page {
 .board-layout {
   position: relative;
   z-index: 2;
-  display: grid;
-  grid-template-columns: 122rpx minmax(0, 1fr) 122rpx;
-  gap: 12rpx;
-  align-items: start;
-}
-
-.seat-column {
+  min-height: calc(100vh - 140rpx - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
-  min-height: 1rpx;
+  gap: 12rpx;
+}
+
+.seat-row {
+  display: flex;
+  justify-content: center;
+  gap: 8rpx;
 }
 
 .seat-card {
   position: relative;
-  min-height: 164rpx;
-  padding: 16rpx 8rpx 12rpx;
+  flex: 1 1 0;
+  max-width: 136rpx;
+  min-width: 0;
+  height: 142rpx;
+  padding: 12rpx 6rpx 8rpx;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   border: 1rpx solid rgba(181, 127, 67, 0.62);
   background: rgba(10, 18, 18, 0.86);
   box-shadow: inset 0 0 28rpx rgba(223, 164, 87, 0.08);
+  overflow: hidden;
 }
 
 .seat-card::before {
@@ -241,25 +240,25 @@ page {
 
 .seat-no {
   position: absolute;
-  left: 10rpx;
+  left: 8rpx;
   top: 6rpx;
   z-index: 1;
   color: #deb073;
-  font-size: 24rpx;
+  font-size: 22rpx;
   line-height: 1;
 }
 
 .avatar {
-  width: 70rpx;
-  height: 70rpx;
-  margin-top: 10rpx;
+  width: 58rpx;
+  height: 58rpx;
+  margin-top: 4rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1rpx solid #b57c42;
   border-radius: 50%;
   color: #031014;
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: 800;
   background: linear-gradient(135deg, #d9c29a 0%, #74502c 100%);
   overflow: hidden;
@@ -273,10 +272,10 @@ page {
 
 .seat-name {
   width: 100%;
-  margin-top: 8rpx;
+  margin-top: 6rpx;
   color: #e9bf83;
   font-size: 20rpx;
-  line-height: 1.15;
+  line-height: 1.05;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -287,24 +286,20 @@ page {
 }
 
 .role-badge {
-  width: 96rpx;
-  min-height: 30rpx;
-  margin-top: 8rpx;
+  max-width: 112rpx;
+  min-height: 26rpx;
+  margin-top: 5rpx;
+  padding: 0 6rpx;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1rpx solid rgba(22, 213, 223, 0.72);
   color: #27dbe5;
-  font-size: 18rpx;
+  font-size: 17rpx;
   line-height: 1.1;
   background: rgba(4, 45, 51, 0.8);
   text-align: center;
-}
-
-.seat-card.is-nominee .role-badge {
-  border-color: rgba(219, 163, 86, 0.84);
-  color: #f1bd76;
-  background: rgba(62, 44, 13, 0.82);
 }
 
 .seat-card.is-dead {
@@ -313,13 +308,20 @@ page {
 
 .center-board {
   min-width: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  justify-content: center;
+  padding: 4rpx 10rpx 2rpx;
+  box-sizing: border-box;
+  border: 1rpx solid rgba(159, 102, 48, 0.42);
+  background: rgba(3, 15, 17, 0.48);
+  box-shadow: inset 0 0 56rpx rgba(0, 0, 0, 0.48);
 }
 
 .phase-banner {
-  height: 126rpx;
+  min-height: 86rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -329,24 +331,24 @@ page {
 }
 
 .eagle-mark {
-  width: 130rpx;
-  height: 28rpx;
-  border-top: 5rpx solid #b17d45;
-  border-bottom: 3rpx solid rgba(177, 125, 69, 0.72);
+  width: 112rpx;
+  height: 18rpx;
+  border-top: 4rpx solid #b17d45;
+  border-bottom: 2rpx solid rgba(177, 125, 69, 0.72);
   opacity: 0.82;
 }
 
 .phase-title {
-  margin-top: 8rpx;
+  margin-top: 5rpx;
   color: #e0a668;
-  font-size: 42rpx;
+  font-size: 36rpx;
   font-weight: 800;
   letter-spacing: 0;
 }
 
 .track-panel {
-  margin-top: 12rpx;
-  padding: 18rpx 14rpx 14rpx;
+  margin-top: 10rpx;
+  padding: 14rpx 12rpx 12rpx;
   border: 1rpx solid rgba(159, 102, 48, 0.48);
   background: rgba(4, 20, 22, 0.72);
   box-shadow: inset 0 0 42rpx rgba(10, 33, 36, 0.8);
@@ -363,7 +365,7 @@ page {
 .track-title {
   position: relative;
   color: #18d3dd;
-  font-size: 28rpx;
+  font-size: 25rpx;
   font-weight: 700;
   line-height: 1;
   text-align: center;
@@ -374,7 +376,7 @@ page {
 }
 
 .policy-row {
-  margin-top: 24rpx;
+  margin-top: 18rpx;
   display: grid;
   gap: 8rpx;
 }
@@ -390,19 +392,19 @@ page {
 
 .policy-cell {
   position: relative;
-  height: 86rpx;
+  height: 70rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2rpx solid rgba(158, 111, 59, 0.64);
   color: rgba(226, 188, 139, 0.76);
-  font-size: 38rpx;
+  font-size: 32rpx;
   font-weight: 800;
   background: rgba(12, 18, 17, 0.82);
   text-align: center;
 }
 
-.policy-cell text {
+.policy-label {
   max-width: 92%;
   line-height: 1.08;
 }
@@ -422,31 +424,31 @@ page {
 }
 
 .policy-cell.is-victory {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #e4bd84;
   background: rgba(10, 14, 13, 0.9);
 }
 
 .track-progress,
 .election-progress {
-  margin-top: 14rpx;
+  margin-top: 10rpx;
   color: rgba(221, 190, 143, 0.76);
-  font-size: 22rpx;
+  font-size: 20rpx;
   line-height: 1.2;
   text-align: center;
 }
 
-.track-progress text {
+.progress-count {
   color: #1bd5df;
   font-weight: 800;
 }
 
-.fascist-progress text {
+.fascist-count {
   color: #ef6048;
 }
 
 .power-row {
-  margin-top: 14rpx;
+  margin-top: 10rpx;
   display: grid;
   gap: 8rpx;
 }
@@ -460,28 +462,28 @@ page {
 }
 
 .power-icon {
-  width: 42rpx;
-  height: 42rpx;
+  width: 34rpx;
+  height: 34rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #bd8752;
-  font-size: 22rpx;
+  font-size: 20rpx;
   line-height: 1;
 }
 
 .power-label {
   width: 100%;
   margin-top: 4rpx;
-  min-height: 40rpx;
+  min-height: 34rpx;
   color: #dca766;
-  font-size: 18rpx;
+  font-size: 17rpx;
   line-height: 1.08;
   text-align: center;
   word-break: break-all;
 }
 
-.power-cell.is-victory .power-label {
+.power-victory-label {
   color: #e0b373;
 }
 
@@ -494,30 +496,30 @@ page {
 }
 
 .election-panel {
-  margin-top: 12rpx;
-  padding: 16rpx 18rpx 14rpx;
+  margin-top: 10rpx;
+  padding: 12rpx 16rpx 10rpx;
   border: 1rpx solid rgba(159, 102, 48, 0.46);
   background: rgba(5, 20, 20, 0.74);
 }
 
 .election-row {
-  margin-top: 18rpx;
+  margin-top: 12rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 72rpx;
+  gap: 58rpx;
 }
 
 .election-dot {
-  width: 54rpx;
-  height: 54rpx;
+  width: 46rpx;
+  height: 46rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1rpx solid rgba(166, 116, 59, 0.62);
   border-radius: 50%;
   color: rgba(216, 171, 110, 0.72);
-  font-size: 30rpx;
+  font-size: 26rpx;
   background: #071314;
 }
 
@@ -529,9 +531,9 @@ page {
 }
 
 .status-strip {
-  min-height: 64rpx;
-  margin-top: 12rpx;
-  padding: 10rpx 18rpx;
+  min-height: 56rpx;
+  margin-top: 10rpx;
+  padding: 8rpx 16rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -549,26 +551,30 @@ page {
 .status-text {
   min-width: 0;
   color: #e9bf83;
-  font-size: 22rpx;
+  font-size: 21rpx;
   line-height: 1.25;
 }
 
+.action-dock {
+  margin-top: auto;
+  padding: 4rpx 10rpx 0;
+}
+
 .action-panel {
-  margin-top: 14rpx;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14rpx;
 }
 
 .vote-action {
-  height: 78rpx;
+  height: 74rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2rpx solid currentColor;
   border-radius: 36rpx;
   color: #041014;
-  font-size: 32rpx;
+  font-size: 31rpx;
   font-weight: 900;
   letter-spacing: 0;
   box-shadow: inset 0 0 22rpx rgba(255, 255, 255, 0.14), 0 0 22rpx rgba(0, 0, 0, 0.34);
@@ -583,20 +589,20 @@ page {
 }
 
 .secondary-actions {
-  margin-top: 12rpx;
+  margin-top: 10rpx;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14rpx;
 }
 
 .secondary-action {
-  height: 58rpx;
+  height: 54rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1rpx solid rgba(185, 128, 66, 0.72);
   color: #e0b373;
-  font-size: 26rpx;
+  font-size: 25rpx;
   background: rgba(7, 24, 24, 0.86);
 }
 
@@ -610,22 +616,39 @@ page {
 }
 
 @media (max-width: 360px) {
-  .board-layout {
-    grid-template-columns: 112rpx minmax(0, 1fr) 112rpx;
-    gap: 8rpx;
-  }
-
   .seat-card {
-    min-height: 154rpx;
+    height: 130rpx;
+    padding-top: 10rpx;
   }
 
   .avatar {
-    width: 62rpx;
-    height: 62rpx;
+    width: 52rpx;
+    height: 52rpx;
+  }
+
+  .seat-name {
+    font-size: 18rpx;
+  }
+
+  .role-badge {
+    min-height: 24rpx;
+    font-size: 16rpx;
   }
 
   .policy-cell {
-    height: 78rpx;
+    height: 62rpx;
+    font-size: 28rpx;
+  }
+
+  .phase-title {
     font-size: 32rpx;
+  }
+
+  .power-label {
+    font-size: 16rpx;
+  }
+
+  .election-row {
+    gap: 44rpx;
   }
 }

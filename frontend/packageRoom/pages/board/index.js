@@ -42,8 +42,8 @@ Page({
     isLeaving: false,
     snapshot: null,
     board: null,
-    leftSeats: [],
-    rightSeats: [],
+    topSeats: [],
+    bottomSeats: [],
     liberalTrack: [],
     fascistTrack: [],
     electionTrack: [],
@@ -159,13 +159,13 @@ Page({
 
     const board = this.createBoard(snapshot);
     const seats = this.createSeats(snapshot, avatarUrlByFileId);
-    const splitIndex = Math.min(5, seats.length);
+    const splitIndex = Math.ceil(seats.length / 2);
 
     this.setData({
       snapshot,
       board,
-      leftSeats: seats.slice(0, splitIndex),
-      rightSeats: seats.slice(splitIndex),
+      topSeats: seats.slice(0, splitIndex),
+      bottomSeats: seats.slice(splitIndex),
       liberalTrack: this.createLiberalTrack(board.liberalPolicyCount),
       fascistTrack: this.createFascistTrack(board.targetPlayerCount, board.fascistPolicyCount),
       electionTrack: this.createElectionTrack(board.electionTracker),
