@@ -191,6 +191,48 @@
   gap: 12rpx;
 }
 
+.dev-control-strip {
+  min-height: 58rpx;
+  padding: 8rpx 12rpx;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10rpx;
+  border: 1rpx solid rgba(31, 204, 215, 0.5);
+  color: #bdeff0;
+  background: rgba(3, 43, 47, 0.74);
+}
+
+.dev-mark {
+  height: 34rpx;
+  padding: 0 10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(31, 204, 215, 0.62);
+  color: #082024;
+  font-size: 20rpx;
+  font-weight: 800;
+  background: #21d0db;
+  white-space: nowrap;
+}
+
+.dev-seat {
+  min-width: 0;
+  color: #e8c48a;
+  font-size: 22rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dev-hint {
+  color: rgba(189, 239, 240, 0.76);
+  font-size: 19rpx;
+  white-space: nowrap;
+}
+
 .seat-row {
   display: flex;
   justify-content: center;
@@ -226,6 +268,25 @@
 .seat-card.is-current {
   border-color: #16d5df;
   box-shadow: inset 0 0 34rpx rgba(22, 213, 223, 0.2), 0 0 18rpx rgba(22, 213, 223, 0.32);
+}
+
+.seat-card.is-controlled {
+  border-color: #f1bd76;
+  box-shadow: inset 0 0 36rpx rgba(241, 189, 118, 0.22), 0 0 20rpx rgba(241, 189, 118, 0.34);
+}
+
+.seat-card.is-controlled::after {
+  content: "操控";
+  position: absolute;
+  right: 6rpx;
+  top: 6rpx;
+  z-index: 1;
+  padding: 1rpx 6rpx;
+  color: #081719;
+  font-size: 16rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  background: #f1bd76;
 }
 
 .seat-card.is-nominee {
@@ -558,6 +619,47 @@
 .action-dock {
   margin-top: auto;
   padding: 4rpx 10rpx 0;
+}
+
+.nominate-panel {
+  padding: 10rpx 12rpx 12rpx;
+  border: 1rpx solid rgba(185, 128, 66, 0.64);
+  background: rgba(7, 24, 24, 0.88);
+}
+
+.nominate-title {
+  color: #e8bf83;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.nominate-actions {
+  margin-top: 10rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10rpx;
+}
+
+.nominate-action {
+  min-height: 54rpx;
+  padding: 8rpx 10rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(31, 204, 215, 0.58);
+  color: #082024;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 1.16;
+  text-align: center;
+  background: linear-gradient(180deg, #31d8df 0%, #0f8c95 100%);
+}
+
+.nominate-action.is-disabled {
+  opacity: 0.56;
 }
 
 .action-panel {

@@ -45,6 +45,7 @@ function getRoleMeta(role) {
 Page({
   data: {
     roomId: "",
+    controlledMemberId: "",
     isLoading: true,
     errorText: "",
     backgroundSrc: "",
@@ -58,6 +59,7 @@ Page({
   onLoad(options = {}) {
     this.setData({
       roomId: options.roomId || "",
+      controlledMemberId: options.controlledMemberId || "",
     });
     this.loadIdentitySnapshot();
   },
@@ -84,6 +86,7 @@ Page({
           action: "getGameSnapshot",
           payload: {
             roomId: this.data.roomId,
+            controlledMemberId: this.data.controlledMemberId || "",
           },
         },
       });

@@ -25,8 +25,14 @@
     </view>
 
     <view class="board-layout">
+      <view wx:if="{{isDevRoom}}" class="dev-control-strip">
+        <view class="dev-mark">开发者房间</view>
+        <view class="dev-seat">{{controlledSeatText}}</view>
+        <view class="dev-hint">点击席位切换操控视角</view>
+      </view>
+
       <view class="seat-row top-seat-row">
-        <view wx:for="{{topSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
+        <view wx:for="{{topSeats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="切换操控席位">
           <view class="seat-no">{{item.seatNo}}</view>
           <view class="avatar">
             <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
@@ -84,7 +90,7 @@
       </view>
 
       <view class="seat-row bottom-seat-row">
-        <view wx:for="{{bottomSeats}}" wx:key="seatNo" class="{{item.seatClass}}">
+        <view wx:for="{{bottomSeats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="切换操控席位">
           <view class="seat-no">{{item.seatNo}}</view>
           <view class="avatar">
             <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
@@ -95,6 +101,21 @@
       </view>
 
       <view class="action-dock">
+        <view wx:if="{{canNominate}}" class="nominate-panel">
+          <view class="nominate-title">选择总理候选人</view>
+          <view class="nominate-actions">
+            <view
+              wx:for="{{nominateTargets}}"
+              wx:key="memberId"
+              class="nominate-action {{isSubmittingCommand ? 'is-disabled' : ''}}"
+              bindtap="onTapNominate"
+              data-member-id="{{item.memberId}}"
+              role="button"
+              aria-label="提名总理候选人"
+            >{{item.label}}</view>
+          </view>
+        </view>
+
         <view wx:if="{{canVote}}" class="action-panel">
           <view class="vote-action ja-action" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">赞成 Ja</view>
           <view class="vote-action nein-action" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">反对 Nein</view>

@@ -257,7 +257,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
     memberById[getMemberId(item)] = item;
   });
   const pendingTask =
-    memberId === gameCore.currentPresidentCandidateId
+    gameCore.phase === "nomination" && memberId === gameCore.currentPresidentCandidateId
       ? {
           taskId: `${gameCore.gameId}:${gameCore.version}:NOMINATE_CHANCELLOR:${memberId}`,
           taskType: "NOMINATE_CHANCELLOR",
@@ -1171,6 +1171,60 @@ async function getRoomMember(roomId, openid) {
   return membersRes.data.find(isActiveMember) || null;
 }
 
+async function resolveActingMember(room, openid, controlledMemberId) {
+  const roomId = room && (room.roomId || room._id);
+  const realMember = await getRoomMember(roomId, openid);
+  if (!realMember) {
+    return {
+      error: fail("NOT_ROOM_MEMBER", "当前用户不在房间中"),
+    };
+  }
+
+  if (!controlledMemberId) {
+    return {
+      member: realMember,
+      realMember,
+    };
+  }
+
+  if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_DEV) {
+    return {
+      error: fail("ACTION_NOT_ALLOWED", "当前房间不允许切换操控席位"),
+    };
+  }
+
+  let controlledMember = null;
+  try {
+    const controlledRes = await db.collection("room_members").doc(controlledMemberId).get();
+    controlledMember = controlledRes.data;
+  } catch (err) {
+    if (!isDocumentNotFoundError(err)) {
+      throw err;
+    }
+  }
+  if (
+    !controlledMember ||
+    controlledMember.roomId !== roomId ||
+    !isActiveMember(controlledMember) ||
+    !controlledMember.isVirtual
+  ) {
+    return {
+      error: fail("INVALID_TARGET", "只能操控当前开发者房间中的虚拟席位"),
+    };
+  }
+
+  if (controlledMember.controlledByOpenId !== openid) {
+    return {
+      error: fail("ACTION_NOT_ALLOWED", "没有该虚拟席位的操控权限"),
+    };
+  }
+
+  return {
+    member: controlledMember,
+    realMember,
+  };
+}
+
 async function leaveRoom(payload, openid) {
   const roomId = payload && payload.roomId;
   if (!roomId || typeof roomId !== "string") {
@@ -1513,6 +1567,7 @@ async function startGame(payload, openid) {
 
 async function getGameSnapshot(payload, openid) {
   const roomId = payload && payload.roomId;
+  const controlledMemberId = payload && payload.controlledMemberId;
   if (!roomId || typeof roomId !== "string") {
     return fail("INVALID_PAYLOAD", "缺少 roomId");
   }
@@ -1527,10 +1582,11 @@ async function getGameSnapshot(payload, openid) {
     return fail("GAME_NOT_STARTED", "房间尚未开局");
   }
 
-  const member = await getRoomMember(roomId, openid);
-  if (!member) {
-    return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+  const acting = await resolveActingMember(room, openid, controlledMemberId);
+  if (acting.error) {
+    return acting.error;
   }
+  const member = acting.member;
 
   const publicRes = await db.collection("room_public_snapshots").doc(roomId).get();
   const publicSnapshot = publicRes.data;
@@ -1551,7 +1607,10 @@ async function getGameSnapshot(payload, openid) {
     roomId,
     roomCode: publicPayload.roomCode || room.roomCode,
     roomStatus: "in_game",
+    roomMode: room.mode || ROOM_MODE_NORMAL,
     myMemberId: memberId,
+    realMemberId: getMemberId(acting.realMember),
+    controlledMemberId: controlledMemberId || "",
     version: publicPayload.version || publicSnapshot.version || GAME_INITIAL_VERSION,
     round: publicPayload.round || 1,
     currentPhase: publicPayload.currentPhase || "nomination",
@@ -1560,6 +1619,252 @@ async function getGameSnapshot(payload, openid) {
     pendingTask: privatePayload.pendingTask || privateSnapshot.pendingTask || null,
     serverHints: [],
     updatedAt: publicPayload.updatedAt || nowIso(),
+  });
+}
+
+function validateTaskId(taskId, gameCore, commandType, actorMemberId) {
+  if (!taskId) {
+    return null;
+  }
+
+  const expectedTaskId = `${gameCore.gameId}:${gameCore.version}:${commandType}:${actorMemberId}`;
+  if (taskId !== expectedTaskId) {
+    return fail("ACTION_NOT_ALLOWED", "待办任务已过期，请刷新后重试");
+  }
+  return null;
+}
+
+function buildCommandAccepted(roomId, previousVersion, gameCore, previousPhase) {
+  return ok({
+    accepted: true,
+    roomId,
+    roomStatus: gameCore.status || "in_game",
+    previousVersion,
+    newVersion: gameCore.version,
+    currentPhase: gameCore.phase,
+    phaseChanged: previousPhase !== gameCore.phase,
+    deduplicated: false,
+    needsRefresh: true,
+  });
+}
+
+async function submitCommand(payload, openid) {
+  const roomId = payload && payload.roomId;
+  const type = payload && payload.type;
+  const expectedVersion = Number(payload && payload.expectedVersion);
+  const controlledMemberId = payload && payload.controlledMemberId;
+
+  if (!roomId || typeof roomId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+  if (!type || typeof type !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少命令类型");
+  }
+  if (!Number.isInteger(expectedVersion)) {
+    return fail("INVALID_PAYLOAD", "缺少 expectedVersion");
+  }
+
+  return withCommandIdempotency(openid, payload, async () => {
+    return await db.runTransaction(async (transaction) => {
+      const roomRes = await transaction.collection("rooms").doc(roomId).get();
+      const room = roomRes.data;
+      if (!room) {
+        return fail("ROOM_NOT_FOUND", "房间不存在");
+      }
+      if (room.status !== "in_game") {
+        return fail("GAME_NOT_STARTED", "房间尚未开局");
+      }
+
+      const realMemberRes = await transaction
+        .collection("room_members")
+        .where({
+          roomId,
+          openId: openid,
+        })
+        .limit(1)
+        .get();
+      const realMember = realMemberRes.data.find(isActiveMember) || null;
+      if (!realMember) {
+        return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+      }
+
+      let actorMember = realMember;
+      if (controlledMemberId) {
+        if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_DEV) {
+          return fail("ACTION_NOT_ALLOWED", "当前房间不允许切换操控席位");
+        }
+        let controlledMember = null;
+        try {
+          const controlledRes = await transaction.collection("room_members").doc(controlledMemberId).get();
+          controlledMember = controlledRes.data;
+        } catch (err) {
+          if (!isDocumentNotFoundError(err)) {
+            throw err;
+          }
+        }
+        if (
+          !controlledMember ||
+          controlledMember.roomId !== roomId ||
+          !isActiveMember(controlledMember) ||
+          !controlledMember.isVirtual
+        ) {
+          return fail("INVALID_TARGET", "只能操控当前开发者房间中的虚拟席位");
+        }
+        if (controlledMember.controlledByOpenId !== openid) {
+          return fail("ACTION_NOT_ALLOWED", "没有该虚拟席位的操控权限");
+        }
+        actorMember = controlledMember;
+      }
+      const actorMemberId = getMemberId(actorMember);
+
+      const gameId = room.currentGameId;
+      if (!gameId) {
+        return fail("GAME_NOT_STARTED", "对局尚未初始化");
+      }
+
+      const gameCoreRes = await transaction.collection("game_core").doc(gameId).get();
+      const gameCore = gameCoreRes.data;
+      if (!gameCore || gameCore.roomId !== roomId) {
+        return fail("GAME_NOT_STARTED", "对局状态不存在");
+      }
+      if (gameCore.status === "game_ended" || gameCore.phase === "game_ended") {
+        return fail("GAME_ALREADY_ENDED", "对局已经结束");
+      }
+      if (gameCore.version !== expectedVersion) {
+        return fail("VERSION_CONFLICT", "当前局势已更新，请刷新后重试", true);
+      }
+
+      const previousVersion = gameCore.version;
+      const previousPhase = gameCore.phase;
+      const updatedAt = new Date();
+      const membersRes = await transaction
+        .collection("room_members")
+        .where({
+          roomId,
+        })
+        .get();
+      const members = membersRes.data.filter(isActiveMember).sort((a, b) => a.seatIndex - b.seatIndex);
+
+      if (type !== "NOMINATE_CHANCELLOR") {
+        return fail("PHASE_MISMATCH", "当前暂未接入该游戏命令");
+      }
+      if (gameCore.phase !== "nomination") {
+        return fail("PHASE_MISMATCH", "当前阶段不能提名总理");
+      }
+      if (actorMemberId !== gameCore.currentPresidentCandidateId) {
+        return fail("NOT_CURRENT_ACTOR", "只有当前总统候选人可以提名总理");
+      }
+
+      const taskError = validateTaskId(payload.taskId, gameCore, type, actorMemberId);
+      if (taskError) {
+        return taskError;
+      }
+
+      const targetMemberId = payload.body && payload.body.targetMemberId;
+      const eligibleChancellorIds =
+        (gameCore.phaseData && gameCore.phaseData.eligibleChancellorIds) || getEligibleChancellorIdsFromCore(gameCore);
+      if (!targetMemberId || !eligibleChancellorIds.includes(targetMemberId)) {
+        return fail("INVALID_TARGET", "该玩家不能被提名为总理");
+      }
+
+      const targetMember = members.find((member) => getMemberId(member) === targetMemberId);
+      const publicActorMember = members.find((member) => getMemberId(member) === actorMemberId);
+      if (!targetMember) {
+        return fail("INVALID_TARGET", "目标玩家不存在");
+      }
+
+      const newVersion = previousVersion + 1;
+      const nextGameCore = {
+        ...gameCore,
+        version: newVersion,
+        eventSeq: (gameCore.eventSeq || 0) + 1,
+        phase: "voting",
+        currentChancellorCandidateId: targetMemberId,
+        phaseData: {
+          presidentCandidateId: actorMemberId,
+          chancellorCandidateId: targetMemberId,
+          votesByMemberId: {},
+        },
+        updatedAt,
+      };
+
+      const publicSnapshotRes = await transaction.collection("room_public_snapshots").doc(roomId).get();
+      const currentPublicPayload = (publicSnapshotRes.data && publicSnapshotRes.data.payload) || {};
+      const publicHistory = (((currentPublicPayload.publicState || {}).publicHistory) || []).slice();
+      const eventId = `evt_${gameId}_${nextGameCore.eventSeq}`;
+      const eventSummary = `${publicActorMember ? publicActorMember.displayName : "总统候选人"} 提名 ${
+        targetMember.displayName
+      } 为总理候选人`;
+      publicHistory.push({
+        eventId,
+        round: nextGameCore.round,
+        phase: "nomination",
+        type: "CHANCELLOR_NOMINATED",
+        title: "总理候选人提名",
+        summary: eventSummary,
+        createdAt: updatedAt.toISOString(),
+      });
+
+      const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+      const privateSnapshotPayloads = members.map((member) => ({
+        memberId: getMemberId(member),
+        ownerOpenId: getMemberOpenId(member),
+        payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
+      }));
+
+      await transaction.collection("game_core").doc(gameId).update({
+        data: {
+          version: nextGameCore.version,
+          eventSeq: nextGameCore.eventSeq,
+          phase: nextGameCore.phase,
+          currentChancellorCandidateId: nextGameCore.currentChancellorCandidateId,
+          phaseData: nextGameCore.phaseData,
+          updatedAt,
+        },
+      });
+
+      await transaction.collection("room_public_snapshots").doc(roomId).update({
+        data: {
+          version: nextGameCore.version,
+          payload: publicSnapshotPayload,
+          updatedAt,
+        },
+      });
+
+      for (const snapshot of privateSnapshotPayloads) {
+        await transaction
+          .collection("player_private_snapshots")
+          .doc(snapshot.memberId)
+          .update({
+            data: {
+              version: nextGameCore.version,
+              payload: snapshot.payload,
+              pendingTask: snapshot.payload.pendingTask,
+              updatedAt,
+            },
+          });
+      }
+
+      await transaction.collection("game_events").doc(eventId).set({
+        data: {
+          eventId,
+          gameId,
+          roomId,
+          seq: nextGameCore.eventSeq,
+          type: "CHANCELLOR_NOMINATED",
+          actorMemberId,
+          targetMemberId,
+          publicPayload: {
+            title: "总理候选人提名",
+            summary: eventSummary,
+          },
+          privatePayload: null,
+          createdAt: updatedAt,
+        },
+      });
+
+      return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
+    });
   });
 }
 
@@ -1757,6 +2062,8 @@ async function dispatchAction(action, payload, openid, wxContext) {
       return await getLobbySnapshot(payload, openid);
     case "getGameSnapshot":
       return await getGameSnapshot(payload, openid);
+    case "submitCommand":
+      return await submitCommand(payload, openid);
     case "setReady":
       return await setReady(payload, openid);
     case "startGame":

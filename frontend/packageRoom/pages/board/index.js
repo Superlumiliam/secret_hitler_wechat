@@ -49,6 +49,12 @@ Page({
     electionTrack: [],
     statusText: "",
     canVote: false,
+    isDevRoom: false,
+    controlledMemberId: "",
+    controlledSeatText: "",
+    canNominate: false,
+    nominateTargets: [],
+    isSubmittingCommand: false,
   },
 
   onLoad(options) {
@@ -108,6 +114,7 @@ Page({
           action: "getGameSnapshot",
           payload: {
             roomId: this.data.roomId,
+            controlledMemberId: this.data.controlledMemberId || "",
           },
         },
       });
@@ -170,7 +177,11 @@ Page({
       fascistTrack: this.createFascistTrack(board.targetPlayerCount, board.fascistPolicyCount),
       electionTrack: this.createElectionTrack(board.electionTracker),
       statusText: this.createStatusText(snapshot, board),
+      isDevRoom: snapshot.roomMode === "dev",
+      controlledSeatText: this.createControlledSeatText(snapshot),
       canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
+      canNominate: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR"),
+      nominateTargets: this.createNominateTargets(snapshot),
     });
   },
 
@@ -199,9 +210,16 @@ Page({
   createSeats(snapshot, avatarUrlByFileId) {
     const publicState = (snapshot && snapshot.publicState) || {};
     const presidentCandidateId = publicState.currentPresidentCandidateId;
+    const chancellorCandidateId = publicState.currentChancellorCandidateId;
+    const currentViewerMemberId = snapshot && snapshot.myMemberId;
 
     return (publicState.seatOrder || []).map((member) => {
-      const roleLabel = member.memberId === presidentCandidateId ? "总统候选人" : "";
+      const roleLabel =
+        member.memberId === presidentCandidateId
+          ? "总统候选人"
+          : member.memberId === chancellorCandidateId
+            ? "总理候选人"
+            : "";
       const avatarSrc = avatarUrlByFileId[member.avatarUrl] || "";
 
       return {
@@ -213,10 +231,39 @@ Page({
         isAlive: member.isAlive,
         isOffline: member.isOffline,
         seatClass: `seat-card ${member.memberId === presidentCandidateId ? "is-current" : ""} ${
+          member.memberId === currentViewerMemberId ? "is-controlled" : ""
+        } ${
+          member.memberId === chancellorCandidateId ? "is-nominee" : ""
+        } ${
           member.isAlive === false ? "is-dead" : ""
         }`,
       };
     });
+  },
+
+  createControlledSeatText(snapshot) {
+    const publicState = (snapshot && snapshot.publicState) || {};
+    const seat = (publicState.seatOrder || []).find((member) => member.memberId === snapshot.myMemberId);
+    if (!seat) {
+      return "当前操控席位：未知";
+    }
+    return `当前操控席位：${seat.seatIndex}号 ${seat.displayName}`;
+  },
+
+  createNominateTargets(snapshot) {
+    const pendingTask = snapshot && snapshot.pendingTask;
+    if (!pendingTask || pendingTask.taskType !== "NOMINATE_CHANCELLOR") {
+      return [];
+    }
+
+    const allowedTargets = pendingTask.allowedTargets || [];
+    const publicState = (snapshot && snapshot.publicState) || {};
+    return (publicState.seatOrder || [])
+      .filter((member) => allowedTargets.includes(member.memberId))
+      .map((member) => ({
+        memberId: member.memberId,
+        label: `${member.seatIndex}号 ${member.displayName}`,
+      }));
   },
 
   createLiberalTrack(liberalPolicyCount) {
@@ -309,7 +356,9 @@ Page({
     }
 
     wx.navigateTo({
-      url: `/packageRoom/pages/identity/index?roomId=${encodeURIComponent(this.data.roomId)}`,
+      url: `/packageRoom/pages/identity/index?roomId=${encodeURIComponent(this.data.roomId)}&controlledMemberId=${encodeURIComponent(
+        this.data.controlledMemberId || "",
+      )}`,
     });
   },
 
@@ -318,6 +367,71 @@ Page({
       title: "历史记录待接入",
       icon: "none",
     });
+  },
+
+  onTapSeat(event) {
+    const memberId = event.currentTarget.dataset.memberId;
+    if (!memberId || !this.data.isDevRoom) {
+      return;
+    }
+
+    const nextControlledMemberId = memberId === this.data.snapshot.realMemberId ? "" : memberId;
+    this.setData({
+      controlledMemberId: nextControlledMemberId,
+      errorText: "",
+    });
+    this.loadGameSnapshot();
+  },
+
+  async onTapNominate(event) {
+    const targetMemberId = event.currentTarget.dataset.memberId;
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+    if (!targetMemberId || this.data.isSubmittingCommand) {
+      return;
+    }
+
+    this.setData({
+      isSubmittingCommand: true,
+    });
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: "roomService",
+        data: {
+          action: "submitCommand",
+          payload: {
+            roomId: this.data.roomId,
+            controlledMemberId: this.data.controlledMemberId || "",
+            commandId: this.createCommandId("nominate_chancellor"),
+            expectedVersion: snapshot.version,
+            taskId: pendingTask.taskId || "",
+            type: "NOMINATE_CHANCELLOR",
+            body: {
+              targetMemberId,
+            },
+          },
+        },
+      });
+      const result = res.result || {};
+      if (!result.success) {
+        throw this.createServiceError(result, "提交提名失败");
+      }
+      await this.loadGameSnapshot({ silent: true });
+    } catch (err) {
+      console.error("提交提名失败", err);
+      wx.showToast({
+        title: err.message || "提交提名失败",
+        icon: "none",
+      });
+      if (err.code === "VERSION_CONFLICT") {
+        this.loadGameSnapshot({ silent: true });
+      }
+    } finally {
+      this.setData({
+        isSubmittingCommand: false,
+      });
+    }
   },
 
   onVoteJa() {

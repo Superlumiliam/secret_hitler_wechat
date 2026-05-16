@@ -7,6 +7,7 @@
 - `/docs/frontend_tech_detail.md`:前端技术方案设计
 - `/docs/front_back_api.md`:前后端api
 - `/docs/project_state.md`:本项目开发进展
+- `/docs/develop_mode.md`:开发者模式开发指南
 - `reference/01-首页入口.png`:首页创建房间入口的页面参考设计图
 - `reference/02-创建房间.png`:创建房间时选择对局人数的页面参考设计图
 - `reference/03-房间大厅.png`:房间大厅等待游戏开始的页面参考设计图
@@ -44,4 +45,3 @@
 - 数据库集合初始化只能放在项目启动 / 维护初始化链路中，例如 `maintenanceService.ensureCollectionsDaily()`；业务云函数请求路径不得用 `ensureRequiredCollections()` 或捕获 `collection not exist` 后创建集合并重试。新增集合时更新维护初始化清单并部署 / 触发初始化，缺集合应视为环境初始化问题，而不是每次请求都检查的业务逻辑。
 - 创建用户、创建房间等参考图中的铜色档案风页面，中文字体优先使用宋/明体气质的系统字体栈：`"Songti SC", STSong, SimSun, serif`。需要整页统一时把`font-family`放在页面根容器上，让按钮、输入、标题、说明文字继承；局部标题只调整字重和字号，避免混用黑体破坏参考图的复古档案感。
 - 微信小程序原生`button`带有默认盒模型、边距、行高和伪元素样式，容易导致图标型按钮或横向均分选项出现视觉位置偏移。仅图标点击控件优先使用可点击`view`并保留`role="button"`、`aria-label`、`bindtap`；横向均分选项也优先用`view`承载，避免为了抵消`button`默认样式写负数定位或魔法偏移。
-- 调整小程序布局时，不要只看样式数值，应使用 Computer Use 在微信开发者工具模拟器里确认实际表现；特别是横向多个选项，要验证所有选项完整可见、均匀排列，且点击每个选项后数据和高亮都与对应图标准确绑定。
