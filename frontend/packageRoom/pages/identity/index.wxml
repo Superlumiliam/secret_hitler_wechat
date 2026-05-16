@@ -44,15 +44,13 @@
       </view>
       <view class="envelope-wrap">
         <image
-          wx:if="{{envelopeSrc}}"
+          wx:if="{{envelopeOpenSrc || envelopeCloseSrc}}"
           class="envelope-image"
-          src="{{envelopeSrc}}"
+          src="{{isEnvelopeClosed ? envelopeCloseSrc : envelopeOpenSrc}}"
           mode="aspectFit"
           webp="{{true}}"
           binderror="onIdentityAssetError"
         />
-        <view class="envelope-lid"></view>
-        <view class="envelope-front-mask"></view>
       </view>
     </view>
 

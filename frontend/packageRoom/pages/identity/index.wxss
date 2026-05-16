@@ -159,7 +159,7 @@ page {
   position: absolute;
   left: 50%;
   bottom: 142rpx;
-  z-index: 3;
+  z-index: 4;
   width: 390rpx;
   height: 520rpx;
   display: flex;
@@ -186,8 +186,8 @@ page {
 }
 
 .is-closed .identity-card-frame {
-  opacity: 0.18;
-  transform: translateX(-50%) translateY(262rpx) scale(0.76);
+  opacity: 0;
+  transform: translateX(-50%) translateY(226rpx) scale(0.72);
 }
 
 .identity-card-missing {
@@ -209,11 +209,12 @@ page {
 .envelope-wrap {
   position: absolute;
   left: 50%;
-  bottom: 6rpx;
-  z-index: 4;
-  width: 640rpx;
-  height: 372rpx;
-  transform: translateX(-50%);
+  bottom: -28rpx;
+  z-index: 2;
+  width: 680rpx;
+  height: 528rpx;
+  transform: translateX(-50%) translateY(0);
+  transition: transform 560ms cubic-bezier(0.2, 0.82, 0.24, 1);
   filter: drop-shadow(0 18rpx 22rpx rgba(0, 0, 0, 0.48));
 }
 
@@ -222,51 +223,18 @@ page {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 3;
+  z-index: 1;
   width: 100%;
   height: 100%;
 }
 
-.envelope-lid,
-.envelope-front-mask {
-  position: absolute;
-  left: 36rpx;
-  right: 36rpx;
-  pointer-events: none;
-}
-
-.envelope-lid {
-  top: 34rpx;
-  z-index: 5;
-  height: 214rpx;
-  background:
-    linear-gradient(160deg, rgba(199, 150, 82, 0.96), rgba(93, 58, 30, 0.98)),
-    #8b5a2e;
-  clip-path: polygon(50% 0, 100% 72%, 100% 100%, 0 100%, 0 72%);
-  opacity: 0;
-  transform: rotateX(74deg) translateY(34rpx);
-  transform-origin: 50% 100%;
-  transition: opacity 220ms ease, transform 560ms cubic-bezier(0.2, 0.82, 0.24, 1);
-}
-
-.envelope-front-mask {
-  bottom: 0;
-  z-index: 6;
-  height: 168rpx;
-  background: linear-gradient(180deg, rgba(128, 83, 43, 0), rgba(87, 55, 30, 0.2));
-}
-
-.is-closed .envelope-lid {
-  opacity: 0.96;
-  transform: rotateX(0deg) translateY(0);
-}
-
 .is-open .envelope-wrap {
-  transform: translateX(-50%) translateY(0);
+  transform: translateX(-50%) translateY(92rpx) scale(0.96);
 }
 
 .is-closed .envelope-wrap {
-  transform: translateX(-50%) translateY(18rpx);
+  z-index: 5;
+  transform: translateX(-50%) translateY(0) scale(1);
 }
 
 .panel {

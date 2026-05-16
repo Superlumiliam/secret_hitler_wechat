@@ -1,7 +1,12 @@
 const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
 const IDENTITY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-identity.webp`;
-const IDENTITY_ENVELOPE_FILE_ID = `${CLOUD_ASSET_ROOT}identity-envelop.webp`;
+const IDENTITY_ENVELOPE_OPEN_FILE_IDS = [
+  `${CLOUD_ASSET_ROOT}identity-envelope-open.webp`,
+];
+const IDENTITY_ENVELOPE_CLOSE_FILE_IDS = [
+  `${CLOUD_ASSET_ROOT}identity-envelope-closed.webp`,
+];
 const IDENTITY_CARD_FILE_ID_BY_ROLE = {
   LIBERAL: `${CLOUD_ASSET_ROOT}identity-liberal.webp`,
   FASCIST: `${CLOUD_ASSET_ROOT}identity-fascist.webp`,
@@ -43,6 +48,11 @@ function getRoleMeta(role) {
   return ROLE_META[role] || ROLE_META.LIBERAL;
 }
 
+function getFirstTempUrl(urlByFileId, fileIds) {
+  const matchedFileId = (fileIds || []).find((fileId) => urlByFileId[fileId]);
+  return matchedFileId ? urlByFileId[matchedFileId] : "";
+}
+
 Page({
   data: {
     roomId: "",
@@ -50,7 +60,8 @@ Page({
     errorText: "",
     backgroundSrc: "",
     backgroundVisible: true,
-    envelopeSrc: "",
+    envelopeOpenSrc: "",
+    envelopeCloseSrc: "",
     isEnvelopeClosed: false,
     isEnvelopeAnimating: false,
     identity: null,
@@ -152,7 +163,12 @@ Page({
       return Promise.resolve({});
     }
 
-    const fileList = [IDENTITY_BACKGROUND_FILE_ID, IDENTITY_ENVELOPE_FILE_ID, cardFileId].filter(Boolean);
+    const fileList = [
+      IDENTITY_BACKGROUND_FILE_ID,
+      ...IDENTITY_ENVELOPE_OPEN_FILE_IDS,
+      ...IDENTITY_ENVELOPE_CLOSE_FILE_IDS,
+      cardFileId,
+    ].filter(Boolean);
     (knownMembers || []).forEach((member) => {
       if (isCloudFileId(member.avatarUrl)) {
         fileList.push(member.avatarUrl);
@@ -176,7 +192,8 @@ Page({
         this.setData({
           backgroundSrc: urlByFileId[IDENTITY_BACKGROUND_FILE_ID] || "",
           backgroundVisible: Boolean(urlByFileId[IDENTITY_BACKGROUND_FILE_ID]),
-          envelopeSrc: urlByFileId[IDENTITY_ENVELOPE_FILE_ID] || "",
+          envelopeOpenSrc: getFirstTempUrl(urlByFileId, IDENTITY_ENVELOPE_OPEN_FILE_IDS),
+          envelopeCloseSrc: getFirstTempUrl(urlByFileId, IDENTITY_ENVELOPE_CLOSE_FILE_IDS),
         });
 
         return urlByFileId;
