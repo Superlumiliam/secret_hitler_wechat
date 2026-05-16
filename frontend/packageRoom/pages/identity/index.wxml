@@ -25,12 +25,7 @@
       </view>
     </view>
 
-    <view
-      class="card-stage {{isEnvelopeClosed ? 'is-closed' : 'is-open'}} {{isEnvelopeAnimating ? 'is-animating' : ''}}"
-      bindtap="onToggleEnvelope"
-      role="button"
-      aria-label="切换身份信封"
-    >
+    <view class="card-stage">
       <view class="identity-card-frame {{identity.cardClass}}">
         <image
           wx:if="{{identity.cardSrc}}"
@@ -41,16 +36,6 @@
           binderror="onIdentityAssetError"
         />
         <view wx:else class="identity-card-missing">{{identity.roleLabel}}</view>
-      </view>
-      <view class="envelope-wrap">
-        <image
-          wx:if="{{envelopeOpenSrc || envelopeCloseSrc}}"
-          class="envelope-image"
-          src="{{isEnvelopeClosed ? envelopeCloseSrc : envelopeOpenSrc}}"
-          mode="aspectFit"
-          webp="{{true}}"
-          binderror="onIdentityAssetError"
-        />
       </view>
     </view>
 
