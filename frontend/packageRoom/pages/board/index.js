@@ -54,6 +54,7 @@ Page({
     controlledSeatText: "",
     canNominate: false,
     nominateTargets: [],
+    nominateRuleHint: "",
     isSubmittingCommand: false,
   },
 
@@ -182,6 +183,7 @@ Page({
       canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
       canNominate: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR"),
       nominateTargets: this.createNominateTargets(snapshot),
+      nominateRuleHint: this.createNominateRuleHint(snapshot),
     });
   },
 
@@ -212,6 +214,7 @@ Page({
     const presidentCandidateId = publicState.currentPresidentCandidateId;
     const chancellorCandidateId = publicState.currentChancellorCandidateId;
     const currentViewerMemberId = snapshot && snapshot.myMemberId;
+    const nominationAllowedIds = this.getNominationAllowedIds(snapshot);
 
     return (publicState.seatOrder || []).map((member) => {
       const roleLabel =
@@ -235,6 +238,8 @@ Page({
         } ${
           member.memberId === chancellorCandidateId ? "is-nominee" : ""
         } ${
+          nominationAllowedIds.includes(member.memberId) ? "is-eligible-nominee" : ""
+        } ${
           member.isAlive === false ? "is-dead" : ""
         }`,
       };
@@ -257,13 +262,42 @@ Page({
     }
 
     const allowedTargets = pendingTask.allowedTargets || [];
+    const targetOptions = pendingTask.meta && Array.isArray(pendingTask.meta.targetOptions) ? pendingTask.meta.targetOptions : [];
+    const optionByMemberId = {};
+    targetOptions.forEach((option) => {
+      optionByMemberId[option.memberId] = option;
+    });
+
     const publicState = (snapshot && snapshot.publicState) || {};
-    return (publicState.seatOrder || [])
-      .filter((member) => allowedTargets.includes(member.memberId))
-      .map((member) => ({
+    return (publicState.seatOrder || []).map((member) => {
+      const option = optionByMemberId[member.memberId] || {};
+      const canNominate =
+        typeof option.canNominate === "boolean" ? option.canNominate : allowedTargets.includes(member.memberId);
+      const disabledReason = option.disabledReason || (canNominate ? "" : "暂不可提名");
+
+      return {
         memberId: member.memberId,
         label: `${member.seatIndex}号 ${member.displayName}`,
-      }));
+        canNominate,
+        disabledReason,
+      };
+    });
+  },
+
+  createNominateRuleHint(snapshot) {
+    const pendingTask = snapshot && snapshot.pendingTask;
+    if (!pendingTask || pendingTask.taskType !== "NOMINATE_CHANCELLOR") {
+      return "";
+    }
+    return (pendingTask.meta && pendingTask.meta.ruleHint) || "";
+  },
+
+  getNominationAllowedIds(snapshot) {
+    const pendingTask = snapshot && snapshot.pendingTask;
+    if (!pendingTask || pendingTask.taskType !== "NOMINATE_CHANCELLOR") {
+      return [];
+    }
+    return pendingTask.allowedTargets || [];
   },
 
   createLiberalTrack(liberalPolicyCount) {
@@ -385,9 +419,18 @@ Page({
 
   async onTapNominate(event) {
     const targetMemberId = event.currentTarget.dataset.memberId;
+    const canNominate = event.currentTarget.dataset.canNominate;
+    const disabledReason = event.currentTarget.dataset.disabledReason;
     const snapshot = this.data.snapshot || {};
     const pendingTask = snapshot.pendingTask || {};
     if (!targetMemberId || this.data.isSubmittingCommand) {
+      return;
+    }
+    if (canNominate !== true && canNominate !== "true") {
+      wx.showToast({
+        title: disabledReason || "该玩家暂不可提名",
+        icon: "none",
+      });
       return;
     }
 

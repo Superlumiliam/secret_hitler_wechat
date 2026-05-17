@@ -433,13 +433,13 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `taskId` 由后端生成，前端只能回传不能伪造语义
 - `taskType` 必须与命令类型一一对应；唯一例外是 `CHANCELLOR_REQUEST_VETO` 作为 `CHANCELLOR_ENACT_POLICY` 阶段的可选子动作，不单独生成任务卡
 - `allowedTargets` 是权威目标列表；前端不得自行扩大
-- `meta` 只放“无法从快照其他字段可靠推导”的附加信息
+- `meta` 只放“无法从快照其他字段可靠推导”的附加信息；目标类任务可在 `meta.targetOptions` 下发禁用原因供前端展示
 
 正式 `meta` 契约如下：
 
 | `taskType` | `meta` 字段 |
 | --- | --- |
-| `NOMINATE_CHANCELLOR` | `ruleHint` |
+| `NOMINATE_CHANCELLOR` | `ruleHint`、`targetOptions = [{ memberId, canNominate, disabledReason }]` |
 | `SUBMIT_VOTE` | `options = ["JA", "NEIN"]` |
 | `PRESIDENT_DISCARD_POLICY` | `selectionMode = "discard_one"` |
 | `CHANCELLOR_ENACT_POLICY` | `selectionMode = "enact_one"`、`canRequestVeto` |

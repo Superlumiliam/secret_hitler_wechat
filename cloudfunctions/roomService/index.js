@@ -187,6 +187,32 @@ function getEligibleChancellorIdsFromCore(gameCore) {
   });
 }
 
+function getChancellorTargetOptions(gameCore, members) {
+  const aliveMemberIds = gameCore.aliveMemberIds || [];
+  const aliveCount = aliveMemberIds.length;
+
+  return members.map((member) => {
+    const memberId = getMemberId(member);
+    let disabledReason = "";
+
+    if (!aliveMemberIds.includes(memberId)) {
+      disabledReason = "已出局";
+    } else if (memberId === gameCore.currentPresidentCandidateId) {
+      disabledReason = "不能提名自己";
+    } else if (aliveCount > 5 && memberId === gameCore.previousElectedPresidentId) {
+      disabledReason = "受上一届总统任期限制影响";
+    } else if (memberId === gameCore.previousElectedChancellorId) {
+      disabledReason = "受上一届总理任期限制影响";
+    }
+
+    return {
+      memberId,
+      canNominate: !disabledReason,
+      disabledReason,
+    };
+  });
+}
+
 function buildInitialPublicHistory(gameCore, members, createdAt) {
   const president = members.find((member) => getMemberId(member) === gameCore.currentPresidentCandidateId);
   return [
@@ -266,6 +292,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
           allowedTargets: getEligibleChancellorIdsFromCore(gameCore),
           meta: {
             ruleHint: "上一届当选政府成员不能再次组成政府；若仅存活 5 人则放宽总统限制",
+            targetOptions: getChancellorTargetOptions(gameCore, members),
           },
         }
       : null;
@@ -2086,6 +2113,7 @@ exports.__testHooks = {
   buildInitialPolicyState,
   createInitialGameProjection,
   getEligibleChancellorIdsFromCore,
+  getChancellorTargetOptions,
 };
 
 exports.main = async (event) => {

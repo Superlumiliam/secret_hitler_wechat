@@ -1196,7 +1196,7 @@ interface PendingTaskViewModel {
 
 - 页面：`board`
 - 组件：`target-picker`
-- 数据源：`pendingTask.allowedTargets`
+- 数据源：`pendingTask.allowedTargets`、`pendingTask.meta.targetOptions`
 - UI 要求：
   - 不可选玩家显示置灰和禁用原因
   - 显示“上一届政府任期限制”提示文案

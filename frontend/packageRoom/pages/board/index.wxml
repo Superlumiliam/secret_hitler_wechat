@@ -103,16 +103,22 @@
       <view class="action-dock">
         <view wx:if="{{canNominate}}" class="nominate-panel">
           <view class="nominate-title">选择总理候选人</view>
+          <view wx:if="{{nominateRuleHint}}" class="nominate-hint">{{nominateRuleHint}}</view>
           <view class="nominate-actions">
             <view
               wx:for="{{nominateTargets}}"
               wx:key="memberId"
-              class="nominate-action {{isSubmittingCommand ? 'is-disabled' : ''}}"
+              class="nominate-action {{item.canNominate ? '' : 'is-ineligible'}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
               bindtap="onTapNominate"
               data-member-id="{{item.memberId}}"
+              data-can-nominate="{{item.canNominate}}"
+              data-disabled-reason="{{item.disabledReason}}"
               role="button"
               aria-label="提名总理候选人"
-            >{{item.label}}</view>
+            >
+              <view class="nominate-label">{{item.label}}</view>
+              <view wx:if="{{!item.canNominate}}" class="nominate-reason">{{item.disabledReason}}</view>
+            </view>
           </view>
         </view>
 

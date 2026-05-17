@@ -38,6 +38,7 @@ Module._load = originalLoad;
 const {
   ROLE_PRESET_BY_PLAYER_COUNT,
   createInitialGameProjection,
+  getChancellorTargetOptions,
 } = __testHooks;
 
 function makeMembers(playerCount) {
@@ -134,6 +135,40 @@ function assertEventsSafe(projection) {
   });
 }
 
+function assertNominationTargetOptions() {
+  const members = makeMembers(7);
+  const baseCore = {
+    aliveMemberIds: members.map((member) => member.memberId),
+    currentPresidentCandidateId: "mem_1",
+    previousElectedPresidentId: "mem_2",
+    previousElectedChancellorId: "mem_3",
+  };
+
+  const options = getChancellorTargetOptions(baseCore, members);
+  const byMemberId = Object.fromEntries(options.map((option) => [option.memberId, option]));
+  assert.strictEqual(byMemberId.mem_1.canNominate, false, "president candidate should not nominate self");
+  assert.strictEqual(byMemberId.mem_1.disabledReason, "不能提名自己");
+  assert.strictEqual(byMemberId.mem_2.canNominate, false, "previous president should be blocked above five alive players");
+  assert.strictEqual(byMemberId.mem_2.disabledReason, "受上一届总统任期限制影响");
+  assert.strictEqual(byMemberId.mem_3.canNominate, false, "previous chancellor should be blocked");
+  assert.strictEqual(byMemberId.mem_3.disabledReason, "受上一届总理任期限制影响");
+  assert.strictEqual(byMemberId.mem_4.canNominate, true, "other alive players should be eligible");
+
+  const fiveAliveCore = {
+    ...baseCore,
+    aliveMemberIds: ["mem_1", "mem_2", "mem_3", "mem_4", "mem_5"],
+  };
+  const fiveAliveOptions = getChancellorTargetOptions(fiveAliveCore, members);
+  const fiveAliveByMemberId = Object.fromEntries(fiveAliveOptions.map((option) => [option.memberId, option]));
+  assert.strictEqual(
+    fiveAliveByMemberId.mem_2.canNominate,
+    true,
+    "previous president should be eligible when only five players are alive",
+  );
+  assert.strictEqual(fiveAliveByMemberId.mem_3.canNominate, false, "previous chancellor should still be blocked");
+  assert.strictEqual(fiveAliveByMemberId.mem_6.disabledReason, "已出局", "dead players should show dead reason");
+}
+
 Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
   const playerCount = Number(playerCountKey);
   const room = {
@@ -159,5 +194,7 @@ Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
   assertPublicSnapshotSafe(projection);
   assertEventsSafe(projection);
 });
+
+assertNominationTargetOptions();
 
 console.log("startGame initialization tests passed");

@@ -1573,7 +1573,12 @@ type ApplyCommandResult = {
   "deadline": null,
   "allowedTargets": ["mem_2", "mem_4", "mem_5"],
   "meta": {
-    "ruleHint": "上一届当选政府成员不能再次组成政府；若仅存活 5 人则放宽总统限制"
+    "ruleHint": "上一届当选政府成员不能再次组成政府；若仅存活 5 人则放宽总统限制",
+    "targetOptions": [
+      { "memberId": "mem_1", "canNominate": false, "disabledReason": "不能提名自己" },
+      { "memberId": "mem_2", "canNominate": true, "disabledReason": "" },
+      { "memberId": "mem_3", "canNominate": false, "disabledReason": "受上一届总理任期限制影响" }
+    ]
   }
 }
 ```
