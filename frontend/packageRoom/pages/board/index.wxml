@@ -87,6 +87,20 @@
           <view class="status-icon">♟</view>
           <view class="status-text">{{statusText}}</view>
         </view>
+
+        <view wx:if="{{voteProgressText || voteResult}}" class="vote-panel {{voteResult ? voteResult.resultClass : ''}}">
+          <view wx:if="{{voteProgressText && !voteResult}}" class="vote-progress-text">{{voteProgressText}}</view>
+          <block wx:if="{{voteResult}}">
+            <view class="vote-result-title">{{voteResult.title}}</view>
+            <view class="vote-result-detail">{{voteResult.detailText}}</view>
+            <view class="vote-reveal-row">
+              <view wx:for="{{voteResult.voteRows}}" wx:key="memberId" class="vote-reveal-item {{item.voteClass}}">
+                <text class="vote-reveal-name">{{item.name}}</text>
+                <text class="vote-reveal-mark">{{item.voteText}}</text>
+              </view>
+            </view>
+          </block>
+        </view>
       </view>
 
       <view class="seat-row bottom-seat-row">
@@ -123,8 +137,12 @@
         </view>
 
         <view wx:if="{{canVote}}" class="action-panel">
-          <view class="vote-action ja-action" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">赞成 Ja</view>
-          <view class="vote-action nein-action" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">反对 Nein</view>
+          <view class="vote-action ja-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">赞成 JA</view>
+          <view class="vote-action nein-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">反对 NEIN</view>
+        </view>
+
+        <view wx:elif="{{votingSubmitted}}" class="vote-waiting-panel">
+          <view class="vote-waiting-text">{{voteWaitingText}}</view>
         </view>
 
         <view class="secondary-actions">

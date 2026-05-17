@@ -621,6 +621,87 @@
   line-height: 1.25;
 }
 
+.vote-panel {
+  margin-top: 10rpx;
+  padding: 10rpx 12rpx;
+  border: 1rpx solid rgba(31, 204, 215, 0.42);
+  background: rgba(3, 28, 31, 0.76);
+}
+
+.vote-panel.is-failed {
+  border-color: rgba(239, 96, 72, 0.46);
+  background: rgba(35, 12, 9, 0.72);
+}
+
+.vote-progress-text,
+.vote-result-title {
+  color: #e9bf83;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.vote-panel.is-passed .vote-result-title {
+  color: #1bd5df;
+}
+
+.vote-panel.is-failed .vote-result-title {
+  color: #ef6048;
+}
+
+.vote-result-detail {
+  margin-top: 6rpx;
+  color: rgba(229, 192, 141, 0.84);
+  font-size: 19rpx;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.vote-reveal-row {
+  margin-top: 10rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8rpx;
+}
+
+.vote-reveal-item {
+  min-width: 0;
+  min-height: 38rpx;
+  padding: 5rpx 8rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8rpx;
+  border: 1rpx solid rgba(185, 128, 66, 0.52);
+  background: rgba(8, 18, 18, 0.82);
+}
+
+.vote-reveal-name {
+  min-width: 0;
+  color: #e4bd84;
+  font-size: 18rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vote-reveal-mark {
+  flex: 0 0 auto;
+  color: #e4bd84;
+  font-size: 19rpx;
+  font-weight: 900;
+}
+
+.vote-reveal-item.is-ja .vote-reveal-mark {
+  color: #1bd5df;
+}
+
+.vote-reveal-item.is-nein .vote-reveal-mark {
+  color: #ef6048;
+}
+
 .action-dock {
   margin-top: auto;
   padding: 4rpx 10rpx 0;
@@ -716,12 +797,35 @@
   box-shadow: inset 0 0 22rpx rgba(255, 255, 255, 0.14), 0 0 22rpx rgba(0, 0, 0, 0.34);
 }
 
+.vote-action.is-disabled {
+  opacity: 0.55;
+}
+
 .ja-action {
   background: linear-gradient(180deg, #28dbe8 0%, #0a8f9b 100%);
 }
 
 .nein-action {
   background: linear-gradient(180deg, #f06b4f 0%, #96231a 100%);
+}
+
+.vote-waiting-panel {
+  min-height: 62rpx;
+  padding: 10rpx 12rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(185, 128, 66, 0.64);
+  background: rgba(7, 24, 24, 0.88);
+}
+
+.vote-waiting-text {
+  color: #e8bf83;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
 }
 
 .secondary-actions {

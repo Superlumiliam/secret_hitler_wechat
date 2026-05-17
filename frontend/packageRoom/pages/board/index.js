@@ -49,6 +49,10 @@ Page({
     electionTrack: [],
     statusText: "",
     canVote: false,
+    votingSubmitted: false,
+    voteProgressText: "",
+    voteResult: null,
+    voteWaitingText: "",
     isDevRoom: false,
     controlledMemberId: "",
     controlledSeatText: "",
@@ -181,6 +185,10 @@ Page({
       isDevRoom: snapshot.roomMode === "dev",
       controlledSeatText: this.createControlledSeatText(snapshot),
       canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
+      votingSubmitted: this.hasSubmittedVote(snapshot),
+      voteProgressText: this.createVoteProgressText(snapshot),
+      voteResult: this.createVoteResult(snapshot),
+      voteWaitingText: this.createVoteWaitingText(snapshot),
       canNominate: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR"),
       nominateTargets: this.createNominateTargets(snapshot),
       nominateRuleHint: this.createNominateRuleHint(snapshot),
@@ -352,9 +360,70 @@ Page({
       return `当前：${board.presidentSeatNo}号 ${board.presidentName} 是总统候选人，等待提名总理候选人`;
     }
     if (snapshot.currentPhase === "voting") {
-      return "当前：等待所有存活玩家完成政府投票";
+      const voteProgressText = this.createVoteProgressText(snapshot);
+      return voteProgressText ? `当前：政府投票中，${voteProgressText}` : "当前：等待所有存活玩家完成政府投票";
     }
     return `当前阶段：${board.phaseName}`;
+  },
+
+  hasSubmittedVote(snapshot) {
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const voting = privateState.voting || {};
+    return Boolean(voting.submitted);
+  },
+
+  createVoteProgressText(snapshot) {
+    const publicState = (snapshot && snapshot.publicState) || {};
+    const progress = publicState.voteProgress || null;
+    if (!progress) {
+      return "";
+    }
+    return `已投票 ${progress.submittedCount || 0}/${progress.requiredCount || progress.totalCount || 0}`;
+  },
+
+  createVoteWaitingText(snapshot) {
+    if (snapshot.currentPhase !== "voting" || !this.hasSubmittedVote(snapshot)) {
+      return "";
+    }
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const voting = privateState.voting || {};
+    const voteText = voting.myVote === "JA" ? "赞成 JA" : voting.myVote === "NEIN" ? "反对 NEIN" : "已提交";
+    return `${voteText}，等待其他玩家`;
+  },
+
+  createVoteResult(snapshot) {
+    const publicState = (snapshot && snapshot.publicState) || {};
+    const revealedVotes = Array.isArray(publicState.revealedVotes) ? publicState.revealedVotes : null;
+    const result = publicState.voteResult || {};
+    if (!revealedVotes) {
+      return null;
+    }
+    const voteRows = revealedVotes.map((item) => ({
+      memberId: item.memberId,
+      name: item.displayName || "玩家",
+      voteText: item.vote === "JA" ? "JA" : "NEIN",
+      voteClass: item.vote === "JA" ? "is-ja" : "is-nein",
+    }));
+    let detailText = `赞成 ${result.jaCount || 0}，反对 ${result.neinCount || 0}`;
+    if (result.chaosPolicy) {
+      const policyName = result.chaosPolicy.policy === "LIBERAL" ? "自由派政策" : "极权派政策";
+      detailText = `${detailText}；三轮未通过，混乱政策颁布：${policyName}`;
+    } else if (result.hitlerCheck && result.hitlerCheck.checked) {
+      detailText = result.hitlerCheck.passed
+        ? `${detailText}；危险阶段检查通过：该总理不是独裁者`
+        : `${detailText}；独裁者当选，极权派获胜`;
+    } else {
+      detailText = `${detailText}；选举轨 ${result.electionTrackerBefore || 0} → ${
+        result.electionTrackerAfter || 0
+      }`;
+    }
+
+    return {
+      title: result.passed ? "投票通过" : "投票未通过",
+      resultClass: result.passed ? "is-passed" : "is-failed",
+      detailText,
+      voteRows,
+    };
   },
 
   createServiceError(result, fallbackMessage) {
@@ -478,17 +547,80 @@ Page({
   },
 
   onVoteJa() {
-    wx.showToast({
-      title: "投票流程待接入",
-      icon: "none",
-    });
+    this.submitVote("JA");
   },
 
   onVoteNein() {
-    wx.showToast({
-      title: "投票流程待接入",
-      icon: "none",
+    this.submitVote("NEIN");
+  },
+
+  async submitVote(vote) {
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+    if (!this.data.canVote || this.data.isSubmittingCommand) {
+      return;
+    }
+
+    const voteText = vote === "JA" ? "赞成 JA" : "反对 NEIN";
+    const confirmRes = await new Promise((resolve) => {
+      wx.showModal({
+        title: "确认投票",
+        content: `确定提交${voteText}？投票提交后不能修改。`,
+        confirmText: "提交",
+        cancelText: "取消",
+        success: resolve,
+        fail: () => resolve({ confirm: false }),
+      });
     });
+    if (!confirmRes.confirm) {
+      return;
+    }
+
+    this.setData({
+      isSubmittingCommand: true,
+    });
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: "gameService",
+        data: {
+          action: "submitCommand",
+          payload: {
+            roomId: this.data.roomId,
+            controlledMemberId: this.data.controlledMemberId || "",
+            commandId: this.createCommandId("submit_vote"),
+            expectedVersion: snapshot.version,
+            taskId: pendingTask.taskId || "",
+            type: "SUBMIT_VOTE",
+            body: {
+              vote,
+            },
+          },
+        },
+      });
+      const result = res.result || {};
+      if (!result.success) {
+        throw this.createServiceError(result, "提交投票失败");
+      }
+      wx.showToast({
+        title: "投票已提交",
+        icon: "none",
+      });
+      await this.loadGameSnapshot({ silent: true });
+    } catch (err) {
+      console.error("提交投票失败", err);
+      if (err.code === "VERSION_CONFLICT" || err.code === "DUPLICATE_COMMAND" || err.code === "ACTION_NOT_ALLOWED") {
+        await this.loadGameSnapshot({ silent: true });
+      }
+      wx.showToast({
+        title: err.code === "DUPLICATE_COMMAND" ? "投票已提交" : err.message || "提交投票失败",
+        icon: "none",
+      });
+    } finally {
+      this.setData({
+        isSubmittingCommand: false,
+      });
+    }
   },
 
   createCommandId(prefix) {
