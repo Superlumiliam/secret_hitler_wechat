@@ -45,7 +45,7 @@
 - 前端图片资源遵循小程序包体优化：大于`200K`的图片不要放进`frontend/`主包，应上传到微信云存储，通过`wx.cloud.getTempFileURL`转换为临时 HTTPS 地址后给`image.src`使用；云存储图片的源文件需在`reference/processed_images`目录保留一份备份
 - 微信小程序 `image` 组件的 `webp` 属性默认不解析 WebP，且 WebP 只支持网络资源；页面使用 WebP 时优先上传到微信云存储，通过 `wx.cloud.getTempFileURL` 获取临时 HTTPS 地址，并在 `image` 上显式设置 `webp="{{true}}"`。不要在 WXSS `background-image` 或本地主包路径中直接依赖 WebP 渲染。
 - 云存储图片也要控制移动端加载成本。处理大型 PNG 背景图时，优先在不缩小尺寸的前提下尝试 WebP 有损压缩并移除元数据
-- 当无法使用微信开发者 CLI 做小程序页面验证时，优先用 Computer Use 查看已打开的微信开发者工具右侧模拟器并进行交互验证；例如可在首页模拟器中点击“创建房间”，再通过画面内容和底部页面路径确认是否进入`pages/create-room/index`。
+- 当无法使用微信开发者 CLI 做小程序页面验证时，允许用 Computer Use 查看已打开的微信开发者工具当前状态和右侧模拟器画面；如果验证涉及多步骤 UI 交互，不要尝试用 Computer Use 操控模拟器，应让用户自行完成测试验证并反馈结果。
 - 使用微信 CLI 部署云函数时，不要依赖当前目录自动识别项目。优先使用显式路径命令：`wechat-cli cloud functions deploy --env <envId> --paths <云函数目录绝对路径> --appid <appid> --remote-npm-install`。如果使用 `--names`，必须同时传 `--project <项目绝对路径>`。出现`缺失参数 'project / appid'`说明缺少显式项目或 appid；出现`getCloudAPISignedHeader failed`可改用`--paths + --appid`重试；出现`当前函数处于Updating状态`说明云端函数正在更新，等待函数状态回到`Active`后单独重试，避免并发部署同一函数。
 - 云函数内做数据库集合等资源初始化时，必须把“资源已存在”作为可忽略的成功态处理，并兼容微信云开发不同错误形态，例如`errCode === -501001`、`ResourceExist`、`Table exist`、`DATABASE_COLLECTION_ALREADY_EXIST`；不要只匹配单一英文文案，否则已有集合会被误判为`INTERNAL_ERROR`。
 - 数据库集合初始化只能放在项目启动 / 维护初始化链路中，例如 `maintenanceService.ensureCollectionsDaily()`；业务云函数请求路径不得用 `ensureRequiredCollections()` 或捕获 `collection not exist` 后创建集合并重试。新增集合时更新维护初始化清单并部署 / 触发初始化，缺集合应视为环境初始化问题，而不是每次请求都检查的业务逻辑。

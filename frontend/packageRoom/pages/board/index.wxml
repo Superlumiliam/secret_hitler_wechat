@@ -115,22 +115,22 @@
       </view>
 
       <view class="action-dock">
-        <view wx:if="{{canDiscardPolicy}}" class="policy-picker-panel">
+        <view wx:if="{{canPickPolicy}}" class="policy-picker-panel">
           <view class="policy-picker-title">{{policyPickerTitle}}</view>
           <view wx:if="{{policyPickerHint}}" class="policy-picker-hint">{{policyPickerHint}}</view>
-          <view class="policy-picker-row">
+          <view class="policy-picker-row {{canEnactPolicy ? 'is-two-cards' : ''}}">
             <view
               wx:for="{{policyCards}}"
               wx:key="index"
               class="{{item.cardClass}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
-              bindtap="onTapDiscardPolicy"
+              bindtap="onTapPolicyCard"
               data-index="{{item.index}}"
               role="button"
-              aria-label="弃掉此政策牌"
+              aria-label="{{canEnactPolicy ? '颁布此政策牌' : '弃掉此政策牌'}}"
             >
               <view class="policy-card-mark">{{item.mark}}</view>
               <view class="policy-card-title">{{item.title}}</view>
-              <view class="policy-card-action">弃掉此牌</view>
+              <view class="policy-card-action">{{canEnactPolicy ? '颁布此牌' : '弃掉此牌'}}</view>
             </view>
           </view>
         </view>

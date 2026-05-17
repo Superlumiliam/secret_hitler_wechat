@@ -232,6 +232,75 @@ function assertLegislativePresidentVisibility() {
   });
 }
 
+function assertLegislativeChancellorVisibility() {
+  const members = makeMembers(5);
+  const room = {
+    roomId: "room_chancellor_legislative",
+    roomCode: "778900",
+  };
+  const chancellorHand = ["LIBERAL", "FASCIST"];
+  const gameCore = {
+    ...createInitialGameProjection(room, members, {
+      gameId: "game_chancellor_legislative",
+      createdAt: new Date("2026-05-12T00:00:00.000Z"),
+      pickIndex: () => 0,
+    }).gameCore,
+    version: 3,
+    phase: "legislative_chancellor",
+    currentPresidentId: "mem_1",
+    currentChancellorId: "mem_2",
+    policyState: {
+      drawPile: ["FASCIST", "LIBERAL", "FASCIST"],
+      discardPile: ["LIBERAL"],
+      presidentHand: null,
+      chancellorHand,
+      peekPile: null,
+    },
+    phaseData: {
+      presidentId: "mem_1",
+      chancellorId: "mem_2",
+      cards: chancellorHand,
+      vetoAllowed: false,
+    },
+  };
+
+  const publicPayload = buildPublicSnapshotPayload(room, gameCore, members, [], new Date("2026-05-12T00:02:00.000Z"));
+  assert.strictEqual(hasSecretKey(publicPayload), false, "public chancellor snapshot should not contain secrets");
+  assert.strictEqual(
+    JSON.stringify(publicPayload).includes(chancellorHand.join(",")),
+    false,
+    "public chancellor snapshot should not reveal policy hand",
+  );
+
+  const chancellorPrivate = buildPrivateSnapshotPayload(
+    gameCore,
+    members[1],
+    members,
+    new Date("2026-05-12T00:02:00.000Z"),
+  );
+  assert.strictEqual(
+    chancellorPrivate.pendingTask.taskType,
+    "CHANCELLOR_ENACT_POLICY",
+    "chancellor should receive enact task",
+  );
+  assert.strictEqual(
+    chancellorPrivate.privateState.legislative.action,
+    "enact_one",
+    "chancellor legislative action should be enact_one",
+  );
+  assert.deepStrictEqual(
+    chancellorPrivate.privateState.legislative.hand,
+    chancellorHand,
+    "chancellor should see the two remaining policy cards",
+  );
+
+  [members[0], ...members.slice(2)].forEach((member) => {
+    const privatePayload = buildPrivateSnapshotPayload(gameCore, member, members, new Date("2026-05-12T00:02:00.000Z"));
+    assert.strictEqual(privatePayload.pendingTask, null, "non-chancellor should not receive enact task");
+    assert.strictEqual(privatePayload.privateState.legislative, null, "non-chancellor should not see chancellor hand");
+  });
+}
+
 Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
   const playerCount = Number(playerCountKey);
   const room = {
@@ -260,5 +329,6 @@ Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
 
 assertNominationTargetOptions();
 assertLegislativePresidentVisibility();
+assertLegislativeChancellorVisibility();
 
 console.log("startGame initialization tests passed");
