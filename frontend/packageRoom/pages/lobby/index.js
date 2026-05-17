@@ -352,6 +352,21 @@ Page({
     return result.data || {};
   },
 
+  async callGameService(action, payload) {
+    const res = await wx.cloud.callFunction({
+      name: "gameService",
+      data: {
+        action,
+        payload,
+      },
+    });
+    const result = res.result || {};
+    if (!result.success) {
+      throw createServiceError(result, "操作失败");
+    }
+    return result.data || {};
+  },
+
   async onReadyAction() {
     const lobby = this.data.lobby;
     const viewerState = (lobby && lobby.viewerState) || {};
@@ -458,7 +473,7 @@ Page({
     });
 
     try {
-      const result = await this.callRoomService("startGame", {
+      const result = await this.callGameService("startGame", {
         commandId: createCommandId("start_game"),
         roomId: this.data.roomId,
       });

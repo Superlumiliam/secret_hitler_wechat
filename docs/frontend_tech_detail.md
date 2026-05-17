@@ -590,7 +590,6 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 - `leaveRoom(roomId)`
 - `getLobbySnapshot(roomId)`
 - `setReady(roomId, ready)`
-- `startGame(roomId)`
 
 补充约束：
 
@@ -598,19 +597,21 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 - `createRoom`、`joinRoom` 成功后直接返回 `lobbySnapshot`
 - `createRoom`、`joinRoom` 前端必须先确认本地用户资料已完成；若使用自定义头像，应先上传为房间临时头像，再在请求中携带 `displayName/avatarUrl`，后端只校验并保存到当前房间成员快照
 - 房间临时头像建议使用可归属到房间的云路径，例如 `room_assets/{roomId}/avatars/{memberId或openid}_{timestamp}.jpg`；创建 / 加入房间前未知 `roomId` 时可先使用 `room_assets/pending/{commandId}/...`，由后端在成功创建或加入后关联到房间清理清单
-- `startGame` 成功后只以返回的 `routeHint / needsRefresh` 作为跳转依据，正式桌面数据仍通过 `getGameSnapshot` 获取
 - `updateSeatOrder(roomId, orderedMemberIds)` 属于 P1 座位管理扩展，MVP 前端不接入
 
 ### 9.4 `gameService`
 
 必须包含：
 
+- `startGame(roomId)`
 - `getGameSnapshot(roomId)`
 - `submitCommand(command)`
 - `getResultSnapshot(roomId)`
 
 补充约束：
 
+- `startGame` 内部自动补齐 `commandId`
+- `startGame` 成功后只以返回的 `routeHint / needsRefresh` 作为跳转依据，正式桌面数据仍通过 `getGameSnapshot` 获取
 - `submitCommand` 内部自动补齐 `commandId`
 - `submitCommand` 必须从 `gameStore.version` 注入 `expectedVersion`
 - 若当前操作来自 `pendingTask`，必须回传 `taskId`
@@ -939,6 +940,7 @@ MVP 不支持房主调整座位，座位顺序由加入顺序初始化并在开�
 - 未准备：按钮显示“准备”
 - 非房主不显示“开始游戏”
 - 房主点击开始前弹出确认弹窗，避免误开局
+- 确认后调用 `gameService.startGame(roomId)`；成功后根据 `routeHint` 进入对局桌面，并立即拉取 `gameService.getGameSnapshot(roomId)`
 
 ### 分享策略
 
@@ -1601,7 +1603,7 @@ MVP 尽量少图化：
 
 - 大厅页
 - 准备
-- 开始游戏
+- 开始游戏（调用 `gameService.startGame`）
 - 分享
 
 ### 阶段 3：桌面与身份查看
@@ -1638,7 +1640,7 @@ MVP 尽量少图化：
 
 1. 原生微信小程序 + TypeScript。
 2. 页面只消费快照 view-model，不操作核心真相。
-3. 命令统一走 `submitGameCommand`，强制带 `commandId` 和 `expectedVersion`。
+3. 开局统一走 `gameService.startGame`，游戏内命令统一走 `submitGameCommand`；所有写操作强制带 `commandId`，除 `startGame` 外的游戏内命令强制带 `expectedVersion`。
 4. 数据同步采用“云函数轮询读取快照”。
 5. 大厅与对局页面分包，规则与结果独立分包。
 6. 身份页只做“我的身份”查看与“我知道了”返回，不增加遮罩、定时或确认命令。

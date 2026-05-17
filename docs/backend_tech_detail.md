@@ -32,7 +32,7 @@
 1. MVP 不开放前端直接读取或监听数据库集合，统一通过云函数轮询读取大厅视图或对局快照。
 2. 核心真相只保存在后端内部集合，前端永远不拿完整真相。
 3. 大厅阶段不维护公共 / 私密快照，直接由 `rooms + room_members` 实时组装大厅视图响应；对局阶段每次成功写入后同步重建公共快照和全部私密快照，优先保证一致性，暂不优先优化写放大。
-4. 游戏内所有写操作统一走 `gameService.submitCommand`，大厅阶段写操作统一走 `roomService`。
+4. 游戏开局与游戏内所有写操作统一走 `gameService`；大厅阶段写操作统一走 `roomService`。
 
 ### 2.3 为什么不用数据库直读或监听
 
@@ -706,7 +706,6 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - `leaveRoom`
 - `getLobbySnapshot`
 - `setReady`
-- `startGame`
 
 说明：`updateSeatOrder` 属于 P1 座位管理扩展，MVP 不要求实现。
 
@@ -805,7 +804,18 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - `rooms.version + 1`
 - 即时组装并返回大厅视图响应
 
-### 8.2.7 `startGame`
+## 8.3 `gameService`
+
+允许 action：
+
+- `startGame`
+- `getGameSnapshot`
+- `submitCommand`
+- `getResultSnapshot`
+
+### 8.3.1 `startGame`
+
+`startGame` 是游戏状态机的创世命令，由 `gameService` 负责。它由大厅页触发，但不属于大厅生命周期写操作。
 
 强校验：
 
@@ -825,15 +835,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 7. 写初始公共快照和全部私密快照
 8. 写 `GAME_STARTED` 事件
 
-## 8.3 `gameService`
-
-允许 action：
-
-- `getGameSnapshot`
-- `submitCommand`
-- `getResultSnapshot`
-
-### 8.3.1 `getGameSnapshot`
+### 8.3.2 `getGameSnapshot`
 
 读取逻辑固定为：
 
@@ -847,7 +849,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - 现场从 `game_core` 即时拼装复杂业务视图
 - 前端传入任意 `memberId` 读取他人私密快照
 
-### 8.3.2 `submitCommand`
+### 8.3.3 `submitCommand`
 
 这是整个后端的核心写入口。所有游戏内命令都按统一结构进入：
 
@@ -877,7 +879,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - `seatIndex`
 - `role`
 
-### 8.3.3 `getResultSnapshot`
+### 8.3.4 `getResultSnapshot`
 
 仅当：
 
@@ -1415,7 +1417,13 @@ advanceSystemPhases(state): {
 作用域规则：
 
 - `createRoom`、`joinRoom`：`scopeKey = user:${openid}`
-- `leaveRoom`、`setReady`、`startGame`：`scopeKey = room:${roomId}`
+- `leaveRoom`、`setReady`：`scopeKey = room:${roomId}`
+
+处理规则与开局写操作一致。
+
+### 开局写操作
+
+`gameService.startGame` 必须带 `commandId`，使用 `scopeKey = room:${roomId}`。开局是从大厅进入对局的状态机创世命令，不需要 `expectedVersion`，但必须重新读取 `rooms` 与 `room_members` 做权限和开局条件校验。
 
 处理规则与游戏内命令一致：
 
@@ -1485,7 +1493,7 @@ type ApplyCommandResult = {
 约束：
 
 - `viewerState` 只存在于 API 响应，不写入数据库。
-- `startGame`、`setReady` 等写操作必须基于 `rooms` 与 `room_members` 重新做权限校验，不能依赖返回给前端的 `viewerState`。
+- `setReady`、`gameService.startGame` 等写操作必须基于 `rooms` 与 `room_members` 重新做权限校验，不能依赖返回给前端的 `viewerState`。
 
 ## 13.2 游戏公共快照生成
 
@@ -1886,7 +1894,7 @@ export interface RandomProvider {
 1. 先搭建 TypeScript 后端工程和四个云函数入口
 2. 实现 `rooms / room_members` 仓储
 3. 实现 `createRoom / joinRoom / getLobbySnapshot`
-4. 实现 `startGame` 和开局身份生成
+4. 实现 `gameService.startGame` 和开局身份生成
 5. 实现纯领域状态机与 `submitCommand`
 6. 实现快照投影器
 7. 实现 `getGameSnapshot / getResultSnapshot`

@@ -110,7 +110,7 @@ Page({
 
     try {
       const res = await wx.cloud.callFunction({
-        name: "roomService",
+        name: "gameService",
         data: {
           action: "getGameSnapshot",
           payload: {
@@ -440,7 +440,7 @@ Page({
 
     try {
       const res = await wx.cloud.callFunction({
-        name: "roomService",
+        name: "gameService",
         data: {
           action: "submitCommand",
           payload: {

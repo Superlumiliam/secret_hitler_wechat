@@ -71,12 +71,12 @@ MVP 阶段固定为以下三类对外云函数：
 | 云函数 | 职责 | 允许 action |
 | --- | --- | --- |
 | `bootstrapService` | 会话初始化与活跃房间恢复 | `ensureSession`、`recoverActiveRoom` |
-| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`setReady`、`startGame` |
-| `gameService` | 对局快照、命令处理、结果快照 | `getGameSnapshot`、`submitCommand`、`getResultSnapshot` |
+| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`setReady` |
+| `gameService` | 游戏开局、对局快照、命令处理、结果快照 | `startGame`、`getGameSnapshot`、`submitCommand`、`getResultSnapshot` |
 
 说明：
 
-- 游戏内所有可变更状态操作统一走 `gameService.submitCommand`
+- 游戏开局走 `gameService.startGame`，游戏内所有可变更状态操作统一走 `gameService.submitCommand`
 - 不为每个游戏动作拆分独立云函数
 - `maintenanceService` 仅供定时任务使用，不对前端暴露
 
@@ -96,7 +96,7 @@ MVP 阶段固定为以下三类对外云函数：
 - `action` 必须显式声明
 - `payload` 永远存在，读接口传空对象 `{}` 即可
 - 所有写操作都必须携带 `commandId`
-- 所有游戏内写操作都必须额外携带 `expectedVersion`
+- 除 `startGame` 外，所有游戏内写操作都必须额外携带 `expectedVersion`
 
 ## 3.3 统一响应 envelope
 
@@ -136,8 +136,8 @@ MVP 阶段固定为以下三类对外云函数：
 
 所有会改变状态的请求都必须带 `commandId`：
 
-- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`setReady`、`startGame`
-- 游戏写操作：`submitCommand`
+- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`setReady`
+- 游戏写操作：`startGame`、`submitCommand`
 
 用途：
 
@@ -893,7 +893,9 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `ACTION_NOT_ALLOWED`
 - `INTERNAL_ERROR`
 
-## 6.8 `startGame`
+## 7. `gameService` 详细接口
+
+## 7.1 `startGame`
 
 请求：
 
@@ -945,9 +947,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `ACTION_NOT_ALLOWED`
 - `INTERNAL_ERROR`
 
-## 7. `gameService` 详细接口
-
-## 7.1 `getGameSnapshot`
+## 7.2 `getGameSnapshot`
 
 请求：
 
@@ -982,7 +982,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `GAME_ALREADY_ENDED`
 - `INTERNAL_ERROR`
 
-## 7.2 `submitCommand`
+## 7.3 `submitCommand`
 
 这是游戏内唯一写入口。
 
@@ -1055,7 +1055,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `DUPLICATE_COMMAND`
 - `INTERNAL_ERROR`
 
-## 7.3 `getResultSnapshot`
+## 7.4 `getResultSnapshot`
 
 请求：
 
@@ -1406,7 +1406,7 @@ MVP 前端交互以 `pendingTask` 为唯一强约束任务来源：
 
 - 前端只通过云函数提交命令，不直接写核心状态
 - 所有写操作都必须带 `commandId`
-- 所有游戏内写操作都必须带 `expectedVersion`
+- 除 `startGame` 外，所有游戏内写操作都必须带 `expectedVersion`
 - 游戏内所有状态变更统一走 `gameService.submitCommand`
 - 前端只消费大厅视图、游戏公共快照和当前玩家私密快照
 - 大厅视图与对局快照只允许通过 `getLobbySnapshot`、`getGameSnapshot`、`getResultSnapshot` 等云函数 action 读取
