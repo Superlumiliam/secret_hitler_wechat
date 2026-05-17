@@ -707,6 +707,108 @@
   padding: 4rpx 10rpx 0;
 }
 
+.policy-picker-panel {
+  padding: 12rpx;
+  border: 1rpx solid rgba(185, 128, 66, 0.64);
+  background: rgba(7, 24, 24, 0.9);
+}
+
+.policy-picker-title {
+  color: #e8bf83;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.policy-picker-hint {
+  margin-top: 6rpx;
+  color: rgba(221, 190, 143, 0.78);
+  font-size: 19rpx;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.policy-picker-row {
+  margin-top: 12rpx;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10rpx;
+}
+
+.policy-pick-card {
+  min-width: 0;
+  height: 154rpx;
+  padding: 12rpx 8rpx 10rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  border: 2rpx solid rgba(185, 128, 66, 0.72);
+  color: #e9bf83;
+  background: rgba(13, 18, 17, 0.9);
+  box-shadow: inset 0 0 26rpx rgba(222, 160, 83, 0.12);
+}
+
+.policy-pick-card.is-disabled {
+  opacity: 0.56;
+}
+
+.policy-pick-card.is-liberal {
+  border-color: rgba(31, 204, 215, 0.66);
+  box-shadow: inset 0 0 30rpx rgba(31, 204, 215, 0.16), 0 0 12rpx rgba(31, 204, 215, 0.14);
+}
+
+.policy-pick-card.is-fascist {
+  border-color: rgba(239, 96, 72, 0.66);
+  box-shadow: inset 0 0 30rpx rgba(239, 96, 72, 0.16), 0 0 12rpx rgba(239, 96, 72, 0.14);
+}
+
+.policy-card-mark {
+  width: 46rpx;
+  height: 46rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid currentColor;
+  color: #e8bf83;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.is-liberal .policy-card-mark {
+  color: #24d5df;
+}
+
+.is-fascist .policy-card-mark {
+  color: #ef6048;
+}
+
+.policy-card-title {
+  max-width: 100%;
+  color: #e8bf83;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.12;
+  text-align: center;
+}
+
+.policy-card-action {
+  width: 100%;
+  min-height: 34rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #071719;
+  font-size: 18rpx;
+  font-weight: 900;
+  line-height: 1.1;
+  background: #e1b373;
+  text-align: center;
+}
+
 .nominate-panel {
   padding: 10rpx 12rpx 12rpx;
   border: 1rpx solid rgba(185, 128, 66, 0.64);

@@ -37,7 +37,10 @@ Module._load = originalLoad;
 
 const {
   ROLE_PRESET_BY_PLAYER_COUNT,
+  buildPrivateSnapshotPayload,
+  buildPublicSnapshotPayload,
   createInitialGameProjection,
+  drawPolicyCards,
   getChancellorTargetOptions,
 } = __testHooks;
 
@@ -169,6 +172,66 @@ function assertNominationTargetOptions() {
   assert.strictEqual(fiveAliveByMemberId.mem_6.disabledReason, "已出局", "dead players should show dead reason");
 }
 
+function assertLegislativePresidentVisibility() {
+  const members = makeMembers(5);
+  const room = {
+    roomId: "room_legislative",
+    roomCode: "778899",
+  };
+  const projection = createInitialGameProjection(room, members, {
+    gameId: "game_legislative",
+    createdAt: new Date("2026-05-12T00:00:00.000Z"),
+    pickIndex: () => 0,
+  });
+  const drawResult = drawPolicyCards(projection.gameCore.policyState, 3);
+  assert.strictEqual(Boolean(drawResult.error), false, "legislative draw should succeed");
+
+  const gameCore = {
+    ...projection.gameCore,
+    version: 2,
+    phase: "legislative_president",
+    currentPresidentId: "mem_1",
+    currentChancellorId: "mem_2",
+    policyState: {
+      ...drawResult.policyState,
+      presidentHand: drawResult.cards,
+      chancellorHand: null,
+    },
+    phaseData: {
+      presidentId: "mem_1",
+      chancellorId: "mem_2",
+      cards: drawResult.cards,
+    },
+  };
+
+  const publicPayload = buildPublicSnapshotPayload(room, gameCore, members, [], new Date("2026-05-12T00:01:00.000Z"));
+  assert.strictEqual(hasSecretKey(publicPayload), false, "public legislative snapshot should not contain secrets");
+  assert.strictEqual(
+    JSON.stringify(publicPayload).includes(drawResult.cards.join(",")),
+    false,
+    "public legislative snapshot should not reveal policy hand",
+  );
+
+  const presidentPrivate = buildPrivateSnapshotPayload(gameCore, members[0], members, new Date("2026-05-12T00:01:00.000Z"));
+  assert.strictEqual(
+    presidentPrivate.pendingTask.taskType,
+    "PRESIDENT_DISCARD_POLICY",
+    "president should receive discard task",
+  );
+  assert.strictEqual(presidentPrivate.privateState.legislative.hand.length, 3, "president should see three policies");
+  assert.deepStrictEqual(
+    presidentPrivate.privateState.legislative.hand,
+    drawResult.cards,
+    "president should see the drawn policy hand",
+  );
+
+  members.slice(1).forEach((member) => {
+    const privatePayload = buildPrivateSnapshotPayload(gameCore, member, members, new Date("2026-05-12T00:01:00.000Z"));
+    assert.strictEqual(privatePayload.pendingTask, null, "non-president should not receive discard task");
+    assert.strictEqual(privatePayload.privateState.legislative, null, "non-president should not see president hand");
+  });
+}
+
 Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
   const playerCount = Number(playerCountKey);
   const room = {
@@ -196,5 +259,6 @@ Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
 });
 
 assertNominationTargetOptions();
+assertLegislativePresidentVisibility();
 
 console.log("startGame initialization tests passed");

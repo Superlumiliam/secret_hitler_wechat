@@ -398,6 +398,33 @@ function ensurePolicyDrawPile(policyState) {
   return nextPolicyState;
 }
 
+function drawPolicyCards(policyState, count) {
+  const nextPolicyState = {
+    drawPile: ((policyState && policyState.drawPile) || []).slice(),
+    discardPile: ((policyState && policyState.discardPile) || []).slice(),
+    presidentHand: policyState ? policyState.presidentHand || null : null,
+    chancellorHand: policyState ? policyState.chancellorHand || null : null,
+    peekPile: policyState ? policyState.peekPile || null : null,
+  };
+
+  if (nextPolicyState.drawPile.length < count && nextPolicyState.discardPile.length) {
+    nextPolicyState.drawPile = shuffleCopy(nextPolicyState.drawPile.concat(nextPolicyState.discardPile));
+    nextPolicyState.discardPile = [];
+  }
+
+  if (nextPolicyState.drawPile.length < count) {
+    return {
+      error: fail("INTERNAL_ERROR", "政策牌库不足，无法进入立法阶段", true),
+    };
+  }
+
+  const cards = nextPolicyState.drawPile.splice(0, count);
+  return {
+    policyState: nextPolicyState,
+    cards,
+  };
+}
+
 function createVoteResult(gameCore, members, passed) {
   const votesByMemberId = (gameCore.phaseData && gameCore.phaseData.votesByMemberId) || {};
   const revealedVotes = getAliveMembers(gameCore, members).map((member) => {
@@ -593,6 +620,33 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
     };
   }
 
+  if (gameCore.phase === "legislative_president" && memberId === gameCore.currentPresidentId) {
+    const presidentHand =
+      (gameCore.policyState && gameCore.policyState.presidentHand) ||
+      (gameCore.phaseData && gameCore.phaseData.cards) ||
+      null;
+    pendingTask = {
+      taskId: `${gameCore.gameId}:${gameCore.version}:PRESIDENT_DISCARD_POLICY:${memberId}`,
+      taskType: "PRESIDENT_DISCARD_POLICY",
+      required: true,
+      deadline: null,
+      allowedTargets: [],
+      meta: {
+        selectionMode: "discard_one",
+      },
+    };
+    if (Array.isArray(presidentHand)) {
+      pendingTask.meta.cardCount = presidentHand.length;
+    }
+  }
+
+  const legislativeHand =
+    gameCore.phase === "legislative_president" && memberId === gameCore.currentPresidentId
+      ? (gameCore.policyState && gameCore.policyState.presidentHand) ||
+        (gameCore.phaseData && gameCore.phaseData.cards) ||
+        null
+      : null;
+
   return {
     memberId,
     privateState: {
@@ -618,7 +672,14 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
               myVote: ownBallot ? ownBallot.vote : null,
             }
           : null,
-      legislative: null,
+      legislative:
+        Array.isArray(legislativeHand)
+          ? {
+              hand: legislativeHand.slice(),
+              action: "discard_one",
+              canRequestVeto: false,
+            }
+          : null,
       investigationResult: null,
       policyPeek: null,
     },
@@ -1141,6 +1202,8 @@ async function submitCommand(payload, openid) {
             let winner = gameCore.winner || null;
             let winReason = gameCore.winReason || null;
             let endedAt = gameCore.endedAt || null;
+            let policyState = gameCore.policyState || buildInitialPolicyState();
+            let presidentHand = null;
 
             if ((gameCore.fascistPolicyCount || 0) >= 3) {
               if (chancellorAssignment.role === "HITLER") {
@@ -1166,6 +1229,19 @@ async function submitCommand(payload, openid) {
               }
             }
 
+            if (phase === "legislative_president") {
+              const drawResult = drawPolicyCards(policyState, 3);
+              if (drawResult.error) {
+                return drawResult.error;
+              }
+              policyState = {
+                ...drawResult.policyState,
+                presidentHand: drawResult.cards,
+                chancellorHand: null,
+              };
+              presidentHand = drawResult.cards;
+            }
+
             nextGameCore = {
               ...nextGameCore,
               status,
@@ -1176,11 +1252,13 @@ async function submitCommand(payload, openid) {
               previousElectedChancellorId: gameCore.currentChancellorCandidateId,
               electionTracker: 0,
               confirmedNotHitlerMemberIds,
+              policyState,
               phaseData:
                 phase === "legislative_president"
                   ? {
                       presidentId: gameCore.currentPresidentCandidateId,
                       chancellorId: gameCore.currentChancellorCandidateId,
+                      cards: presidentHand,
                     }
                   : {},
               lastVoteResult: voteResult,
@@ -1344,6 +1422,120 @@ async function submitCommand(payload, openid) {
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
       }
 
+      if (type === "PRESIDENT_DISCARD_POLICY") {
+        if (gameCore.phase !== "legislative_president") {
+          return fail("PHASE_MISMATCH", "当前阶段不能由总统弃牌");
+        }
+        if (actorMemberId !== gameCore.currentPresidentId) {
+          return fail("NOT_CURRENT_ACTOR", "只有当前总统可以处理政策牌");
+        }
+
+        const taskError = validateTaskId(payload.taskId, gameCore, type, actorMemberId);
+        if (taskError) {
+          return taskError;
+        }
+
+        const discardPolicyIndex = payload.body && payload.body.discardPolicyIndex;
+        if (!Number.isInteger(discardPolicyIndex) || discardPolicyIndex < 0 || discardPolicyIndex > 2) {
+          return fail("INVALID_PAYLOAD", "请选择一张要弃掉的政策牌");
+        }
+
+        const currentPolicyState = gameCore.policyState || buildInitialPolicyState();
+        const presidentHand =
+          currentPolicyState.presidentHand || (gameCore.phaseData && gameCore.phaseData.cards) || null;
+        if (!Array.isArray(presidentHand) || presidentHand.length !== 3) {
+          return fail("INTERNAL_ERROR", "总统政策手牌状态异常，请刷新后重试", true);
+        }
+
+        const discardedPolicy = presidentHand[discardPolicyIndex];
+        const chancellorHand = presidentHand.filter((_, index) => index !== discardPolicyIndex);
+        const nextPolicyState = {
+          drawPile: ((currentPolicyState && currentPolicyState.drawPile) || []).slice(),
+          discardPile: ((currentPolicyState && currentPolicyState.discardPile) || []).concat(discardedPolicy),
+          presidentHand: null,
+          chancellorHand,
+          peekPile: currentPolicyState ? currentPolicyState.peekPile || null : null,
+        };
+
+        const nextGameCore = {
+          ...gameCore,
+          version: previousVersion + 1,
+          eventSeq: (gameCore.eventSeq || 0) + 1,
+          phase: "legislative_chancellor",
+          policyState: nextPolicyState,
+          phaseData: {
+            presidentId: gameCore.currentPresidentId,
+            chancellorId: gameCore.currentChancellorId,
+            cards: chancellorHand,
+            vetoAllowed: Boolean(gameCore.vetoUnlocked),
+          },
+          updatedAt,
+        };
+
+        const publicSnapshotRes = await transaction.collection("room_public_snapshots").doc(roomId).get();
+        const currentPublicPayload = (publicSnapshotRes.data && publicSnapshotRes.data.payload) || {};
+        const publicHistory = (((currentPublicPayload.publicState || {}).publicHistory) || []).slice();
+        const president = members.find((member) => getMemberId(member) === actorMemberId);
+        const eventSummary = `${president ? president.displayName : "总统"} 已完成政策筛选，并将剩余政策交给总理`;
+        const publicEvent = appendPublicHistory(
+          publicHistory,
+          nextGameCore,
+          "PRESIDENT_DISCARDED_POLICY",
+          "总统完成立法选择",
+          eventSummary,
+          updatedAt,
+        );
+
+        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const privateSnapshotPayloads = members.map((member) => ({
+          memberId: getMemberId(member),
+          ownerOpenId: getMemberOpenId(member),
+          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
+        }));
+
+        await transaction.collection("game_core").doc(gameId).update({
+          data: {
+            version: nextGameCore.version,
+            eventSeq: nextGameCore.eventSeq,
+            phase: nextGameCore.phase,
+            policyState: replaceFieldValue(nextGameCore.policyState),
+            phaseData: replaceFieldValue(nextGameCore.phaseData),
+            updatedAt,
+          },
+        });
+
+        await transaction.collection("room_public_snapshots").doc(roomId).update({
+          data: {
+            version: nextGameCore.version,
+            payload: replaceFieldValue(publicSnapshotPayload),
+            updatedAt,
+          },
+        });
+
+        for (const snapshot of privateSnapshotPayloads) {
+          await transaction
+            .collection("player_private_snapshots")
+            .doc(snapshot.memberId)
+            .update({
+              data: {
+                version: nextGameCore.version,
+                payload: replaceFieldValue(snapshot.payload),
+                pendingTask: replaceFieldValue(snapshot.payload.pendingTask),
+                updatedAt,
+              },
+            });
+        }
+
+        await transaction.collection("game_events").doc(publicEvent.event.eventId).set({
+          data: {
+            ...publicEvent.event,
+            actorMemberId,
+          },
+        });
+
+        return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
+      }
+
       if (type !== "NOMINATE_CHANCELLOR") {
         return fail("PHASE_MISMATCH", "当前暂未接入该游戏命令");
       }
@@ -1493,7 +1685,10 @@ exports.__testHooks = {
   INITIAL_POLICY_DECK,
   buildRoleAssignments,
   buildInitialPolicyState,
+  buildPublicSnapshotPayload,
+  buildPrivateSnapshotPayload,
   createInitialGameProjection,
+  drawPolicyCards,
   getEligibleChancellorIdsFromCore,
   getChancellorTargetOptions,
 };

@@ -59,6 +59,10 @@ Page({
     canNominate: false,
     nominateTargets: [],
     nominateRuleHint: "",
+    canDiscardPolicy: false,
+    policyCards: [],
+    policyPickerTitle: "",
+    policyPickerHint: "",
     isSubmittingCommand: false,
   },
 
@@ -192,6 +196,10 @@ Page({
       canNominate: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR"),
       nominateTargets: this.createNominateTargets(snapshot),
       nominateRuleHint: this.createNominateRuleHint(snapshot),
+      canDiscardPolicy: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "PRESIDENT_DISCARD_POLICY"),
+      policyCards: this.createPolicyCards(snapshot),
+      policyPickerTitle: this.createPolicyPickerTitle(snapshot),
+      policyPickerHint: this.createPolicyPickerHint(snapshot),
     });
   },
 
@@ -363,6 +371,12 @@ Page({
       const voteProgressText = this.createVoteProgressText(snapshot);
       return voteProgressText ? `当前：政府投票中，${voteProgressText}` : "当前：等待所有存活玩家完成政府投票";
     }
+    if (snapshot.pendingTask && snapshot.pendingTask.taskType === "PRESIDENT_DISCARD_POLICY") {
+      return "当前：你是总统，请从 3 张政策牌中秘密弃掉 1 张";
+    }
+    if (snapshot.currentPhase === "legislative_president") {
+      return `当前：${board.presidentSeatNo}号 ${board.presidentName} 正在秘密处理政策牌`;
+    }
     return `当前阶段：${board.phaseName}`;
   },
 
@@ -424,6 +438,38 @@ Page({
       detailText,
       voteRows,
     };
+  },
+
+  createPolicyCards(snapshot) {
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const legislative = privateState.legislative || {};
+    const hand = Array.isArray(legislative.hand) ? legislative.hand : [];
+    return hand.map((policy, index) => {
+      const isLiberal = policy === "LIBERAL";
+      return {
+        index,
+        policy,
+        title: isLiberal ? "自由派政策" : "极权派政策",
+        mark: isLiberal ? "自" : "极",
+        cardClass: `policy-pick-card ${isLiberal ? "is-liberal" : "is-fascist"} ${
+          this.data.isSubmittingCommand ? "is-disabled" : ""
+        }`,
+      };
+    });
+  },
+
+  createPolicyPickerTitle(snapshot) {
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const action = privateState.legislative && privateState.legislative.action;
+    return action === "discard_one" ? "请选择 1 张弃掉" : "";
+  },
+
+  createPolicyPickerHint(snapshot) {
+    const pendingTask = snapshot && snapshot.pendingTask;
+    if (!pendingTask || pendingTask.taskType !== "PRESIDENT_DISCARD_POLICY") {
+      return "";
+    }
+    return "弃牌不会公开，事后你可以自由陈述。";
   },
 
   createServiceError(result, fallbackMessage) {
@@ -614,6 +660,76 @@ Page({
       }
       wx.showToast({
         title: err.code === "DUPLICATE_COMMAND" ? "投票已提交" : err.message || "提交投票失败",
+        icon: "none",
+      });
+    } finally {
+      this.setData({
+        isSubmittingCommand: false,
+      });
+    }
+  },
+
+  async onTapDiscardPolicy(event) {
+    const discardPolicyIndex = Number(event.currentTarget.dataset.index);
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+    const card = this.data.policyCards.find((item) => item.index === discardPolicyIndex);
+    if (!this.data.canDiscardPolicy || this.data.isSubmittingCommand || !Number.isInteger(discardPolicyIndex)) {
+      return;
+    }
+
+    const confirmRes = await new Promise((resolve) => {
+      wx.showModal({
+        title: "确认弃牌",
+        content: `确定秘密弃掉这张${card ? card.title : "政策牌"}？弃牌不会公开，事后可自由陈述。`,
+        confirmText: "弃掉",
+        cancelText: "取消",
+        success: resolve,
+        fail: () => resolve({ confirm: false }),
+      });
+    });
+    if (!confirmRes.confirm) {
+      return;
+    }
+
+    this.setData({
+      isSubmittingCommand: true,
+    });
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: "gameService",
+        data: {
+          action: "submitCommand",
+          payload: {
+            roomId: this.data.roomId,
+            controlledMemberId: this.data.controlledMemberId || "",
+            commandId: this.createCommandId("president_discard_policy"),
+            expectedVersion: snapshot.version,
+            taskId: pendingTask.taskId || "",
+            type: "PRESIDENT_DISCARD_POLICY",
+            body: {
+              discardPolicyIndex,
+            },
+          },
+        },
+      });
+      const result = res.result || {};
+      if (!result.success) {
+        throw this.createServiceError(result, "提交弃牌失败");
+      }
+      wx.showToast({
+        title: "已交给总理",
+        icon: "none",
+      });
+      await this.loadGameSnapshot({ silent: true });
+    } catch (err) {
+      console.error("提交总统弃牌失败", err);
+      if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
+        await this.loadGameSnapshot({ silent: true });
+      }
+      wx.showToast({
+        title: err.message || "提交弃牌失败",
         icon: "none",
       });
     } finally {

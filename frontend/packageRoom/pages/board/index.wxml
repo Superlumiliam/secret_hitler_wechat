@@ -115,6 +115,26 @@
       </view>
 
       <view class="action-dock">
+        <view wx:if="{{canDiscardPolicy}}" class="policy-picker-panel">
+          <view class="policy-picker-title">{{policyPickerTitle}}</view>
+          <view wx:if="{{policyPickerHint}}" class="policy-picker-hint">{{policyPickerHint}}</view>
+          <view class="policy-picker-row">
+            <view
+              wx:for="{{policyCards}}"
+              wx:key="index"
+              class="{{item.cardClass}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
+              bindtap="onTapDiscardPolicy"
+              data-index="{{item.index}}"
+              role="button"
+              aria-label="弃掉此政策牌"
+            >
+              <view class="policy-card-mark">{{item.mark}}</view>
+              <view class="policy-card-title">{{item.title}}</view>
+              <view class="policy-card-action">弃掉此牌</view>
+            </view>
+          </view>
+        </view>
+
         <view wx:if="{{canNominate}}" class="nominate-panel">
           <view class="nominate-title">选择总理候选人</view>
           <view wx:if="{{nominateRuleHint}}" class="nominate-hint">{{nominateRuleHint}}</view>
