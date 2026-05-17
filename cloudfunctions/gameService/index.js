@@ -375,7 +375,11 @@ function getAliveMembers(gameCore, members) {
 function getNextAlivePresidentCandidateId(gameCore, members) {
   const aliveMemberIds = gameCore.aliveMemberIds || [];
   const sortedMembers = members.slice().sort((a, b) => a.seatIndex - b.seatIndex);
-  const currentIndex = sortedMembers.findIndex((member) => getMemberId(member) === gameCore.currentPresidentCandidateId);
+  const basePresidentId =
+    gameCore.specialElectionCallerId && gameCore.currentPresidentCandidateId === gameCore.forcedNextPresidentId
+      ? gameCore.specialElectionCallerId
+      : gameCore.currentPresidentCandidateId;
+  const currentIndex = sortedMembers.findIndex((member) => getMemberId(member) === basePresidentId);
   if (!sortedMembers.length || !aliveMemberIds.length) {
     return "";
   }
@@ -388,6 +392,16 @@ function getNextAlivePresidentCandidateId(gameCore, members) {
     }
   }
   return aliveMemberIds[0] || "";
+}
+
+function getNextNominationTransition(gameCore, members) {
+  const wasForcedPresident =
+    gameCore.specialElectionCallerId && gameCore.currentPresidentCandidateId === gameCore.forcedNextPresidentId;
+  return {
+    nextPresidentCandidateId: getNextAlivePresidentCandidateId(gameCore, members),
+    specialElectionCallerId: wasForcedPresident ? null : gameCore.specialElectionCallerId || null,
+    forcedNextPresidentId: wasForcedPresident ? null : gameCore.forcedNextPresidentId || null,
+  };
 }
 
 function ensurePolicyDrawPile(policyState) {
@@ -467,6 +481,50 @@ function getExecutiveAllowedTargetIds(gameCore, actionType) {
     return aliveMemberIds;
   }
   return [];
+}
+
+function getExecutiveTaskType(actionType) {
+  if (actionType === "INVESTIGATE") {
+    return "EXEC_INVESTIGATE";
+  }
+  if (actionType === "SPECIAL_ELECTION") {
+    return "EXEC_SPECIAL_ELECTION";
+  }
+  if (actionType === "POLICY_PEEK") {
+    return "EXEC_POLICY_PEEK_ACK";
+  }
+  if (actionType === "EXECUTION") {
+    return "EXECUTE_PLAYER";
+  }
+  return "";
+}
+
+function getExecutiveTaskMeta(actionType) {
+  if (actionType === "INVESTIGATE") {
+    return {
+      actionTitle: "调查忠诚",
+      actionHint: "选择一名仍存活且本局未被调查的玩家，只会向你显示其阵营。",
+    };
+  }
+  if (actionType === "SPECIAL_ELECTION") {
+    return {
+      actionTitle: "特别选举",
+      actionHint: "选择另一名存活玩家担任下一任总统候选人，之后总统顺序会回到你左手边。",
+    };
+  }
+  if (actionType === "POLICY_PEEK") {
+    return {
+      confirmText: "确认已查看",
+    };
+  }
+  if (actionType === "EXECUTION") {
+    return {
+      actionTitle: "处决玩家",
+      actionHint: "选择一名存活玩家立即出局；除非处决独裁者，否则不会公开其身份或阵营。",
+      dangerConfirmText: "确认处决",
+    };
+  }
+  return {};
 }
 
 function createVoteResult(gameCore, members, passed) {
@@ -617,7 +675,9 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
       liberalPolicyCount: gameCore.liberalPolicyCount,
       fascistPolicyCount: gameCore.fascistPolicyCount,
       vetoUnlocked: gameCore.vetoUnlocked,
-      executiveActionType: null,
+      executiveActionType:
+        gameCore.phase === "executive_action" && gameCore.phaseData ? gameCore.phaseData.actionType || null : null,
+      nextSpecialPresidentCandidateId: gameCore.forcedNextPresidentId || null,
       voteProgress,
       revealedVotes,
       voteResult,
@@ -705,6 +765,21 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
     }
   }
 
+  if (gameCore.phase === "executive_action" && memberId === gameCore.currentPresidentId) {
+    const actionType = gameCore.phaseData && gameCore.phaseData.actionType;
+    const taskType = getExecutiveTaskType(actionType);
+    if (taskType) {
+      pendingTask = {
+        taskId: `${gameCore.gameId}:${gameCore.version}:${taskType}:${memberId}`,
+        taskType,
+        required: true,
+        deadline: null,
+        allowedTargets: getExecutiveAllowedTargetIds(gameCore, actionType),
+        meta: getExecutiveTaskMeta(actionType),
+      };
+    }
+  }
+
   const legislativeHand =
     gameCore.phase === "legislative_president" && memberId === gameCore.currentPresidentId
       ? (gameCore.policyState && gameCore.policyState.presidentHand) ||
@@ -716,6 +791,17 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
           null
         : null;
   const legislativeAction = gameCore.phase === "legislative_chancellor" ? "enact_one" : "discard_one";
+  const investigationResultsByMemberId = gameCore.investigationResultsByMemberId || {};
+  const investigationResult = investigationResultsByMemberId[memberId] || null;
+  const policyPeekCards =
+    gameCore.phase === "executive_action" &&
+    memberId === gameCore.currentPresidentId &&
+    gameCore.phaseData &&
+    gameCore.phaseData.actionType === "POLICY_PEEK" &&
+    gameCore.policyState &&
+    Array.isArray(gameCore.policyState.drawPile)
+      ? gameCore.policyState.drawPile.slice(0, 3)
+      : null;
 
   return {
     memberId,
@@ -754,8 +840,13 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
               ),
             }
           : null,
-      investigationResult: null,
-      policyPeek: null,
+      investigationResult,
+      policyPeek: policyPeekCards
+        ? {
+            cards: policyPeekCards,
+            viewedAt: updatedAt.toISOString(),
+          }
+        : null,
     },
     pendingTask,
     updatedAt: updatedAt.toISOString(),
@@ -795,6 +886,7 @@ function createInitialGameProjection(room, members, options = {}) {
     deadMemberIds: [],
     confirmedNotHitlerMemberIds: [],
     investigatedMemberIds: [],
+    investigationResultsByMemberId: {},
     roleRevealAckedMemberIds: [],
     policyState: buildInitialPolicyState(options),
     phaseData: {
@@ -1342,7 +1434,8 @@ async function submitCommand(payload, openid) {
             };
           } else {
             const nextElectionTracker = (gameCore.electionTracker || 0) + 1;
-            const nextPresidentCandidateId = getNextAlivePresidentCandidateId(gameCore, members);
+            const nominationTransition = getNextNominationTransition(gameCore, members);
+            const nextPresidentCandidateId = nominationTransition.nextPresidentCandidateId;
             let phase = "nomination";
             let status = gameCore.status || "in_game";
             let policyState = gameCore.policyState || buildInitialPolicyState();
@@ -1399,6 +1492,8 @@ async function submitCommand(payload, openid) {
               currentChancellorCandidateId: null,
               currentPresidentId: null,
               currentChancellorId: null,
+              specialElectionCallerId: nominationTransition.specialElectionCallerId,
+              forcedNextPresidentId: nominationTransition.forcedNextPresidentId,
               previousElectedPresidentId,
               previousElectedChancellorId,
               electionTracker,
@@ -1447,6 +1542,8 @@ async function submitCommand(payload, openid) {
             currentChancellorCandidateId: nextGameCore.currentChancellorCandidateId,
             currentPresidentId: nextGameCore.currentPresidentId,
             currentChancellorId: nextGameCore.currentChancellorId,
+            specialElectionCallerId: nextGameCore.specialElectionCallerId,
+            forcedNextPresidentId: nextGameCore.forcedNextPresidentId,
             previousElectedPresidentId: nextGameCore.previousElectedPresidentId,
             previousElectedChancellorId: nextGameCore.previousElectedChancellorId,
             electionTracker: nextGameCore.electionTracker,
@@ -1669,8 +1766,9 @@ async function submitCommand(payload, openid) {
           phase = "executive_action";
         }
 
+        const nominationTransition = phase === "nomination" ? getNextNominationTransition(gameCore, members) : null;
         const nextPresidentCandidateId =
-          phase === "nomination" ? getNextAlivePresidentCandidateId(gameCore, members) : gameCore.currentPresidentCandidateId;
+          phase === "nomination" ? nominationTransition.nextPresidentCandidateId : gameCore.currentPresidentCandidateId;
         let nextPolicyState = {
           drawPile: ((currentPolicyState && currentPolicyState.drawPile) || []).slice(),
           discardPile: ((currentPolicyState && currentPolicyState.discardPile) || []).concat(discardedPolicy),
@@ -1691,6 +1789,10 @@ async function submitCommand(payload, openid) {
           currentChancellorCandidateId: phase === "nomination" ? null : gameCore.currentChancellorCandidateId,
           currentPresidentId: phase === "nomination" ? null : gameCore.currentPresidentId,
           currentChancellorId: phase === "nomination" ? null : gameCore.currentChancellorId,
+          specialElectionCallerId:
+            phase === "nomination" ? nominationTransition.specialElectionCallerId : gameCore.specialElectionCallerId || null,
+          forcedNextPresidentId:
+            phase === "nomination" ? nominationTransition.forcedNextPresidentId : gameCore.forcedNextPresidentId || null,
           electionTracker: 0,
           liberalPolicyCount,
           fascistPolicyCount,
@@ -1776,6 +1878,8 @@ async function submitCommand(payload, openid) {
             currentChancellorCandidateId: nextGameCore.currentChancellorCandidateId,
             currentPresidentId: nextGameCore.currentPresidentId,
             currentChancellorId: nextGameCore.currentChancellorId,
+            specialElectionCallerId: nextGameCore.specialElectionCallerId,
+            forcedNextPresidentId: nextGameCore.forcedNextPresidentId,
             electionTracker: nextGameCore.electionTracker,
             liberalPolicyCount: nextGameCore.liberalPolicyCount,
             fascistPolicyCount: nextGameCore.fascistPolicyCount,
@@ -1820,6 +1924,253 @@ async function submitCommand(payload, openid) {
             actorMemberId,
           },
         });
+
+        return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
+      }
+
+      if (["EXEC_INVESTIGATE", "EXEC_SPECIAL_ELECTION", "EXEC_POLICY_PEEK_ACK", "EXECUTE_PLAYER"].includes(type)) {
+        if (gameCore.phase !== "executive_action") {
+          return fail("PHASE_MISMATCH", "当前阶段不能执行总统权力");
+        }
+        if (actorMemberId !== gameCore.currentPresidentId) {
+          return fail("NOT_CURRENT_ACTOR", "只有当前总统可以执行总统权力");
+        }
+
+        const actionType = gameCore.phaseData && gameCore.phaseData.actionType;
+        const expectedCommandType = getExecutiveTaskType(actionType);
+        if (type !== expectedCommandType) {
+          return fail("PHASE_MISMATCH", "当前总统权力与命令类型不匹配");
+        }
+
+        const taskError = validateTaskId(payload.taskId, gameCore, type, actorMemberId);
+        if (taskError) {
+          return taskError;
+        }
+
+        const targetMemberId = payload.body && payload.body.targetMemberId;
+        const allowedTargetIds =
+          (gameCore.phaseData && gameCore.phaseData.allowedTargetIds) || getExecutiveAllowedTargetIds(gameCore, actionType);
+        if (type !== "EXEC_POLICY_PEEK_ACK" && (!targetMemberId || !allowedTargetIds.includes(targetMemberId))) {
+          return fail("INVALID_TARGET", "该玩家不是当前总统权力的合法目标");
+        }
+        if (type === "EXEC_POLICY_PEEK_ACK" && (!payload.body || payload.body.acknowledged !== true)) {
+          return fail("INVALID_PAYLOAD", "请确认已查看政策牌");
+        }
+
+        const publicSnapshotRes = await transaction.collection("room_public_snapshots").doc(roomId).get();
+        const currentPublicPayload = (publicSnapshotRes.data && publicSnapshotRes.data.payload) || {};
+        const publicHistory = (((currentPublicPayload.publicState || {}).publicHistory) || []).slice();
+        const publicEvents = [];
+        const president = members.find((member) => getMemberId(member) === actorMemberId);
+        const targetMember = members.find((member) => getMemberId(member) === targetMemberId);
+        const nominationTransition =
+          type === "EXEC_SPECIAL_ELECTION"
+            ? {
+                nextPresidentCandidateId: targetMemberId,
+                specialElectionCallerId: actorMemberId,
+                forcedNextPresidentId: targetMemberId,
+              }
+            : getNextNominationTransition(gameCore, members);
+
+        let status = gameCore.status || "in_game";
+        let phase = "nomination";
+        let winner = gameCore.winner || null;
+        let winReason = gameCore.winReason || null;
+        let endedAt = gameCore.endedAt || null;
+        let aliveMemberIds = (gameCore.aliveMemberIds || []).slice();
+        let deadMemberIds = (gameCore.deadMemberIds || []).slice();
+        let investigatedMemberIds = (gameCore.investigatedMemberIds || []).slice();
+        let investigationResultsByMemberId = { ...(gameCore.investigationResultsByMemberId || {}) };
+        let nextPresidentCandidateId = nominationTransition.nextPresidentCandidateId;
+        let specialElectionCallerId = nominationTransition.specialElectionCallerId;
+        let forcedNextPresidentId = nominationTransition.forcedNextPresidentId;
+        let eventType = "EXECUTIVE_ACTION_COMPLETED";
+        let eventTitle = "总统权力完成";
+        let eventSummary = `${president ? president.displayName : "总统"} 已完成总统权力`;
+        const eventExtra = {
+          executiveActionType: actionType,
+        };
+
+        if (type === "EXEC_INVESTIGATE") {
+          const assignment = (gameCore.roleAssignments || {})[targetMemberId] || {};
+          if (!assignment.party) {
+            return fail("INVALID_TARGET", "目标玩家身份不存在");
+          }
+          if (!investigatedMemberIds.includes(targetMemberId)) {
+            investigatedMemberIds.push(targetMemberId);
+          }
+          investigationResultsByMemberId[actorMemberId] = {
+            targetMemberId,
+            targetDisplayName: targetMember ? targetMember.displayName : "",
+            party: assignment.party,
+            revealedAt: updatedAt.toISOString(),
+          };
+          eventType = "EXEC_INVESTIGATED";
+          eventTitle = "总统完成忠诚调查";
+          eventSummary = `${president ? president.displayName : "总统"} 调查了 ${
+            targetMember ? targetMember.displayName : "一名玩家"
+          } 的忠诚`;
+          eventExtra.targetMemberId = targetMemberId;
+        } else if (type === "EXEC_SPECIAL_ELECTION") {
+          eventType = "EXEC_SPECIAL_ELECTION";
+          eventTitle = "特别选举发动";
+          eventSummary = `${president ? president.displayName : "总统"} 指定 ${
+            targetMember ? targetMember.displayName : "一名玩家"
+          } 成为下一任特别总统候选人`;
+          eventExtra.targetMemberId = targetMemberId;
+          eventExtra.nextPresidentCandidateId = targetMemberId;
+          eventExtra.callerMemberId = actorMemberId;
+        } else if (type === "EXEC_POLICY_PEEK_ACK") {
+          eventType = "EXEC_POLICY_PEEK_ACKED";
+          eventTitle = "总统完成政策预览";
+          eventSummary = `${president ? president.displayName : "总统"} 已秘密查看政策牌堆顶`;
+        } else if (type === "EXECUTE_PLAYER") {
+          const assignment = (gameCore.roleAssignments || {})[targetMemberId] || {};
+          aliveMemberIds = aliveMemberIds.filter((memberId) => memberId !== targetMemberId);
+          if (!deadMemberIds.includes(targetMemberId)) {
+            deadMemberIds.push(targetMemberId);
+          }
+          eventType = "EXEC_PLAYER_EXECUTED";
+          eventTitle = "总统完成处决";
+          eventSummary = `${president ? president.displayName : "总统"} 处决了 ${
+            targetMember ? targetMember.displayName : "一名玩家"
+          }`;
+          eventExtra.targetMemberId = targetMemberId;
+          if (assignment.role === "HITLER") {
+            status = "game_ended";
+            phase = "game_ended";
+            winner = "LIBERAL";
+            winReason = "HITLER_EXECUTED";
+            endedAt = updatedAt;
+            nextPresidentCandidateId = gameCore.currentPresidentCandidateId;
+            specialElectionCallerId = gameCore.specialElectionCallerId || null;
+            forcedNextPresidentId = gameCore.forcedNextPresidentId || null;
+            eventSummary = `${eventSummary}，独裁者被处决，自由派获胜`;
+            eventExtra.winner = winner;
+            eventExtra.winReason = winReason;
+          } else if (!aliveMemberIds.includes(nextPresidentCandidateId)) {
+            nextPresidentCandidateId = getNextAlivePresidentCandidateId(
+              {
+                ...gameCore,
+                aliveMemberIds,
+                currentPresidentCandidateId: nextPresidentCandidateId,
+                specialElectionCallerId,
+                forcedNextPresidentId,
+              },
+              members,
+            );
+          }
+        }
+
+        const nextGameCore = {
+          ...gameCore,
+          status,
+          version: previousVersion + 1,
+          eventSeq: (gameCore.eventSeq || 0) + 1,
+          round: phase === "nomination" ? (gameCore.round || 1) + 1 : gameCore.round,
+          phase,
+          currentPresidentCandidateId: nextPresidentCandidateId,
+          currentChancellorCandidateId: phase === "nomination" ? null : gameCore.currentChancellorCandidateId,
+          currentPresidentId: phase === "nomination" ? null : gameCore.currentPresidentId,
+          currentChancellorId: phase === "nomination" ? null : gameCore.currentChancellorId,
+          specialElectionCallerId,
+          forcedNextPresidentId,
+          aliveMemberIds,
+          deadMemberIds,
+          investigatedMemberIds,
+          investigationResultsByMemberId,
+          phaseData:
+            phase === "nomination"
+              ? {
+                  presidentCandidateId: nextPresidentCandidateId,
+                  eligibleChancellorIds: [],
+                }
+              : {},
+          winner,
+          winReason,
+          endedAt,
+          updatedAt,
+        };
+        if (nextGameCore.phase === "nomination") {
+          nextGameCore.phaseData.eligibleChancellorIds = getEligibleChancellorIdsFromCore(nextGameCore);
+        }
+
+        const publicEvent = appendPublicHistory(
+          publicHistory,
+          nextGameCore,
+          eventType,
+          eventTitle,
+          eventSummary,
+          updatedAt,
+          eventExtra,
+        );
+        publicEvents.push({
+          ...publicEvent.event,
+          actorMemberId,
+          targetMemberId: targetMemberId || null,
+        });
+
+        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const privateSnapshotPayloads = members.map((member) => ({
+          memberId: getMemberId(member),
+          ownerOpenId: getMemberOpenId(member),
+          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
+        }));
+
+        await transaction.collection("game_core").doc(gameId).update({
+          data: {
+            status: nextGameCore.status,
+            version: nextGameCore.version,
+            eventSeq: nextGameCore.eventSeq,
+            round: nextGameCore.round,
+            phase: nextGameCore.phase,
+            currentPresidentCandidateId: nextGameCore.currentPresidentCandidateId,
+            currentChancellorCandidateId: nextGameCore.currentChancellorCandidateId,
+            currentPresidentId: nextGameCore.currentPresidentId,
+            currentChancellorId: nextGameCore.currentChancellorId,
+            specialElectionCallerId: nextGameCore.specialElectionCallerId,
+            forcedNextPresidentId: nextGameCore.forcedNextPresidentId,
+            aliveMemberIds: replaceFieldValue(nextGameCore.aliveMemberIds),
+            deadMemberIds: replaceFieldValue(nextGameCore.deadMemberIds),
+            investigatedMemberIds: replaceFieldValue(nextGameCore.investigatedMemberIds),
+            investigationResultsByMemberId: replaceFieldValue(nextGameCore.investigationResultsByMemberId),
+            phaseData: replaceFieldValue(nextGameCore.phaseData),
+            winner: nextGameCore.winner,
+            winReason: nextGameCore.winReason,
+            endedAt: nextGameCore.endedAt,
+            updatedAt,
+          },
+        });
+
+        await transaction.collection("room_public_snapshots").doc(roomId).update({
+          data: {
+            roomStatus: nextGameCore.status,
+            version: nextGameCore.version,
+            payload: replaceFieldValue(publicSnapshotPayload),
+            updatedAt,
+          },
+        });
+
+        for (const snapshot of privateSnapshotPayloads) {
+          await transaction
+            .collection("player_private_snapshots")
+            .doc(snapshot.memberId)
+            .update({
+              data: {
+                roomStatus: nextGameCore.status,
+                version: nextGameCore.version,
+                payload: replaceFieldValue(snapshot.payload),
+                pendingTask: replaceFieldValue(snapshot.payload.pendingTask),
+                updatedAt,
+              },
+            });
+        }
+
+        for (const event of publicEvents) {
+          await transaction.collection("game_events").doc(event.eventId).set({
+            data: event,
+          });
+        }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
       }
@@ -1977,6 +2328,9 @@ exports.__testHooks = {
   buildPrivateSnapshotPayload,
   createInitialGameProjection,
   drawPolicyCards,
+  getExecutiveAllowedTargetIds,
+  getExecutiveTaskType,
+  getNextNominationTransition,
   getEligibleChancellorIdsFromCore,
   getChancellorTargetOptions,
 };

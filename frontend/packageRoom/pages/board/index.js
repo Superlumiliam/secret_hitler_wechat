@@ -65,6 +65,11 @@ Page({
     policyCards: [],
     policyPickerTitle: "",
     policyPickerHint: "",
+    executiveAction: null,
+    canExecuteAction: false,
+    executiveTargets: [],
+    policyPeekCards: [],
+    investigationResult: null,
     isSubmittingCommand: false,
   },
 
@@ -207,6 +212,16 @@ Page({
       policyCards: this.createPolicyCards(snapshot),
       policyPickerTitle: this.createPolicyPickerTitle(snapshot),
       policyPickerHint: this.createPolicyPickerHint(snapshot),
+      executiveAction: this.createExecutiveAction(snapshot),
+      canExecuteAction: Boolean(
+        snapshot.pendingTask &&
+          ["EXEC_INVESTIGATE", "EXEC_SPECIAL_ELECTION", "EXEC_POLICY_PEEK_ACK", "EXECUTE_PLAYER"].includes(
+            snapshot.pendingTask.taskType,
+          ),
+      ),
+      executiveTargets: this.createExecutiveTargets(snapshot),
+      policyPeekCards: this.createPolicyPeekCards(snapshot),
+      investigationResult: this.createInvestigationResult(snapshot),
     });
   },
 
@@ -229,6 +244,8 @@ Page({
       fascistPolicyCount: publicState.fascistPolicyCount || 0,
       electionTracker: publicState.electionTracker || 0,
       vetoUnlocked: Boolean(publicState.vetoUnlocked),
+      executiveActionType: publicState.executiveActionType || "",
+      nextSpecialPresidentCandidateId: publicState.nextSpecialPresidentCandidateId || "",
     };
   },
 
@@ -390,6 +407,16 @@ Page({
     if (snapshot.currentPhase === "legislative_chancellor") {
       return `当前：${board.chancellorSeatNo}号 ${board.chancellorName} 正在秘密处理政策牌`;
     }
+    if (snapshot.currentPhase === "executive_action") {
+      const action = this.createExecutiveAction(snapshot);
+      if (snapshot.pendingTask && action) {
+        return `当前：你是总统，请执行${action.title}`;
+      }
+      if (action && action.waitingText) {
+        return action.waitingText;
+      }
+      return `当前：${board.presidentSeatNo}号 ${board.presidentName} 正在执行总统权力`;
+    }
     return `当前阶段：${board.phaseName}`;
   },
 
@@ -495,6 +522,99 @@ Page({
       return "只公开最终颁布的政策，另一张弃牌不会公开。";
     }
     return "";
+  },
+
+  createExecutiveAction(snapshot) {
+    const publicState = (snapshot && snapshot.publicState) || {};
+    const pendingTask = snapshot && snapshot.pendingTask;
+    const taskType = pendingTask && pendingTask.taskType;
+    const actionType = publicState.executiveActionType || "";
+    const seatOrder = publicState.seatOrder || [];
+    const president = seatOrder.find((member) => member.memberId === publicState.currentPresidentId);
+    const presidentName = president ? `${president.seatIndex}号 ${president.displayName}` : "总统";
+    const titleByType = {
+      INVESTIGATE: "调查忠诚",
+      SPECIAL_ELECTION: "特别选举",
+      POLICY_PEEK: "政策预览",
+      EXECUTION: "处决玩家",
+    };
+    const taskTitleByType = {
+      EXEC_INVESTIGATE: "调查忠诚",
+      EXEC_SPECIAL_ELECTION: "特别选举",
+      EXEC_POLICY_PEEK_ACK: "政策预览",
+      EXECUTE_PLAYER: "处决玩家",
+    };
+    const title = (pendingTask && pendingTask.meta && pendingTask.meta.actionTitle) || taskTitleByType[taskType] || titleByType[actionType] || "";
+    if (!title && snapshot.currentPhase !== "executive_action") {
+      return null;
+    }
+
+    let waitingText = `${presidentName} 正在执行${title || "总统权力"}`;
+    if (actionType === "SPECIAL_ELECTION" && publicState.nextSpecialPresidentCandidateId) {
+      const forced = seatOrder.find((member) => member.memberId === publicState.nextSpecialPresidentCandidateId);
+      if (forced) {
+        waitingText = `${presidentName} 正在发动特别选举，下一任特别总统候选人将是 ${forced.seatIndex}号 ${forced.displayName}`;
+      }
+    }
+
+    return {
+      title,
+      hint: (pendingTask && pendingTask.meta && pendingTask.meta.actionHint) || "",
+      confirmText: (pendingTask && pendingTask.meta && (pendingTask.meta.confirmText || pendingTask.meta.dangerConfirmText)) || "确认",
+      taskType: taskType || "",
+      actionType,
+      waitingText,
+    };
+  },
+
+  createExecutiveTargets(snapshot) {
+    const pendingTask = snapshot && snapshot.pendingTask;
+    if (
+      !pendingTask ||
+      !["EXEC_INVESTIGATE", "EXEC_SPECIAL_ELECTION", "EXECUTE_PLAYER"].includes(pendingTask.taskType)
+    ) {
+      return [];
+    }
+    const allowedTargets = pendingTask.allowedTargets || [];
+    const publicState = (snapshot && snapshot.publicState) || {};
+    return (publicState.seatOrder || []).map((member) => {
+      const canTarget = allowedTargets.includes(member.memberId);
+      return {
+        memberId: member.memberId,
+        label: `${member.seatIndex}号 ${member.displayName}`,
+        canTarget,
+        disabledReason: member.isAlive === false ? "已出局" : canTarget ? "" : "暂不可选择",
+      };
+    });
+  },
+
+  createPolicyPeekCards(snapshot) {
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const policyPeek = privateState.policyPeek || {};
+    const cards = Array.isArray(policyPeek.cards) ? policyPeek.cards : [];
+    return cards.map((policy, index) => {
+      const isLiberal = policy === "LIBERAL";
+      return {
+        index,
+        policy,
+        title: isLiberal ? "自由派政策" : "极权派政策",
+        mark: isLiberal ? "自" : "极",
+        cardClass: `policy-pick-card ${isLiberal ? "is-liberal" : "is-fascist"}`,
+      };
+    });
+  },
+
+  createInvestigationResult(snapshot) {
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const result = privateState.investigationResult || null;
+    if (!result) {
+      return null;
+    }
+    return {
+      targetName: result.targetDisplayName || "目标玩家",
+      partyText: result.party === "LIBERAL" ? "自由派" : "极权派",
+      partyClass: result.party === "LIBERAL" ? "is-liberal-text" : "is-fascist-text",
+    };
   },
 
   createServiceError(result, fallbackMessage) {
@@ -774,6 +894,115 @@ Page({
       }
       wx.showToast({
         title: err.message || (isDiscard ? "提交弃牌失败" : "提交颁布失败"),
+        icon: "none",
+      });
+    } finally {
+      this.setData({
+        isSubmittingCommand: false,
+      });
+    }
+  },
+
+  async onTapExecutiveTarget(event) {
+    const targetMemberId = event.currentTarget.dataset.memberId;
+    const canTarget = event.currentTarget.dataset.canTarget;
+    const disabledReason = event.currentTarget.dataset.disabledReason;
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+    const action = this.data.executiveAction || {};
+    if (!targetMemberId || this.data.isSubmittingCommand) {
+      return;
+    }
+    if (canTarget !== true && canTarget !== "true") {
+      wx.showToast({
+        title: disabledReason || "该玩家暂不可选择",
+        icon: "none",
+      });
+      return;
+    }
+
+    const target = this.data.executiveTargets.find((item) => item.memberId === targetMemberId) || {};
+    const isExecution = pendingTask.taskType === "EXECUTE_PLAYER";
+    const confirmRes = await new Promise((resolve) => {
+      wx.showModal({
+        title: action.title || "确认总统权力",
+        content: isExecution
+          ? `确认处决${target.label || "该玩家"}？目标将立即出局。`
+          : `确认选择${target.label || "该玩家"}？`,
+        confirmText: isExecution ? "确认处决" : "确认",
+        cancelText: "取消",
+        success: resolve,
+        fail: () => resolve({ confirm: false }),
+      });
+    });
+    if (!confirmRes.confirm) {
+      return;
+    }
+
+    await this.submitExecutiveCommand({
+      commandType: pendingTask.taskType,
+      body: {
+        targetMemberId,
+      },
+      toastText: isExecution ? "处决已执行" : "总统权力已执行",
+    });
+  },
+
+  async onTapPolicyPeekAck() {
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+    if (pendingTask.taskType !== "EXEC_POLICY_PEEK_ACK" || this.data.isSubmittingCommand) {
+      return;
+    }
+    await this.submitExecutiveCommand({
+      commandType: "EXEC_POLICY_PEEK_ACK",
+      body: {
+        acknowledged: true,
+      },
+      toastText: "政策预览已确认",
+    });
+  },
+
+  async submitExecutiveCommand(options) {
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+
+    this.setData({
+      isSubmittingCommand: true,
+    });
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: "gameService",
+        data: {
+          action: "submitCommand",
+          payload: {
+            roomId: this.data.roomId,
+            controlledMemberId: this.data.controlledMemberId || "",
+            commandId: this.createCommandId((options.commandType || "executive_action").toLowerCase()),
+            expectedVersion: snapshot.version,
+            taskId: pendingTask.taskId || "",
+            type: options.commandType,
+            body: options.body || {},
+          },
+        },
+      });
+      const result = res.result || {};
+      if (!result.success) {
+        throw this.createServiceError(result, "提交总统权力失败");
+      }
+      wx.showToast({
+        title: options.toastText || "已提交",
+        icon: "none",
+      });
+      await this.loadGameSnapshot({ silent: true });
+    } catch (err) {
+      console.error("提交总统权力失败", err);
+      if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
+        await this.loadGameSnapshot({ silent: true });
+      }
+      wx.showToast({
+        title: err.message || "提交总统权力失败",
         icon: "none",
       });
     } finally {

@@ -41,6 +41,9 @@ const {
   buildPublicSnapshotPayload,
   createInitialGameProjection,
   drawPolicyCards,
+  getExecutiveAllowedTargetIds,
+  getExecutiveTaskType,
+  getNextNominationTransition,
   getChancellorTargetOptions,
 } = __testHooks;
 
@@ -301,6 +304,155 @@ function assertLegislativeChancellorVisibility() {
   });
 }
 
+function makeExecutiveCore(actionType, overrides = {}) {
+  const members = makeMembers(7);
+  const room = {
+    roomId: `room_exec_${actionType}`,
+    roomCode: "700001",
+  };
+  const baseCore = createInitialGameProjection(room, members, {
+    gameId: `game_exec_${actionType}`,
+    createdAt: new Date("2026-05-12T00:00:00.000Z"),
+    pickIndex: () => 0,
+  }).gameCore;
+  return {
+    room,
+    members,
+    gameCore: {
+      ...baseCore,
+      version: 8,
+      round: 3,
+      phase: "executive_action",
+      currentPresidentCandidateId: "mem_1",
+      currentPresidentId: "mem_1",
+      currentChancellorId: "mem_2",
+      fascistPolicyCount: actionType === "EXECUTION" ? 4 : 2,
+      phaseData: {
+        presidentId: "mem_1",
+        actionType,
+        allowedTargetIds: getExecutiveAllowedTargetIds(
+          {
+            ...baseCore,
+            currentPresidentId: "mem_1",
+            investigatedMemberIds: ["mem_3"],
+          },
+          actionType,
+        ),
+      },
+      investigatedMemberIds: ["mem_3"],
+      ...overrides,
+    },
+  };
+}
+
+function assertExecutivePrivateAndPublicProjection() {
+  const investigate = makeExecutiveCore("INVESTIGATE");
+  const publicPayload = buildPublicSnapshotPayload(
+    investigate.room,
+    investigate.gameCore,
+    investigate.members,
+    [],
+    new Date("2026-05-12T00:03:00.000Z"),
+  );
+  assert.strictEqual(publicPayload.publicState.executiveActionType, "INVESTIGATE", "public should show action type");
+  assert.strictEqual(hasSecretKey(publicPayload), false, "public executive snapshot should not contain secrets");
+
+  const presidentPrivate = buildPrivateSnapshotPayload(
+    investigate.gameCore,
+    investigate.members[0],
+    investigate.members,
+    new Date("2026-05-12T00:03:00.000Z"),
+  );
+  assert.strictEqual(presidentPrivate.pendingTask.taskType, "EXEC_INVESTIGATE", "president should receive investigate task");
+  assert.strictEqual(
+    presidentPrivate.pendingTask.allowedTargets.includes("mem_3"),
+    false,
+    "already investigated player should not be targetable",
+  );
+
+  const withResult = {
+    ...investigate.gameCore,
+    phase: "nomination",
+    investigationResultsByMemberId: {
+      mem_1: {
+        targetMemberId: "mem_4",
+        targetDisplayName: "玩家4",
+        party: "FASCIST",
+        revealedAt: "2026-05-12T00:04:00.000Z",
+      },
+    },
+  };
+  const resultPrivate = buildPrivateSnapshotPayload(
+    withResult,
+    investigate.members[0],
+    investigate.members,
+    new Date("2026-05-12T00:04:00.000Z"),
+  );
+  assert.deepStrictEqual(
+    Object.keys(resultPrivate.privateState.investigationResult).sort(),
+    ["party", "revealedAt", "targetDisplayName", "targetMemberId"].sort(),
+    "investigation result should only expose party-level result",
+  );
+  const otherPrivate = buildPrivateSnapshotPayload(
+    withResult,
+    investigate.members[1],
+    investigate.members,
+    new Date("2026-05-12T00:04:00.000Z"),
+  );
+  assert.strictEqual(otherPrivate.privateState.investigationResult, null, "other players should not see investigation");
+
+  const peek = makeExecutiveCore("POLICY_PEEK", {
+    policyState: {
+      drawPile: ["FASCIST", "LIBERAL", "FASCIST", "LIBERAL"],
+      discardPile: [],
+      presidentHand: null,
+      chancellorHand: null,
+      peekPile: null,
+    },
+  });
+  const peekPublic = buildPublicSnapshotPayload(peek.room, peek.gameCore, peek.members, [], new Date("2026-05-12T00:05:00.000Z"));
+  assert.strictEqual(JSON.stringify(peekPublic).includes("FASCIST,LIBERAL,FASCIST"), false, "public should not reveal peek cards");
+  const peekPrivate = buildPrivateSnapshotPayload(
+    peek.gameCore,
+    peek.members[0],
+    peek.members,
+    new Date("2026-05-12T00:05:00.000Z"),
+  );
+  assert.strictEqual(peekPrivate.pendingTask.taskType, "EXEC_POLICY_PEEK_ACK", "president should ack policy peek");
+  assert.deepStrictEqual(peekPrivate.privateState.policyPeek.cards, ["FASCIST", "LIBERAL", "FASCIST"]);
+  assert.deepStrictEqual(peek.gameCore.policyState.drawPile, ["FASCIST", "LIBERAL", "FASCIST", "LIBERAL"], "peek should not mutate deck");
+
+  const special = makeExecutiveCore("SPECIAL_ELECTION");
+  assert.strictEqual(getExecutiveTaskType("SPECIAL_ELECTION"), "EXEC_SPECIAL_ELECTION");
+  assert.strictEqual(
+    getExecutiveAllowedTargetIds(special.gameCore, "SPECIAL_ELECTION").includes("mem_1"),
+    false,
+    "special election cannot target current president",
+  );
+  const forcedTransition = getNextNominationTransition({
+    ...special.gameCore,
+    currentPresidentCandidateId: "mem_4",
+    specialElectionCallerId: "mem_1",
+    forcedNextPresidentId: "mem_4",
+  }, special.members);
+  assert.strictEqual(forcedTransition.nextPresidentCandidateId, "mem_2", "after forced president, order should resume left of caller");
+  assert.strictEqual(forcedTransition.specialElectionCallerId, null, "special election should clear after forced round");
+
+  const execution = makeExecutiveCore("EXECUTION");
+  const execPrivate = buildPrivateSnapshotPayload(
+    execution.gameCore,
+    execution.members[0],
+    execution.members,
+    new Date("2026-05-12T00:06:00.000Z"),
+  );
+  assert.strictEqual(execPrivate.pendingTask.taskType, "EXECUTE_PLAYER", "president should receive execution task");
+  assert.strictEqual(
+    execPrivate.pendingTask.allowedTargets.includes("mem_1"),
+    true,
+    "execution should allow targeting self",
+  );
+}
+
 Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
   const playerCount = Number(playerCountKey);
   const room = {
@@ -330,5 +482,6 @@ Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
 assertNominationTargetOptions();
 assertLegislativePresidentVisibility();
 assertLegislativeChancellorVisibility();
+assertExecutivePrivateAndPublicProjection();
 
 console.log("startGame initialization tests passed");

@@ -115,6 +115,47 @@
       </view>
 
       <view class="action-dock">
+        <view wx:if="{{investigationResult}}" class="secret-result-panel">
+          <view class="secret-result-title">调查结果</view>
+          <view class="secret-result-text">{{investigationResult.targetName}} 属于 <text class="{{investigationResult.partyClass}}">{{investigationResult.partyText}}</text></view>
+        </view>
+
+        <view wx:if="{{snapshot.currentPhase === 'executive_action'}}" class="executive-panel">
+          <view class="executive-title">{{executiveAction.title || '总统权力'}}</view>
+          <view wx:if="{{executiveAction.hint}}" class="executive-hint">{{executiveAction.hint}}</view>
+
+          <view wx:if="{{canExecuteAction && executiveAction.taskType === 'EXEC_POLICY_PEEK_ACK'}}" class="policy-picker-row is-three-cards">
+            <view wx:for="{{policyPeekCards}}" wx:key="index" class="{{item.cardClass}}">
+              <view class="policy-card-mark">{{item.mark}}</view>
+              <view class="policy-card-title">{{item.title}}</view>
+              <view class="policy-card-action">政策牌</view>
+            </view>
+          </view>
+
+          <view wx:if="{{canExecuteAction && executiveAction.taskType === 'EXEC_POLICY_PEEK_ACK'}}" class="executive-confirm {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapPolicyPeekAck" role="button" aria-label="确认政策预览">
+            {{executiveAction.confirmText || '确认已查看'}}
+          </view>
+
+          <view wx:elif="{{canExecuteAction}}" class="executive-targets">
+            <view
+              wx:for="{{executiveTargets}}"
+              wx:key="memberId"
+              class="executive-target {{item.canTarget ? '' : 'is-ineligible'}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
+              bindtap="onTapExecutiveTarget"
+              data-member-id="{{item.memberId}}"
+              data-can-target="{{item.canTarget}}"
+              data-disabled-reason="{{item.disabledReason}}"
+              role="button"
+              aria-label="选择总统权力目标"
+            >
+              <view class="executive-target-label">{{item.label}}</view>
+              <view wx:if="{{!item.canTarget}}" class="executive-target-reason">{{item.disabledReason}}</view>
+            </view>
+          </view>
+
+          <view wx:else class="executive-waiting">{{executiveAction.waitingText}}</view>
+        </view>
+
         <view wx:if="{{canPickPolicy}}" class="policy-picker-panel">
           <view class="policy-picker-title">{{policyPickerTitle}}</view>
           <view wx:if="{{policyPickerHint}}" class="policy-picker-hint">{{policyPickerHint}}</view>
