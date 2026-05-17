@@ -325,6 +325,32 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
     "requiredCount": 7
   },
   "revealedVotes": null,
+  "history": {
+    "roundsStarted": 4,
+    "roundsCompleted": 3,
+    "rounds": [
+      {
+        "round": 4,
+        "status": "voting",
+        "presidentId": "mem_1",
+        "chancellorId": "mem_7",
+        "voteSummary": {
+          "ja": 0,
+          "nein": 0,
+          "required": 9,
+          "revealed": false
+        },
+        "votes": [
+          { "memberId": "mem_1", "state": "pending" },
+          { "memberId": "mem_8", "state": "dead" }
+        ],
+        "outcome": {
+          "type": "pending_vote",
+          "label": "投票中"
+        }
+      }
+    ]
+  },
   "publicHistory": [
     {
       "eventId": "evt_game_xxx_18",
@@ -346,6 +372,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `currentPresidentId` / `currentChancellorId` 表示“已当选并正在执政的政府”
 - `previousElectedPresidentId` / `previousElectedChancellorId` 用于前端展示任期限制提示
 - `revealedVotes` 在投票未公开前必须为 `null`；公开后为完整数组
+- `history` 是局内历史记录页的公共投影，只能由公开事实生成，不得包含私密牌面、调查结果或未公开投票
 - `publicHistory` 只写公共事实摘要，不写私密结果
 
 禁止包含：
@@ -356,6 +383,69 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - 调查结果
 - 牌顶预览内容
 - 未公开投票
+
+### 4.4.1 `publicState.history`
+
+`history` 用于 `packageRoom/pages/history/index` 渲染参考 `reference/09-历史记录页.png` 的总体情况与逐轮看板。它是公共快照的一部分，所有房间成员看到的内容一致。
+
+```ts
+interface PublicHistoryProjection {
+  roundsStarted: number
+  roundsCompleted: number
+  rounds: Array<{
+    round: number
+    status:
+      | 'nominating'
+      | 'voting'
+      | 'vote_failed'
+      | 'legislating'
+      | 'executing'
+      | 'completed'
+      | 'chaos'
+      | 'game_ended'
+    presidentId: string | null
+    chancellorId: string | null
+    voteSummary: {
+      ja: number
+      nein: number
+      required: number
+      revealed: boolean
+    }
+    votes: Array<{
+      memberId: string
+      state: 'ja' | 'nein' | 'dead' | 'pending' | 'not_started'
+    }>
+    outcome: {
+      type:
+        | 'pending_nomination'
+        | 'pending_vote'
+        | 'vote_failed'
+        | 'pending_legislation'
+        | 'liberal_policy'
+        | 'fascist_policy'
+        | 'vetoed'
+        | 'chaos_policy'
+        | 'investigation'
+        | 'special_election'
+        | 'policy_peek'
+        | 'execution'
+        | 'win'
+      label: string
+      targetMemberId?: string
+    }
+  }>
+}
+```
+
+生成规则：
+
+- `roundsStarted` 表示已经创建或进入过的轮次，包含当前未完成轮。
+- `roundsCompleted` 表示已经完成结算并离开该轮的轮次数；当前轮仍在提名、投票、立法或执行阶段时不计入完成。
+- 投票未公开前，`voteSummary.revealed = false`，`ja/nein = 0`，存活玩家 `votes.state = pending` 或 `not_started`，不得返回真实单人票。
+- 投票公开后，`votes` 必须包含本轮所有座位成员；已出局玩家使用 `dead`。
+- 总统弃牌、总理弃牌、调查忠诚结果、政策预览牌面不得写入 `history`。
+- `outcome.label` 使用前端可直接展示的中文短文案，并遵守术语映射，例如“极权派政策”“处决 8 号玩家”“政策预览”。
+- `targetMemberId` 只用于公开目标，例如调查目标、特别总统、处决目标；不得用于表示私密结果。
 
 ## 4.5 `privateState`
 

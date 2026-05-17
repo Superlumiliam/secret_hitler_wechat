@@ -126,6 +126,11 @@ frontend/
         index.wxml
         index.wxss
         index.json
+      history/
+        index.ts
+        index.wxml
+        index.wxss
+        index.json
       rules/
         index.ts
         index.wxml
@@ -226,7 +231,7 @@ frontend/
 
 ### 5.1 页面划分
 
-建议页面保留 8 个页面，其中 7 个主流程页面 + 1 个辅助规则页。创建游戏前端流程拆为“首页（创建房间入口）”、“创建用户”、“创建房间”、“房间大厅”四个页面；创建用户页也是首页头像入口的资料编辑页。页面参考 `reference/01-首页入口.png`、`reference/02-创建房间.png`、`reference/03-房间大厅.png`：
+建议页面保留 9 个页面，其中 7 个主流程页面 + 2 个辅助查看页。创建游戏前端流程拆为“首页（创建房间入口）”、“创建用户”、“创建房间”、“房间大厅”四个页面；创建用户页也是首页头像入口的资料编辑页。页面参考 `reference/01-首页入口.png`、`reference/02-创建房间.png`、`reference/03-房间大厅.png`：
 
 | 页面 | 路径 | 作用 |
 | --- | --- | --- |
@@ -236,6 +241,7 @@ frontend/
 | 房间大厅 | `packageRoom/pages/lobby/index` | 展示房间、座位、准备、开始、分享 |
 | 身份页 | `packageRoom/pages/identity/index` | 查看自己的身份并返回桌面 |
 | 对局桌面页 | `packageRoom/pages/board/index` | 公共桌面 + 当前私密任务 |
+| 历史记录页 | `packageRoom/pages/history/index` | 局内查看总体情况与逐轮公开记录 |
 | 结果页 | `packageResult/pages/result/index` | 终局结果与复盘 |
 | 规则页 | `packageRoom/pages/rules/index` | 局内规则说明 |
 
@@ -255,6 +261,7 @@ frontend/
         "pages/lobby/index",
         "pages/identity/index",
         "pages/board/index",
+        "pages/history/index",
         "pages/rules/index"
       ]
     },
@@ -302,6 +309,8 @@ frontend/
 - `lobby -> board`：开局成功后 `wx.redirectTo`
 - `board -> identity`：点击“我的身份”后 `wx.navigateTo`
 - `identity -> board`：点击“我知道了”后 `wx.navigateBack`
+- `board -> history`：点击“历史记录”后 `wx.navigateTo`
+- `history -> board`：点击左上角回退按钮或系统返回后 `wx.navigateBack`
 - `board -> result`：`wx.redirectTo`
 - `rules`：统一 `wx.navigateTo`
 - 退出房间 / 房间失效：`wx.reLaunch({ url: '/pages/home/index' })`
@@ -984,6 +993,7 @@ interface IdentityPageData {
 - 展示当前轮次 / 阶段 / 候选人 / 政策轨 / 选举轨
 - 展示个人待办任务
 - 承载投票、提名、选牌、执行权力等私密交互
+- 提供历史记录入口
 
 ### 页面布局
 
@@ -1010,11 +1020,150 @@ interface BoardPageData {
 
 1. 公共桌面始终可见。
 2. 页面提供“我的身份”入口，点击后跳转身份页。
-3. `pendingTask = null` 时显示“当前无需操作，等待其他玩家”。
-4. 已出局玩家显示只读提示，不显示操作入口。
-5. 规则入口固定在右上角。
+3. 页面提供“历史记录”入口，点击后跳转 `packageRoom/pages/history/index`，携带 `roomId` 或复用当前 `gameStore` 的活跃房间上下文。
+4. `pendingTask = null` 时显示“当前无需操作，等待其他玩家”。
+5. 已出局玩家显示只读提示，不显示操作入口。
+6. 规则入口固定在右上角。
 
-## 12.7 结果页 `result`
+## 12.7 历史记录页 `history`
+
+### 页面职责
+
+- 参考 `reference/09-历史记录页.png` 完整实现局内历史记录页
+- 从对局桌面页进入，返回后仍回到对局桌面页
+- 展示本局公共总览、已开始轮次的逐轮记录和图例
+- 当前轮未完成时展示已知事实与下一步状态，不出现无意义空白
+
+### 页面视觉
+
+历史记录页完全参考 `reference/09-历史记录页.png` 的信息层级与视觉气质：
+
+- 深色档案 / 复古桌游桌面背景，铜色边框、细线分隔、旧纸纹理和低饱和红蓝对比
+- 顶部为左上回退按钮、居中标题“历史记录”、房间号、人数局、当前轮标签
+- 第一块大看板为总体情况，横向展示已进行轮次、自由派已颁布、极权派已颁布、当前选举轨
+- 后续看板按轮次倒序或正序连续展示；MVP 按参考图正序展示，当前轮滚动到可见区域即可
+- 每个轮次看板左侧为圆形轮次章，中部为总统提名总理与投票结果，底部为座位投票条，右侧为本轮结算徽章
+- 页底展示图例：赞成、反对、已出局无法投票
+
+### `data` 字段
+
+```ts
+interface HistoryPageData {
+  history: GameHistoryViewModel | null
+  loading: boolean
+  errorText: string
+}
+```
+
+### ViewModel
+
+```ts
+interface GameHistoryViewModel {
+  roomId: string
+  roomCode: string
+  playerCount: number
+  currentRound: number
+  roundsStarted: number
+  roundsCompleted: number
+  tracks: {
+    liberal: number
+    fascist: number
+    electionTracker: number
+  }
+  players: Array<{
+    memberId: string
+    seatIndex: number
+    displayName: string
+    isAlive: boolean
+  }>
+  rounds: RoundHistoryViewModel[]
+}
+
+interface RoundHistoryViewModel {
+  round: number
+  status:
+    | 'nominating'
+    | 'voting'
+    | 'vote_failed'
+    | 'legislating'
+    | 'executing'
+    | 'completed'
+    | 'chaos'
+    | 'game_ended'
+  presidentSeatIndex: number | null
+  presidentName: string | null
+  chancellorSeatIndex: number | null
+  chancellorName: string | null
+  voteSummary: {
+    ja: number
+    nein: number
+    required: number
+    revealed: boolean
+  }
+  votes: Array<{
+    memberId: string
+    seatIndex: number
+    state: 'ja' | 'nein' | 'dead' | 'pending' | 'not_started'
+  }>
+  outcome: {
+    type:
+      | 'pending_nomination'
+      | 'pending_vote'
+      | 'vote_failed'
+      | 'pending_legislation'
+      | 'liberal_policy'
+      | 'fascist_policy'
+      | 'vetoed'
+      | 'chaos_policy'
+      | 'investigation'
+      | 'special_election'
+      | 'policy_peek'
+      | 'execution'
+      | 'win'
+    label: string
+    targetText?: string
+  }
+}
+```
+
+### 数据来源
+
+- 页面进入时优先消费 `gameStore.snapshot.publicState.history`。
+- 若 `gameStore` 中没有快照或版本落后，调用 `gameService.getGameSnapshot(roomId)` 刷新。
+- 历史页只使用公共快照，不读取 `privateState`，不展示任何私密行动结果。
+
+### 未完成轮次显示逻辑
+
+当前轮数据不完整时按阶段渐进展示：
+
+| 当前阶段 | 看板显示 |
+| --- | --- |
+| `nomination` | 展示总统候选人；总理位置显示“等待提名”；投票条为 `not_started`；右侧徽章显示“提名中” |
+| `voting` | 展示候选总统 / 总理；已投票人数可在小字中显示，但单人投票条统一为 `pending`，右侧徽章显示“投票中” |
+| 投票已公开且未通过 | 展示完整赞成 / 反对和每人投票，右侧徽章显示“未通过” |
+| `hitler_check` | 展示候选政府已通过；右侧徽章显示“危险阶段判定中”，不展示内部判定细节 |
+| `legislative_president` | 展示投票通过；右侧徽章显示“总统立法中”，不展示总统手牌或弃牌 |
+| `legislative_chancellor` | 展示投票通过；右侧徽章显示“总理立法中”，不展示总理手牌 |
+| `veto_response` | 展示投票通过；右侧徽章显示“否决待确认” |
+| `executive_action` | 若政策已颁布则展示政策徽章，同时显示“权力执行中”；目标未公开前不预留空白 |
+| `round_result` | 展示本轮公开结算；若下一轮即将开始，右侧徽章显示最终结算 |
+
+显示原则：
+
+1. 未公开单人投票前，不显示赞成 / 反对分布，避免泄露。
+2. 已出局玩家在投票条中使用骷髅态，并显示“已出局无法投票”。
+3. 尚未发生的节点使用明确状态文案，例如“等待提名”“投票中”“立法中”，不留空白。
+4. 调查忠诚只展示“调查 X 号玩家”，不展示阵营结果。
+5. 政策预览只展示“政策预览”，不展示牌面。
+6. 处决展示被处决座位与出局态；若处决直接终局，结果页再展示身份真相。
+
+### 交互方案
+
+- 左上角回退按钮使用可点击 `view`，保留 `role="button"` 与 `aria-label="返回对局桌面"`，避免原生 `button` 默认样式偏移。
+- 页面不提供主动命令操作，不需要 `expectedVersion`。
+- 页面可随对局桌面轮询刷新；若刷新到 `game_ended`，保留当前页展示并提示可返回桌面进入结果页，或由全局路由统一跳转结果页。
+
+## 12.8 结果页 `result`
 
 ### 页面职责
 
@@ -1038,7 +1187,7 @@ interface ResultPageData {
 - 支持“查看规则”
 - 不支持重新加入已失效旧局
 
-## 12.8 规则页 `rules`
+## 12.9 规则页 `rules`
 
 规则页不直接读取 markdown，而是消费 `static/rulesContent.ts` 的结构化数据：
 
@@ -1074,6 +1223,8 @@ interface RuleSection {
 | `policy-track` | 渲染政策轨 | `liberalCount`, `fascistCount`, `vetoUnlocked` | 无 |
 | `election-track` | 渲染选举轨 | `count` | 无 |
 | `public-log` | 渲染最近公开事件 | `items` | `expand` |
+| `history-summary-board` | 历史页总体情况看板 | `summary` | 无 |
+| `round-history-card` | 历史页单轮记录看板 | `round`, `players` | 无 |
 | `pending-task-card` | 当前待办入口 | `task`, `submitting` | `open` |
 | `vote-panel` | 投票面板 | `visible` | `confirmVote`, `cancel` |
 | `policy-picker` | 政策牌选择 | `visible`, `cards`, `mode` | `confirmPick`, `cancel` |
@@ -1163,6 +1314,7 @@ interface GameBoardViewModel {
     vetoUnlocked: boolean
   }
   publicLogs: PublicLogItem[]
+  history: GameHistoryViewModel
   dangerFlags: string[]
 }
 ```

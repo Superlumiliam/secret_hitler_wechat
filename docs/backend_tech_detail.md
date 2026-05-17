@@ -1528,6 +1528,11 @@ type ApplyCommandResult = {
     "requiredCount": 7
   },
   "revealedVotes": null,
+  "history": {
+    "roundsStarted": 4,
+    "roundsCompleted": 3,
+    "rounds": []
+  },
   "publicHistory": []
 }
 ```
@@ -1539,6 +1544,30 @@ type ApplyCommandResult = {
 - 玩家手牌
 - 调查结果
 - 牌顶预览内容
+- 未公开投票
+
+### 13.2.1 历史记录公共投影
+
+`publicState.history` 专供局内历史记录页使用，应由 `game_core` 当前公开状态与 `game_events.publicPayload` 生成，不从 `privatePayload` 或 `internalPayload` 读取。
+
+生成目标：
+
+- 总览：`roundsStarted`、`roundsCompleted`、房间人数、政策轨和选举轨由公共快照其他字段共同表达
+- 逐轮：总统候选人、总理候选人、公开后的投票、政府是否通过、公开政策、否决、混乱政策、总统权力公开目标、处决目标、胜负触发
+- 当前轮：即使未完成也必须生成一张轮次记录，用 `pending_nomination`、`pending_vote`、`pending_legislation`、`executing` 等公开状态表达进度
+
+隐私边界：
+
+- 投票未公开前，存活玩家只输出 `pending` 或 `not_started`，不得输出真实 `JA / NEIN`
+- 总统弃掉的牌、总理弃掉的牌、调查结果、政策预览牌面不得进入历史投影
+- 调查忠诚只投影公开目标；政策预览只投影“已执行政策预览”
+- 处决只投影公开目标和出局状态；身份真相仍只在终局结果页按结果快照公开
+
+实现建议：
+
+1. 按 `round` 聚合 `game_events` 的公开事件，先生成已完成轮次。
+2. 再用 `game_core.currentPhase`、候选政府、当选政府、投票进度和政策轨补齐当前轮记录。
+3. 每次命令事务完成后，随公共快照全量重建 `history`，避免局部 patch 造成轮次看板不一致。
 
 ## 13.3 私密快照生成
 
