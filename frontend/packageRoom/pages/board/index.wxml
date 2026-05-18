@@ -83,6 +83,22 @@
           <view class="election-progress">当前进度 {{board.electionTracker}} / 3</view>
         </view>
 
+        <view class="deck-piles-panel">
+          <view wx:for="{{board.deckPiles}}" wx:key="key" class="{{item.pileClass}}">
+            <view class="deck-card-stack" aria-hidden="true">
+              <view class="deck-card-shadow"></view>
+              <view class="deck-card-back">
+                <view class="deck-card-frame"></view>
+                <view class="deck-card-seal"></view>
+              </view>
+            </view>
+            <view class="deck-pile-copy">
+              <view class="deck-pile-label">{{item.label}}</view>
+              <view class="deck-pile-count">{{item.countText}}</view>
+            </view>
+          </view>
+        </view>
+
         <view class="status-strip">
           <view class="status-icon">♟</view>
           <view class="status-text">{{statusText}}</view>

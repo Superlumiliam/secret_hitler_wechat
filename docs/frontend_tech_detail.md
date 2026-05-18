@@ -990,7 +990,7 @@ interface IdentityPageData {
 ### 页面职责
 
 - 展示公共桌面
-- 展示当前轮次 / 阶段 / 候选人 / 政策轨 / 选举轨
+- 展示当前轮次 / 阶段 / 候选人 / 政策轨 / 选举轨 / 政策牌堆张数
 - 展示个人待办任务
 - 承载投票、提名、选牌、执行权力等私密交互
 - 提供历史记录入口
@@ -1000,7 +1000,7 @@ interface IdentityPageData {
 从上到下分 5 块：
 
 1. `phase-banner`
-2. `government-badge + tracks`
+2. `government-badge + tracks + deck-piles`
 3. `seat-list`
 4. `public-log`
 5. `pending-task-card / private overlay`
@@ -1024,6 +1024,7 @@ interface BoardPageData {
 4. `pendingTask = null` 时显示“当前无需操作，等待其他玩家”。
 5. 已出局玩家显示只读提示，不显示操作入口。
 6. 规则入口固定在右上角。
+7. 政策轨区域同时展示抽牌堆与弃牌堆：使用政策牌背图做堆叠卡牌视觉，旁边显示公开张数，不显示牌面、牌序或弃牌构成。
 
 ## 12.7 历史记录页 `history`
 
@@ -1227,6 +1228,7 @@ interface RuleSection {
 | `phase-banner` | 阶段提示 | `phase`, `title`, `description`, `danger` | 无 |
 | `policy-track` | 渲染政策轨 | `liberalCount`, `fascistCount`, `vetoUnlocked` | 无 |
 | `election-track` | 渲染选举轨 | `count` | 无 |
+| `deck-piles` | 渲染抽牌堆 / 弃牌堆计数 | `drawCount`, `discardCount` | 无 |
 | `public-log` | 渲染最近公开事件 | `items` | `expand` |
 | `history-summary-board` | 历史页总体情况看板 | `summary` | 无 |
 | `round-history-card` | 历史页单轮记录看板 | `round`, `players` | 无 |
@@ -1250,6 +1252,13 @@ interface RuleSection {
 - 桌面页只展示最近 `8-12` 条摘要
 - 结果页展示完整时间线
 - 日志只渲染后端已公开事件
+
+#### `deck-piles`
+
+- 抽牌堆与弃牌堆均使用本地或云存储的政策牌背素材，避免用纯 CSS 方块代替主要视觉。
+- 数字徽章只展示张数：`drawCount`、`discardCount`。
+- `drawCount = 0` 或 `discardCount = 0` 时保留空堆占位，避免桌面布局跳动。
+- 组件不得接收或渲染牌面数组；任何牌面、牌序、弃牌构成都只能存在于后端内部状态或当前玩家私密任务中。
 
 #### `policy-picker`
 
@@ -1317,6 +1326,10 @@ interface GameBoardViewModel {
     fascist: number
     electionTracker: number
     vetoUnlocked: boolean
+  }
+  deckPiles: {
+    drawCount: number
+    discardCount: number
   }
   publicLogs: PublicLogItem[]
   history: GameHistoryViewModel
@@ -1743,7 +1756,7 @@ MVP 尽量少图化：
 - 席位视角切换只保存在前端本地 `controlledMemberId`，不做持久化的 `devSwitchControlledSeat`。
 - 席位视角切换后必须带 `controlledMemberId` 重新拉取该席位对应的公共快照和私密快照。
 - 调试模式下的游戏内操作仍通过正式服务层提交命令，并携带 `commandId`、`expectedVersion` 和当前 `controlledMemberId`，不用本地状态伪造流程推进。
-- 场景种子、身份总览、牌堆摘要、复杂事件日志暂不进入第一阶段。
+- 场景种子、身份总览、包含牌序或构成的牌堆摘要、复杂事件日志暂不进入第一阶段；正式桌面的抽牌堆 / 弃牌堆张数属于公共信息展示，应随对局桌面实现。
 
 ## 22. 开发顺序建议
 

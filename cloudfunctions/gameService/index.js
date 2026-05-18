@@ -317,6 +317,13 @@ function buildInitialPolicyState(options = {}) {
   };
 }
 
+function buildPublicPolicyDeck(policyState) {
+  return {
+    drawCount: Array.isArray(policyState && policyState.drawPile) ? policyState.drawPile.length : 0,
+    discardCount: Array.isArray(policyState && policyState.discardPile) ? policyState.discardPile.length : 0,
+  };
+}
+
 function pickInitialPresidentCandidateId(members, options = {}) {
   if (!members.length) {
     return "";
@@ -1049,6 +1056,7 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
       electionTracker: gameCore.electionTracker,
       liberalPolicyCount: gameCore.liberalPolicyCount,
       fascistPolicyCount: gameCore.fascistPolicyCount,
+      policyDeck: buildPublicPolicyDeck(gameCore.policyState),
       vetoUnlocked: gameCore.vetoUnlocked,
       executiveActionType:
         gameCore.phase === "executive_action" && gameCore.phaseData ? gameCore.phaseData.actionType || null : null,

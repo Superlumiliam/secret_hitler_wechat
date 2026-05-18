@@ -318,6 +318,10 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
   "electionTracker": 1,
   "liberalPolicyCount": 2,
   "fascistPolicyCount": 3,
+  "policyDeck": {
+    "drawCount": 9,
+    "discardCount": 2
+  },
   "vetoUnlocked": false,
   "executiveActionType": null,
   "voteProgress": {
@@ -371,6 +375,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `currentPresidentCandidateId` / `currentChancellorCandidateId` 表示“正在提名或正在投票的候选政府”
 - `currentPresidentId` / `currentChancellorId` 表示“已当选并正在执政的政府”
 - `previousElectedPresidentId` / `previousElectedChancellorId` 用于前端展示任期限制提示
+- `policyDeck.drawCount` / `policyDeck.discardCount` 只表示抽牌堆和弃牌堆当前张数，用于公共桌面牌堆显示
 - `revealedVotes` 在投票未公开前必须为 `null`；公开后为完整数组
 - `history` 是局内历史记录页的公共投影，只能由公开事实生成，不得包含私密牌面、调查结果或未公开投票
 - `publicHistory` 只写公共事实摘要，不写私密结果
@@ -379,6 +384,8 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 - 角色映射
 - 牌堆顺序
+- 牌堆构成
+- 弃牌牌面
 - 玩家手牌
 - 调查结果
 - 牌顶预览内容

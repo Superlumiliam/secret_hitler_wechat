@@ -68,7 +68,7 @@ P0 目标是让 `5-10` 人可以不依赖主持人完成一整局标准《secret
 
 - 前端实现 `packageRoom/pages/board`，作为线下面杀的公共局势板。
 - 页面常驻展示：当前阶段、当前回合、当前行动人、总统候选人、总理候选人、当选总统、当选总理、存活玩家、已出局玩家。
-- 展示自由派政策轨、极权派政策轨、选举轨、否决权是否解锁、危险阶段提示。
+- 展示自由派政策轨、极权派政策轨、抽牌堆 / 弃牌堆张数、选举轨、否决权是否解锁、危险阶段提示。
 - 展示最近公开事件：提名、投票结果、政策颁布、执行权力、处决、胜负判定。
 - 桌面页通过 `gameService.getGameSnapshot` 轮询刷新，使用公共快照 + 当前玩家私密任务渲染。
 - 所有按钮只代表“提交意图”，提交成功后仍以服务端返回快照为准。
@@ -76,7 +76,7 @@ P0 目标是让 `5-10` 人可以不依赖主持人完成一整局标准《secret
 [ ] 对局快照前端模型与组件
 
 - 补齐 `types/game.ts`、`types/task.ts`、`mappers/gameMapper.ts`、`mappers/taskMapper.ts`。
-- 实现基础组件：`phase-banner`、`policy-track`、`election-track`、`seat-list`、`seat-item`、`government-badge`、`public-log`、`pending-task-card`。
+- 实现基础组件：`phase-banner`、`policy-track`、`deck-piles`、`election-track`、`seat-list`、`seat-item`、`government-badge`、`public-log`、`pending-task-card`。
 - 组件只消费映射后的 view-model，不直接拼接后端原始字段。
 - 处理加载态、空态、版本冲突、房间已结束、当前用户已出局等状态。
 

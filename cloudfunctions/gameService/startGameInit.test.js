@@ -131,6 +131,11 @@ function assertPublicSnapshotSafe(projection) {
   assert.strictEqual(publicState.liberalPolicyCount, 0, "liberal track should start at 0");
   assert.strictEqual(publicState.fascistPolicyCount, 0, "fascist track should start at 0");
   assert.strictEqual(publicState.electionTracker, 0, "election tracker should start at 0");
+  assert.deepStrictEqual(
+    publicState.policyDeck,
+    { drawCount: 17, discardCount: 0 },
+    "public snapshot should expose only policy deck counts",
+  );
   assert.strictEqual(Boolean(publicState.history), true, "public snapshot should include history projection");
   assert.strictEqual(publicState.history.roundsStarted, 1, "initial history should start round one");
   assert.strictEqual(publicState.history.roundsCompleted, 0, "initial history should not complete current round");
@@ -278,6 +283,11 @@ function assertLegislativeChancellorVisibility() {
 
   const publicPayload = buildPublicSnapshotPayload(room, gameCore, members, [], new Date("2026-05-12T00:02:00.000Z"));
   assert.strictEqual(hasSecretKey(publicPayload), false, "public chancellor snapshot should not contain secrets");
+  assert.deepStrictEqual(
+    publicPayload.publicState.policyDeck,
+    { drawCount: 3, discardCount: 1 },
+    "public chancellor snapshot should expose only deck counts",
+  );
   assert.strictEqual(
     JSON.stringify(publicPayload).includes(chancellorHand.join(",")),
     false,

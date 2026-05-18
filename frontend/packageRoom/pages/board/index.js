@@ -243,11 +243,34 @@ Page({
       chancellorName: chancellor ? chancellor.displayName : "待提名",
       liberalPolicyCount: publicState.liberalPolicyCount || 0,
       fascistPolicyCount: publicState.fascistPolicyCount || 0,
+      deckPiles: this.createDeckPiles(publicState.policyDeck),
       electionTracker: publicState.electionTracker || 0,
       vetoUnlocked: Boolean(publicState.vetoUnlocked),
       executiveActionType: publicState.executiveActionType || "",
       nextSpecialPresidentCandidateId: publicState.nextSpecialPresidentCandidateId || "",
     };
+  },
+
+  createDeckPiles(policyDeck) {
+    const drawCount = Math.max(0, Number(policyDeck && policyDeck.drawCount) || 0);
+    const discardCount = Math.max(0, Number(policyDeck && policyDeck.discardCount) || 0);
+
+    return [
+      {
+        key: "draw",
+        label: "抽牌堆",
+        count: drawCount,
+        pileClass: `deck-pile is-draw ${drawCount > 0 ? "has-cards" : "is-empty"}`,
+        countText: `${drawCount} 张`,
+      },
+      {
+        key: "discard",
+        label: "弃牌堆",
+        count: discardCount,
+        pileClass: `deck-pile is-discard ${discardCount > 0 ? "has-cards" : "is-empty"}`,
+        countText: `${discardCount} 张`,
+      },
+    ];
   },
 
   createSeats(snapshot, avatarUrlByFileId) {

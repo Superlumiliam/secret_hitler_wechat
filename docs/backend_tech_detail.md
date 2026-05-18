@@ -1090,6 +1090,7 @@ const initialDeck: PolicyType[] = [
 
 - 预洗只是维护 `drawPile`，不改变当前玩家手里的 `cards`
 - 只允许后端修改牌顺序
+- 公共快照只投影 `drawPile.length` 与 `discardPile.length`，用于桌面显示抽牌堆 / 弃牌堆张数；不得投影数组内容、牌序或弃牌牌面
 
 ## 10.4 首任总统生成
 
@@ -1521,6 +1522,10 @@ type ApplyCommandResult = {
   "electionTracker": 1,
   "liberalPolicyCount": 2,
   "fascistPolicyCount": 3,
+  "policyDeck": {
+    "drawCount": 9,
+    "discardCount": 2
+  },
   "vetoUnlocked": false,
   "executiveActionType": null,
   "voteProgress": {
@@ -1541,6 +1546,8 @@ type ApplyCommandResult = {
 
 - 角色映射
 - 牌堆顺序
+- 牌堆构成
+- 弃牌牌面
 - 玩家手牌
 - 调查结果
 - 牌顶预览内容
