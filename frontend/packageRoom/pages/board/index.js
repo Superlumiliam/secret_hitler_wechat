@@ -42,8 +42,7 @@ Page({
     isLeaving: false,
     snapshot: null,
     board: null,
-    topSeats: [],
-    bottomSeats: [],
+    seats: [],
     liberalTrack: [],
     fascistTrack: [],
     electionTrack: [],
@@ -183,13 +182,11 @@ Page({
 
     const board = this.createBoard(snapshot);
     const seats = this.createSeats(snapshot, avatarUrlByFileId);
-    const splitIndex = Math.ceil(seats.length / 2);
 
     this.setData({
       snapshot,
       board,
-      topSeats: seats.slice(0, splitIndex),
-      bottomSeats: seats.slice(splitIndex),
+      seats,
       liberalTrack: this.createLiberalTrack(board.liberalPolicyCount),
       fascistTrack: this.createFascistTrack(board.targetPlayerCount, board.fascistPolicyCount),
       electionTrack: this.createElectionTrack(board.electionTracker),
@@ -653,13 +650,6 @@ Page({
   onTapRules() {
     wx.showToast({
       title: "规则页待接入",
-      icon: "none",
-    });
-  },
-
-  onTapSettings() {
-    wx.showToast({
-      title: "设置待接入",
       icon: "none",
     });
   },

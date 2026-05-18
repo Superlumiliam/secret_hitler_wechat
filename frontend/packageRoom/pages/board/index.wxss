@@ -1,7 +1,7 @@
 .board-page {
   position: relative;
   min-height: 100vh;
-  padding: calc(36rpx + env(safe-area-inset-top)) 18rpx calc(24rpx + env(safe-area-inset-bottom));
+  padding: calc(72rpx + env(safe-area-inset-top)) 18rpx calc(24rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
   overflow-x: hidden;
   color: #e1b373;
@@ -30,7 +30,7 @@
 }
 
 .board-noise::before {
-  top: 96rpx;
+  top: 132rpx;
 }
 
 .board-noise::after {
@@ -40,11 +40,10 @@
 .top-bar {
   position: relative;
   z-index: 2;
-  min-height: 74rpx;
+  min-height: 58rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 10rpx;
 }
 
 .back-control {
@@ -64,6 +63,16 @@
 .action-hover,
 .secondary-hover {
   opacity: 0.72;
+}
+
+.room-meta-row {
+  position: relative;
+  z-index: 2;
+  min-height: 100rpx;
+  margin-top: 10rpx;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
 }
 
 .room-head {
@@ -120,7 +129,6 @@
   flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
-  gap: 10rpx;
 }
 
 .tool-control {
@@ -136,25 +144,6 @@
   width: 38rpx;
   height: 38rpx;
   margin-bottom: 4rpx;
-}
-
-.gear-icon {
-  border-radius: 50%;
-  border: 9rpx solid #d9ad73;
-  box-sizing: border-box;
-  box-shadow: 0 0 12rpx rgba(217, 173, 115, 0.22);
-}
-
-.gear-icon::after {
-  content: "";
-  position: absolute;
-  left: 7rpx;
-  top: 7rpx;
-  width: 5rpx;
-  height: 5rpx;
-  border: 4rpx solid #061416;
-  border-radius: 50%;
-  background: #d9ad73;
 }
 
 .rules-icon {
@@ -234,18 +223,18 @@
 }
 
 .seat-row {
-  display: flex;
-  justify-content: center;
-  gap: 8rpx;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10rpx;
+  padding: 2rpx 8rpx 0;
 }
 
 .seat-card {
   position: relative;
-  flex: 1 1 0;
-  max-width: 136rpx;
+  width: 100%;
   min-width: 0;
-  height: 142rpx;
-  padding: 12rpx 6rpx 8rpx;
+  height: 136rpx;
+  padding: 12rpx 6rpx 7rpx;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;

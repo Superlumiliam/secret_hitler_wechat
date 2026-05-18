@@ -4,6 +4,9 @@
   <block wx:if="{{board}}">
     <view class="top-bar">
       <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回首页">‹</view>
+    </view>
+
+    <view class="room-meta-row">
       <view class="room-head">
         <view class="room-title">
           <text class="room-label">房间号</text>
@@ -13,10 +16,6 @@
         <view class="round-pill">第{{board.roundNo}}轮</view>
       </view>
       <view class="top-actions">
-        <view class="tool-control" bindtap="onTapSettings" role="button" aria-label="设置">
-          <view class="tool-icon gear-icon"></view>
-          <view class="tool-text">设置</view>
-        </view>
         <view class="tool-control" bindtap="onTapRules" role="button" aria-label="规则说明">
           <view class="tool-icon rules-icon"></view>
           <view class="tool-text">规则说明</view>
@@ -31,8 +30,8 @@
         <view class="dev-hint">点击席位切换操控视角</view>
       </view>
 
-      <view class="seat-row top-seat-row">
-        <view wx:for="{{topSeats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="切换操控席位">
+      <view class="seat-row">
+        <view wx:for="{{seats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="切换操控席位">
           <view class="seat-no">{{item.seatNo}}</view>
           <view class="avatar">
             <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
@@ -116,17 +115,6 @@
               </view>
             </view>
           </block>
-        </view>
-      </view>
-
-      <view class="seat-row bottom-seat-row">
-        <view wx:for="{{bottomSeats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="切换操控席位">
-          <view class="seat-no">{{item.seatNo}}</view>
-          <view class="avatar">
-            <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
-          </view>
-          <view class="seat-name">{{item.name}}</view>
-          <view wx:if="{{item.roleLabel}}" class="role-badge">{{item.roleLabel}}</view>
         </view>
       </view>
 
