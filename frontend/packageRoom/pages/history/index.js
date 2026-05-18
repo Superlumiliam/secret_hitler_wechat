@@ -1,14 +1,3 @@
-const STATUS_LABELS = {
-  nominating: "提名中",
-  voting: "投票中",
-  vote_failed: "未通过",
-  legislating: "立法中",
-  executing: "执行中",
-  completed: "已完成",
-  chaos: "混乱政策",
-  game_ended: "对局结束",
-};
-
 const OUTCOME_CLASS_BY_TYPE = {
   pending_nomination: "is-pending",
   pending_vote: "is-pending",
@@ -21,11 +10,11 @@ const OUTCOME_CLASS_BY_TYPE = {
   win: "is-win",
 };
 
-function getSeatLabel(member) {
+function getSeatLabel(member, fallback = "待定") {
   if (!member) {
-    return "待定";
+    return fallback;
   }
-  return `${member.seatIndex}号 ${member.displayName}`;
+  return `${member.seatIndex}号`;
 }
 
 Page({
@@ -141,12 +130,10 @@ Page({
 
       return {
         round: round.round,
-        statusText: STATUS_LABELS[round.status] || "进行中",
-        showStatus: round.status !== "executing",
         presidentText: getSeatLabel(president),
-        chancellorText: getSeatLabel(chancellor),
+        chancellorText: getSeatLabel(chancellor, "等待提名"),
         voteText: voteSummary.revealed
-          ? `${voteSummary.ja || 0} 赞成 / ${voteSummary.nein || 0} 反对`
+          ? `${voteSummary.ja || 0}赞成/${voteSummary.nein || 0}反对`
           : this.getHiddenVoteText(round.status),
         outcomeText: this.createOutcomeText(outcome),
         outcomeClass: `outcome-badge ${OUTCOME_CLASS_BY_TYPE[outcome.type] || "is-pending"}`,

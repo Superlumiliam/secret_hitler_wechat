@@ -45,31 +45,32 @@
 
     <view class="round-list">
       <view wx:for="{{rounds}}" wx:key="round" class="round-board">
-        <view class="round-medal">
-          <view class="round-small">第</view>
-          <view class="round-number">{{item.round}}</view>
-          <view class="round-small">轮</view>
+        <view class="round-side">
+          <view class="round-medal">
+            <view class="round-small">第</view>
+            <view class="round-number">{{item.round}}</view>
+            <view class="round-small">轮</view>
+          </view>
+          <view class="round-outcome">
+            <view class="{{item.outcomeClass}}">{{item.outcomeText}}</view>
+          </view>
         </view>
         <view class="round-main">
           <view class="round-line">
             <text class="president-text">{{item.presidentText}}</text>
-            <text class="role-text"> 总统提名 </text>
+            <text class="role-text">总统提名</text>
             <text class="chancellor-text">{{item.chancellorText}}</text>
-            <text class="role-text"> 总理</text>
+            <text class="role-text">总理</text>
           </view>
           <view class="vote-result-line">投票结果：<text class="vote-result-text">{{item.voteText}}</text></view>
-          <view class="vote-strip" style="grid-template-columns: repeat({{item.votes.length}}, minmax(0, 1fr));">
-            <view wx:for="{{item.votes}}" wx:key="memberId" class="{{item.cellClass}}">
-              <view class="seat-no">{{item.seatIndex}}</view>
-              <view class="vote-mark">{{item.mark}}</view>
-            </view>
+        </view>
+        <view class="vote-strip" style="grid-template-columns: repeat({{item.votes.length}}, minmax(0, 1fr));">
+          <view wx:for="{{item.votes}}" wx:key="memberId" class="{{item.cellClass}}">
+            <view class="seat-no">{{item.seatIndex}}</view>
+            <view class="vote-mark">{{item.mark}}</view>
           </view>
-          <view wx:if="{{item.executiveResultText}}" class="executive-result">{{item.executiveResultText}}</view>
         </view>
-        <view class="round-outcome">
-          <view class="{{item.outcomeClass}}">{{item.outcomeText}}</view>
-          <view wx:if="{{item.showStatus}}" class="round-status">{{item.statusText}}</view>
-        </view>
+        <view wx:if="{{item.executiveResultText}}" class="executive-result">{{item.executiveResultText}}</view>
       </view>
     </view>
 
