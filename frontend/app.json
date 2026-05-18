@@ -10,7 +10,8 @@
       "pages": [
         "pages/lobby/index",
         "pages/board/index",
-        "pages/identity/index"
+        "pages/identity/index",
+        "pages/history/index"
       ]
     }
   ],

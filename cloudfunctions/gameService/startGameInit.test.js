@@ -38,6 +38,7 @@ Module._load = originalLoad;
 const {
   ROLE_PRESET_BY_PLAYER_COUNT,
   buildPrivateSnapshotPayload,
+  buildPublicHistoryProjection,
   buildPublicSnapshotPayload,
   createInitialGameProjection,
   drawPolicyCards,
@@ -130,6 +131,14 @@ function assertPublicSnapshotSafe(projection) {
   assert.strictEqual(publicState.liberalPolicyCount, 0, "liberal track should start at 0");
   assert.strictEqual(publicState.fascistPolicyCount, 0, "fascist track should start at 0");
   assert.strictEqual(publicState.electionTracker, 0, "election tracker should start at 0");
+  assert.strictEqual(Boolean(publicState.history), true, "public snapshot should include history projection");
+  assert.strictEqual(publicState.history.roundsStarted, 1, "initial history should start round one");
+  assert.strictEqual(publicState.history.roundsCompleted, 0, "initial history should not complete current round");
+  assert.strictEqual(
+    publicState.history.rounds[0].outcome.type,
+    "pending_nomination",
+    "initial history should show pending nomination",
+  );
 }
 
 function assertEventsSafe(projection) {
@@ -453,6 +462,164 @@ function assertExecutivePrivateAndPublicProjection() {
   );
 }
 
+function assertHistoryProjectionPrivacyAndCurrentRound() {
+  const members = makeMembers(7);
+  const room = {
+    roomId: "room_history",
+    roomCode: "909001",
+  };
+  const projection = createInitialGameProjection(room, members, {
+    gameId: "game_history",
+    createdAt: new Date("2026-05-12T00:00:00.000Z"),
+    pickIndex: () => 0,
+  });
+  const baseHistory = projection.publicSnapshotPayload.publicState.publicHistory;
+  const votingCore = {
+    ...projection.gameCore,
+    version: 4,
+    phase: "voting",
+    currentPresidentCandidateId: "mem_1",
+    currentChancellorCandidateId: "mem_3",
+    phaseData: {
+      presidentCandidateId: "mem_1",
+      chancellorCandidateId: "mem_3",
+      votesByMemberId: {
+        mem_1: { vote: "JA", commandId: "cmd_1" },
+        mem_2: { vote: "NEIN", commandId: "cmd_2" },
+      },
+    },
+  };
+  const votingPayload = buildPublicSnapshotPayload(
+    room,
+    votingCore,
+    members,
+    baseHistory.concat({
+      eventId: "evt_game_history_3",
+      round: 1,
+      phase: "nomination",
+      type: "CHANCELLOR_NOMINATED",
+      title: "总理候选人提名",
+      summary: "1号玩家 提名 3号玩家 为总理候选人",
+      createdAt: "2026-05-12T00:01:00.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+    }),
+    new Date("2026-05-12T00:02:00.000Z"),
+  );
+  const currentRound = votingPayload.publicState.history.rounds[0];
+  assert.strictEqual(currentRound.status, "voting", "current voting round should be marked voting");
+  assert.strictEqual(currentRound.voteSummary.revealed, false, "unrevealed vote summary should remain hidden");
+  assert.strictEqual(currentRound.voteSummary.ja, 0, "unrevealed vote summary should not count JA");
+  assert.strictEqual(currentRound.voteSummary.nein, 0, "unrevealed vote summary should not count NEIN");
+  assert.strictEqual(
+    currentRound.votes.some((vote) => vote.state === "ja"),
+    false,
+    "unrevealed history should not expose JA state",
+  );
+  assert.strictEqual(
+    currentRound.votes.some((vote) => vote.state === "nein"),
+    false,
+    "unrevealed history should not expose NEIN state",
+  );
+  assert.strictEqual(
+    currentRound.votes.filter((vote) => vote.state === "pending").length,
+    2,
+    "submitted unrevealed ballots should only show pending",
+  );
+
+  const legislativeCore = {
+    ...projection.gameCore,
+    version: 5,
+    phase: "legislative_president",
+    currentPresidentCandidateId: "mem_1",
+    currentChancellorCandidateId: "mem_3",
+    currentPresidentId: "mem_1",
+    currentChancellorId: "mem_3",
+    policyState: {
+      drawPile: ["LIBERAL", "FASCIST"],
+      discardPile: [],
+      presidentHand: ["FASCIST", "LIBERAL", "FASCIST"],
+      chancellorHand: null,
+      peekPile: null,
+    },
+    phaseData: {
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      cards: ["FASCIST", "LIBERAL", "FASCIST"],
+    },
+  };
+  const legislativeHistory = buildPublicHistoryProjection(legislativeCore, members, []);
+  assert.strictEqual(
+    legislativeHistory.rounds[0].outcome.type,
+    "pending_legislation",
+    "legislative round should show pending legislation",
+  );
+  assert.strictEqual(
+    JSON.stringify(legislativeHistory).includes("FASCIST") || JSON.stringify(legislativeHistory).includes("LIBERAL"),
+    false,
+    "history projection should not expose legislative hand",
+  );
+
+  const executionCore = {
+    ...projection.gameCore,
+    version: 6,
+    phase: "executive_action",
+    currentPresidentCandidateId: "mem_1",
+    currentChancellorCandidateId: "mem_3",
+    currentPresidentId: "mem_1",
+    currentChancellorId: "mem_3",
+    fascistPolicyCount: 4,
+    phaseData: {
+      presidentId: "mem_1",
+      actionType: "EXECUTION",
+      allowedTargetIds: ["mem_1", "mem_2", "mem_3"],
+    },
+  };
+  const executionHistory = buildPublicHistoryProjection(executionCore, members, []);
+  assert.strictEqual(executionHistory.rounds[0].status, "executing", "executive round should be marked executing");
+  assert.strictEqual(executionHistory.rounds[0].outcome.type, "execution", "execution should be public outcome type");
+  assert.strictEqual(executionHistory.rounds[0].outcome.label, "处决待执行", "execution should have clear pending label");
+
+  const enactedExecutionCore = {
+    ...executionCore,
+    fascistPolicyCount: 4,
+  };
+  const enactedExecutionHistory = buildPublicHistoryProjection(enactedExecutionCore, members, [
+    {
+      eventId: "evt_game_history_4",
+      round: 1,
+      phase: "legislative_chancellor",
+      type: "POLICY_ENACTED",
+      title: "政策颁布",
+      summary: "3号玩家 颁布了 1 张极权派政策，触发总统权力",
+      createdAt: "2026-05-12T00:03:00.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      enactedPolicy: "FASCIST",
+      liberalPolicyCount: 0,
+      fascistPolicyCount: 4,
+      executiveActionType: "EXECUTION",
+      winner: null,
+      winReason: null,
+    },
+  ]);
+  assert.strictEqual(
+    enactedExecutionHistory.rounds[0].status,
+    "executing",
+    "policy-enacted executive round should still show executing status",
+  );
+  assert.strictEqual(
+    enactedExecutionHistory.rounds[0].outcome.type,
+    "fascist_policy",
+    "executive action should preserve enacted policy outcome",
+  );
+  assert.strictEqual(
+    enactedExecutionHistory.rounds[0].outcome.label,
+    "极权派政策",
+    "executive action should preserve enacted policy label",
+  );
+}
+
 Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
   const playerCount = Number(playerCountKey);
   const room = {
@@ -483,5 +650,6 @@ assertNominationTargetOptions();
 assertLegislativePresidentVisibility();
 assertLegislativeChancellorVisibility();
 assertExecutivePrivateAndPublicProjection();
+assertHistoryProjectionPrivacyAndCurrentRound();
 
 console.log("startGame initialization tests passed");

@@ -76,6 +76,7 @@ Page({
   onLoad(options) {
     this.setData({
       roomId: options.roomId || "",
+      controlledMemberId: options.controlledMemberId || "",
     });
     this.loadGameSnapshot();
   },
@@ -657,9 +658,18 @@ Page({
   },
 
   onTapHistory() {
-    wx.showToast({
-      title: "历史记录待接入",
-      icon: "none",
+    if (!this.data.roomId) {
+      wx.showToast({
+        title: "房间信息缺失",
+        icon: "none",
+      });
+      return;
+    }
+
+    wx.navigateTo({
+      url: `/packageRoom/pages/history/index?roomId=${encodeURIComponent(this.data.roomId)}&controlledMemberId=${encodeURIComponent(
+        this.data.controlledMemberId || "",
+      )}`,
     });
   },
 

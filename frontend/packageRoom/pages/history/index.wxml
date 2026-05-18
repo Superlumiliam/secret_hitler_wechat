@@ -1,0 +1,88 @@
+<view class="history-page">
+  <view class="page-frame"></view>
+
+  <block wx:if="{{header}}">
+    <view class="top-bar">
+      <view class="back-control" bindtap="onBackBoard" hover-class="icon-hover" role="button" aria-label="返回对局桌面">‹</view>
+      <view class="title-wrap">
+        <view class="wing-line"></view>
+        <view class="page-title">历史记录</view>
+        <view class="wing-line"></view>
+      </view>
+    </view>
+
+    <view class="room-strip">
+      <view class="room-code-wrap">
+        <text class="room-label">房间号</text>
+        <text class="room-code">{{header.roomCode}}</text>
+      </view>
+      <view class="header-pill">{{header.playerCount}}人局</view>
+      <view class="header-pill">第{{header.round}}轮</view>
+    </view>
+
+    <view class="summary-board">
+      <view class="summary-item">
+        <view class="summary-label">已进行轮次</view>
+        <view class="summary-value"><text class="big-number">{{summary.roundsStarted}}</text><text class="limit-text"> / 无限</text></view>
+        <view class="summary-foot">已完成 {{summary.roundsCompleted}} 轮</view>
+      </view>
+      <view class="summary-item is-liberal">
+        <view class="summary-label">自由派已颁布</view>
+        <view class="summary-value"><text class="big-number">{{summary.liberalPolicyCount}}</text><text class="limit-text"> / 5</text></view>
+      </view>
+      <view class="summary-item is-fascist">
+        <view class="summary-label">极权派已颁布</view>
+        <view class="summary-value"><text class="big-number">{{summary.fascistPolicyCount}}</text><text class="limit-text"> / 6</text></view>
+      </view>
+      <view class="summary-item">
+        <view class="summary-label">当前选举轨</view>
+        <view class="summary-value"><text class="big-number">{{summary.electionTracker}}</text><text class="limit-text"> / 3</text></view>
+        <view class="tracker-row">
+          <view wx:for="{{summary.electionDots}}" wx:key="slot" class="{{item.dotClass}}">{{item.slot}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="round-list">
+      <view wx:for="{{rounds}}" wx:key="round" class="round-board">
+        <view class="round-medal">
+          <view class="round-small">第</view>
+          <view class="round-number">{{item.round}}</view>
+          <view class="round-small">轮</view>
+        </view>
+        <view class="round-main">
+          <view class="round-line">
+            <text class="president-text">{{item.presidentText}}</text>
+            <text class="role-text"> 总统提名 </text>
+            <text class="chancellor-text">{{item.chancellorText}}</text>
+            <text class="role-text"> 总理</text>
+          </view>
+          <view class="vote-result-line">投票结果：<text class="vote-result-text">{{item.voteText}}</text></view>
+          <view class="vote-strip" style="grid-template-columns: repeat({{item.votes.length}}, minmax(0, 1fr));">
+            <view wx:for="{{item.votes}}" wx:key="memberId" class="{{item.cellClass}}">
+              <view class="seat-no">{{item.seatIndex}}</view>
+              <view class="vote-mark">{{item.mark}}</view>
+            </view>
+          </view>
+        </view>
+        <view class="round-outcome">
+          <view class="{{item.outcomeClass}}">{{item.outcomeText}}</view>
+          <view class="round-status">{{item.statusText}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="legend">
+      <view class="legend-item"><text class="legend-dot is-ja">✓</text>赞成</view>
+      <view class="legend-item"><text class="legend-dot is-nein">×</text>反对</view>
+      <view class="legend-item"><text class="legend-dot is-dead">☠</text>已出局（无法投票）</view>
+      <view class="legend-item"><text class="legend-dot is-pending">…</text>未公开/等待</view>
+    </view>
+  </block>
+
+  <view wx:elif="{{errorText}}" class="history-loading">
+    <view>{{errorText}}</view>
+    <view class="retry-action" bindtap="loadHistorySnapshot" hover-class="icon-hover" role="button">重试</view>
+  </view>
+  <view wx:else class="history-loading">正在调取历史档案...</view>
+</view>

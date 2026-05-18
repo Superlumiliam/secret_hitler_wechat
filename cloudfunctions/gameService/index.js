@@ -559,6 +559,377 @@ function createVoteResult(gameCore, members, passed) {
   };
 }
 
+function getPolicyLabel(policy) {
+  return policy === "LIBERAL" ? "自由派政策" : "极权派政策";
+}
+
+function getExecutiveActionLabel(actionType) {
+  if (actionType === "INVESTIGATE") {
+    return "调查忠诚";
+  }
+  if (actionType === "SPECIAL_ELECTION") {
+    return "特别选举";
+  }
+  if (actionType === "POLICY_PEEK") {
+    return "政策预览";
+  }
+  if (actionType === "EXECUTION") {
+    return "处决";
+  }
+  return "总统权力";
+}
+
+function createEmptyHistoryRound(round, members, aliveMemberIds) {
+  return {
+    round,
+    status: "nominating",
+    presidentId: null,
+    chancellorId: null,
+    voteSummary: {
+      ja: 0,
+      nein: 0,
+      required: aliveMemberIds.length,
+      revealed: false,
+    },
+    votes: members.map((member) => ({
+      memberId: getMemberId(member),
+      state: aliveMemberIds.includes(getMemberId(member)) ? "not_started" : "dead",
+    })),
+    outcome: {
+      type: "pending_nomination",
+      label: "等待提名",
+    },
+  };
+}
+
+function getOrCreateHistoryRound(roundsByNo, round, members, aliveMemberIds) {
+  if (!roundsByNo[round]) {
+    roundsByNo[round] = createEmptyHistoryRound(round, members, aliveMemberIds);
+  }
+  return roundsByNo[round];
+}
+
+function buildVoteStatesForReveal(members, aliveMemberIds, revealedVotes) {
+  const voteByMemberId = {};
+  (revealedVotes || []).forEach((item) => {
+    voteByMemberId[item.memberId] = item.vote;
+  });
+
+  return members.map((member) => {
+    const memberId = getMemberId(member);
+    if (!aliveMemberIds.includes(memberId) && !voteByMemberId[memberId]) {
+      return {
+        memberId,
+        state: "dead",
+      };
+    }
+    return {
+      memberId,
+      state: voteByMemberId[memberId] === "JA" ? "ja" : voteByMemberId[memberId] === "NEIN" ? "nein" : "dead",
+    };
+  });
+}
+
+function buildCurrentVoteStates(members, aliveMemberIds, submittedVoteMemberIds, phase) {
+  return members.map((member) => {
+    const memberId = getMemberId(member);
+    if (!aliveMemberIds.includes(memberId)) {
+      return {
+        memberId,
+        state: "dead",
+      };
+    }
+    return {
+      memberId,
+      state: phase === "voting" && submittedVoteMemberIds.includes(memberId) ? "pending" : "not_started",
+    };
+  });
+}
+
+function buildHistoryWinLabel(winner, winReason) {
+  if (!winner) {
+    return "";
+  }
+  if (winReason === "HITLER_ELECTED") {
+    return "独裁者当选，极权派获胜";
+  }
+  if (winReason === "HITLER_EXECUTED") {
+    return "独裁者被处决，自由派获胜";
+  }
+  return `${winner === "LIBERAL" ? "自由派" : "极权派"}获胜`;
+}
+
+function shouldPreserveExecutiveRoundOutcome(outcome) {
+  return Boolean(
+    outcome &&
+      ["liberal_policy", "fascist_policy", "chaos_policy", "win"].includes(outcome.type),
+  );
+}
+
+function applyPublicHistoryEventToRound(roundItem, historyItem, members, aliveMemberIds) {
+  const type = historyItem.type;
+  if (historyItem.presidentId || historyItem.presidentCandidateId) {
+    roundItem.presidentId = historyItem.presidentId || historyItem.presidentCandidateId;
+  }
+  if (historyItem.chancellorId || historyItem.chancellorCandidateId) {
+    roundItem.chancellorId = historyItem.chancellorId || historyItem.chancellorCandidateId;
+  }
+
+  if (type === "GAME_STARTED" || type === "PRESIDENT_CANDIDATE_SELECTED") {
+    roundItem.status = "nominating";
+    roundItem.outcome = {
+      type: "pending_nomination",
+      label: "等待提名",
+    };
+    return;
+  }
+
+  if (type === "CHANCELLOR_NOMINATED") {
+    roundItem.status = "voting";
+    roundItem.outcome = {
+      type: "pending_vote",
+      label: "投票中",
+    };
+    return;
+  }
+
+  if (type === "VOTES_REVEALED") {
+    const revealedVotes = historyItem.votes || [];
+    roundItem.voteSummary = {
+      ja: historyItem.jaCount || 0,
+      nein: historyItem.neinCount || 0,
+      required: aliveMemberIds.length,
+      revealed: true,
+    };
+    roundItem.votes = buildVoteStatesForReveal(members, aliveMemberIds, revealedVotes);
+
+    if (historyItem.chaosPolicy) {
+      roundItem.status = "chaos";
+      roundItem.outcome = {
+        type: "chaos_policy",
+        label: `混乱政策：${getPolicyLabel(historyItem.chaosPolicy.policy)}`,
+      };
+    } else if (historyItem.hitlerCheck && historyItem.hitlerCheck.checked && historyItem.hitlerCheck.passed === false) {
+      roundItem.status = "game_ended";
+      roundItem.outcome = {
+        type: "win",
+        label: "独裁者当选，极权派获胜",
+      };
+    } else if (historyItem.passed) {
+      roundItem.status = "legislating";
+      roundItem.outcome = {
+        type: "pending_legislation",
+        label: "立法中",
+      };
+    } else {
+      roundItem.status = "vote_failed";
+      roundItem.outcome = {
+        type: "vote_failed",
+        label: "未通过",
+      };
+    }
+    return;
+  }
+
+  if (type === "PRESIDENT_DISCARDED_POLICY") {
+    roundItem.status = "legislating";
+    roundItem.outcome = {
+      type: "pending_legislation",
+      label: "立法中",
+    };
+    return;
+  }
+
+  if (type === "POLICY_ENACTED") {
+    const policyType = historyItem.enactedPolicy === "LIBERAL" ? "liberal_policy" : "fascist_policy";
+    roundItem.status = historyItem.winner ? "game_ended" : historyItem.executiveActionType ? "executing" : "completed";
+    roundItem.outcome = {
+      type: historyItem.winner ? "win" : policyType,
+      label: historyItem.winner
+        ? buildHistoryWinLabel(historyItem.winner, historyItem.winReason)
+        : getPolicyLabel(historyItem.enactedPolicy),
+    };
+    return;
+  }
+
+  if (type === "EXEC_INVESTIGATED") {
+    roundItem.status = "completed";
+    roundItem.outcome = {
+      type: "investigation",
+      label: "调查忠诚",
+      targetMemberId: historyItem.targetMemberId,
+    };
+    return;
+  }
+
+  if (type === "EXEC_SPECIAL_ELECTION") {
+    roundItem.status = "completed";
+    roundItem.outcome = {
+      type: "special_election",
+      label: "特别选举",
+      targetMemberId: historyItem.targetMemberId || historyItem.nextPresidentCandidateId,
+    };
+    return;
+  }
+
+  if (type === "EXEC_POLICY_PEEK_ACKED") {
+    roundItem.status = "completed";
+    roundItem.outcome = {
+      type: "policy_peek",
+      label: "政策预览",
+    };
+    return;
+  }
+
+  if (type === "EXEC_PLAYER_EXECUTED") {
+    roundItem.status = historyItem.winner ? "game_ended" : "completed";
+    roundItem.outcome = {
+      type: historyItem.winner ? "win" : "execution",
+      label: historyItem.winner ? buildHistoryWinLabel(historyItem.winner, historyItem.winReason) : "处决玩家",
+      targetMemberId: historyItem.targetMemberId,
+    };
+  }
+}
+
+function applyCurrentRoundToHistory(roundItem, publicState) {
+  const currentPhase = publicState.currentPhase;
+  const aliveMemberIds = publicState.aliveMemberIds || [];
+  const submittedVoteMemberIds = publicState.submittedVoteMemberIds || [];
+  const voteProgress = publicState.voteProgress || null;
+  const voteResult = publicState.voteResult || null;
+  const members = publicState.members || [];
+  const currentPresidentId = publicState.currentPresidentId || publicState.currentPresidentCandidateId || null;
+  const currentChancellorId = publicState.currentChancellorId || publicState.currentChancellorCandidateId || null;
+
+  roundItem.presidentId = currentPresidentId;
+  roundItem.chancellorId = currentChancellorId;
+
+  if (currentPhase === "nomination") {
+    roundItem.status = "nominating";
+    roundItem.voteSummary = {
+      ja: 0,
+      nein: 0,
+      required: aliveMemberIds.length,
+      revealed: false,
+    };
+    roundItem.votes = buildCurrentVoteStates(members, aliveMemberIds, [], currentPhase);
+    roundItem.outcome = {
+      type: "pending_nomination",
+      label: "等待提名",
+    };
+  } else if (currentPhase === "voting") {
+    roundItem.status = "voting";
+    roundItem.voteSummary = {
+      ja: 0,
+      nein: 0,
+      required: voteProgress ? voteProgress.requiredCount || voteProgress.totalCount || aliveMemberIds.length : aliveMemberIds.length,
+      revealed: false,
+    };
+    roundItem.votes = buildCurrentVoteStates(members, aliveMemberIds, submittedVoteMemberIds, currentPhase);
+    roundItem.outcome = {
+      type: "pending_vote",
+      label: "投票中",
+    };
+  } else if (currentPhase === "legislative_president" || currentPhase === "legislative_chancellor") {
+    roundItem.status = "legislating";
+    roundItem.outcome = {
+      type: "pending_legislation",
+      label: "立法中",
+    };
+  } else if (currentPhase === "veto_response") {
+    roundItem.status = "legislating";
+    roundItem.outcome = {
+      type: "vetoed",
+      label: "否决待确认",
+    };
+  } else if (currentPhase === "executive_action") {
+    const actionType = publicState.executiveActionType;
+    const outcomeTypeByAction = {
+      INVESTIGATE: "investigation",
+      SPECIAL_ELECTION: "special_election",
+      POLICY_PEEK: "policy_peek",
+      EXECUTION: "execution",
+    };
+    roundItem.status = "executing";
+    if (!shouldPreserveExecutiveRoundOutcome(roundItem.outcome)) {
+      roundItem.outcome = {
+        type: outcomeTypeByAction[actionType] || "pending_legislation",
+        label: `${getExecutiveActionLabel(actionType)}待执行`,
+      };
+    }
+  } else if (currentPhase === "game_ended" && voteResult && voteResult.hitlerCheck && voteResult.hitlerCheck.checked) {
+    roundItem.status = "game_ended";
+    roundItem.outcome = {
+      type: "win",
+      label: "独裁者当选，极权派获胜",
+    };
+  }
+}
+
+function buildPublicHistoryProjection(gameCore, members, publicHistory = []) {
+  const sortedMembers = members.slice().sort((a, b) => a.seatIndex - b.seatIndex);
+  const aliveMemberIds = (gameCore.aliveMemberIds || sortedMembers.map(getMemberId)).slice();
+  const votesByMemberId = gameCore.phase === "voting" && gameCore.phaseData ? gameCore.phaseData.votesByMemberId || {} : {};
+  const submittedVoteMemberIds = Object.keys(votesByMemberId).filter((memberId) => Boolean(votesByMemberId[memberId]));
+  const maxEventRound = publicHistory.reduce((maxRound, item) => Math.max(maxRound, item.round || 1), 1);
+  const roundsStarted = Math.max(gameCore.round || 1, maxEventRound);
+  const roundsByNo = {};
+
+  for (let round = 1; round <= roundsStarted; round += 1) {
+    roundsByNo[round] = createEmptyHistoryRound(round, sortedMembers, aliveMemberIds);
+  }
+
+  publicHistory
+    .slice()
+    .sort((a, b) => {
+      if ((a.round || 1) !== (b.round || 1)) {
+        return (a.round || 1) - (b.round || 1);
+      }
+      return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+    })
+    .forEach((historyItem) => {
+      const roundItem = getOrCreateHistoryRound(roundsByNo, historyItem.round || 1, sortedMembers, aliveMemberIds);
+      applyPublicHistoryEventToRound(roundItem, historyItem, sortedMembers, aliveMemberIds);
+    });
+
+  const currentRound = getOrCreateHistoryRound(roundsByNo, gameCore.round || 1, sortedMembers, aliveMemberIds);
+  applyCurrentRoundToHistory(currentRound, {
+    currentPhase: gameCore.phase,
+    members: sortedMembers,
+    aliveMemberIds,
+    submittedVoteMemberIds,
+    currentPresidentCandidateId: gameCore.currentPresidentCandidateId || null,
+    currentChancellorCandidateId: gameCore.currentChancellorCandidateId || null,
+    currentPresidentId: gameCore.currentPresidentId || null,
+    currentChancellorId: gameCore.currentChancellorId || null,
+    executiveActionType:
+      gameCore.phase === "executive_action" && gameCore.phaseData ? gameCore.phaseData.actionType || null : null,
+    voteProgress:
+      gameCore.phase === "voting"
+        ? {
+            submittedCount: submittedVoteMemberIds.length,
+            requiredCount: aliveMemberIds.length,
+            totalCount: aliveMemberIds.length,
+          }
+        : null,
+    voteResult: gameCore.lastVoteResult || null,
+  });
+
+  const rounds = Object.keys(roundsByNo)
+    .map((round) => roundsByNo[round])
+    .sort((a, b) => a.round - b.round);
+  const roundsCompleted =
+    gameCore.phase === "game_ended" || gameCore.status === "game_ended"
+      ? roundsStarted
+      : rounds.filter((round) => round.round < (gameCore.round || 1)).length;
+
+  return {
+    roundsStarted,
+    roundsCompleted,
+    rounds,
+  };
+}
+
 function appendPublicHistory(publicHistory, gameCore, eventType, title, summary, createdAt, extra = {}) {
   const eventId = `evt_${gameCore.gameId}_${gameCore.eventSeq}`;
   const historyItem = {
@@ -613,6 +984,8 @@ function buildInitialPublicHistory(gameCore, members, createdAt) {
       title: "首位总统候选人确定",
       summary: `${president ? president.displayName : "一名玩家"} 成为首位总统候选人`,
       createdAt: createdAt.toISOString(),
+      presidentId: gameCore.currentPresidentCandidateId,
+      presidentCandidateId: gameCore.currentPresidentCandidateId,
     },
   ];
 }
@@ -681,6 +1054,7 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
       voteProgress,
       revealedVotes,
       voteResult,
+      history: buildPublicHistoryProjection(gameCore, members, publicHistory),
       publicHistory,
     },
     updatedAt: updatedAt.toISOString(),
@@ -1351,6 +1725,10 @@ async function submitCommand(payload, openid) {
             `政府投票公开：${voteResult.jaCount} 票赞成，${voteResult.neinCount} 票反对，${passed ? "政府通过" : "政府未通过"}`,
             updatedAt,
             {
+              presidentId: gameCore.currentPresidentCandidateId,
+              chancellorId: gameCore.currentChancellorCandidateId,
+              presidentCandidateId: gameCore.currentPresidentCandidateId,
+              chancellorCandidateId: gameCore.currentChancellorCandidateId,
               votes: voteResult.revealedVotes,
               jaCount: voteResult.jaCount,
               neinCount: voteResult.neinCount,
@@ -1851,6 +2229,8 @@ async function submitCommand(payload, openid) {
           eventSummary,
           updatedAt,
           {
+            presidentId: gameCore.currentPresidentId,
+            chancellorId: gameCore.currentChancellorId,
             enactedPolicy,
             liberalPolicyCount,
             fascistPolicyCount,
@@ -1989,6 +2369,8 @@ async function submitCommand(payload, openid) {
         let eventSummary = `${president ? president.displayName : "总统"} 已完成总统权力`;
         const eventExtra = {
           executiveActionType: actionType,
+          presidentId: actorMemberId,
+          chancellorId: gameCore.currentChancellorId || null,
         };
 
         if (type === "EXEC_INVESTIGATE") {
@@ -2234,6 +2616,10 @@ async function submitCommand(payload, openid) {
         title: "总理候选人提名",
         summary: eventSummary,
         createdAt: updatedAt.toISOString(),
+        presidentId: actorMemberId,
+        chancellorId: targetMemberId,
+        presidentCandidateId: actorMemberId,
+        chancellorCandidateId: targetMemberId,
       });
 
       const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
@@ -2324,6 +2710,7 @@ exports.__testHooks = {
   INITIAL_POLICY_DECK,
   buildRoleAssignments,
   buildInitialPolicyState,
+  buildPublicHistoryProjection,
   buildPublicSnapshotPayload,
   buildPrivateSnapshotPayload,
   createInitialGameProjection,
