@@ -34,6 +34,7 @@ function isCloudFileId(fileId) {
 
 Page({
   refreshTimer: null,
+  lastSeatTap: null,
 
   data: {
     roomId: "",
@@ -741,7 +742,20 @@ Page({
       return;
     }
 
-    const nextControlledMemberId = memberId === this.data.snapshot.realMemberId ? "" : memberId;
+    const now = Date.now();
+    const lastSeatTap = this.lastSeatTap || {};
+    const isDoubleTap = lastSeatTap.memberId === memberId && now - lastSeatTap.time <= 450;
+    this.lastSeatTap = {
+      memberId,
+      time: now,
+    };
+    if (!isDoubleTap) {
+      return;
+    }
+
+    this.lastSeatTap = null;
+    const snapshot = this.data.snapshot || {};
+    const nextControlledMemberId = memberId === snapshot.realMemberId ? "" : memberId;
     this.setData({
       controlledMemberId: nextControlledMemberId,
       errorText: "",

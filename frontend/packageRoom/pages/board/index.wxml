@@ -27,11 +27,11 @@
       <view wx:if="{{isDevRoom}}" class="dev-control-strip">
         <view class="dev-mark">开发者房间</view>
         <view class="dev-seat">{{controlledSeatText}}</view>
-        <view class="dev-hint">点击席位切换操控视角</view>
+        <view class="dev-hint">双击席位切换操控视角</view>
       </view>
 
       <view class="seat-row">
-        <view wx:for="{{seats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="切换操控席位">
+        <view wx:for="{{seats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="双击切换操控席位">
           <view class="seat-no">{{item.seatNo}}</view>
           <view class="avatar">
             <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
