@@ -425,14 +425,18 @@ interface PublicHistoryProjection {
         | 'fascist_policy'
         | 'vetoed'
         | 'chaos_policy'
-        | 'investigation'
-        | 'special_election'
-        | 'policy_peek'
-        | 'execution'
         | 'win'
       label: string
       targetMemberId?: string
     }
+    executiveResult: {
+      type: 'investigation' | 'special_election' | 'policy_peek' | 'execution'
+      text: string
+      presidentMemberId: string
+      presidentSeatIndex: number
+      targetMemberId?: string
+      targetSeatIndex?: number
+    } | null
   }>
 }
 ```
@@ -444,8 +448,9 @@ interface PublicHistoryProjection {
 - 投票未公开前，`voteSummary.revealed = false`，`ja/nein = 0`，存活玩家 `votes.state = pending` 或 `not_started`，不得返回真实单人票。
 - 投票公开后，`votes` 必须包含本轮所有座位成员；已出局玩家使用 `dead`。
 - 总统弃牌、总理弃牌、调查忠诚结果、政策预览牌面不得写入 `history`。
-- `outcome.label` 使用前端可直接展示的中文短文案，并遵守术语映射，例如“极权派政策”“处决 8 号玩家”“政策预览”。
-- `targetMemberId` 只用于公开目标，例如调查目标、特别总统、处决目标；不得用于表示私密结果。
+- `outcome` 只表达本轮提名 / 投票 / 政策 / 胜负结算；总统权力不得写入 `outcome`，避免历史看板把阶段状态误当作本轮结算。
+- `executiveResult` 只在总统权力完成后出现，用于前端在投票列表下方显示一行公开结果，例如“5号总统处决了6号玩家”“5号总统特别任命了6号玩家”“5号总统调查了6号玩家”“5号总统查看了政策牌堆顶”。
+- `executiveResult.targetMemberId` 只用于公开目标，例如调查目标、特别总统、处决目标；不得用于表示私密结果。
 
 ## 4.5 `privateState`
 

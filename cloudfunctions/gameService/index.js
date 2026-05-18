@@ -563,22 +563,6 @@ function getPolicyLabel(policy) {
   return policy === "LIBERAL" ? "自由派政策" : "极权派政策";
 }
 
-function getExecutiveActionLabel(actionType) {
-  if (actionType === "INVESTIGATE") {
-    return "调查忠诚";
-  }
-  if (actionType === "SPECIAL_ELECTION") {
-    return "特别选举";
-  }
-  if (actionType === "POLICY_PEEK") {
-    return "政策预览";
-  }
-  if (actionType === "EXECUTION") {
-    return "处决";
-  }
-  return "总统权力";
-}
-
 function createEmptyHistoryRound(round, members, aliveMemberIds) {
   return {
     round,
@@ -599,6 +583,7 @@ function createEmptyHistoryRound(round, members, aliveMemberIds) {
       type: "pending_nomination",
       label: "等待提名",
     },
+    executiveResult: null,
   };
 }
 
@@ -664,6 +649,39 @@ function shouldPreserveExecutiveRoundOutcome(outcome) {
     outcome &&
       ["liberal_policy", "fascist_policy", "chaos_policy", "win"].includes(outcome.type),
   );
+}
+
+function getHistorySeatIndex(members, memberId) {
+  const member = members.find((item) => getMemberId(item) === memberId);
+  return member && Number.isFinite(Number(member.seatIndex)) ? Number(member.seatIndex) : null;
+}
+
+function buildExecutiveResult(historyItem, members, resultType) {
+  const presidentMemberId = historyItem.presidentId || historyItem.presidentCandidateId || null;
+  const targetMemberId = historyItem.targetMemberId || historyItem.nextPresidentCandidateId || null;
+  const presidentSeatIndex = getHistorySeatIndex(members, presidentMemberId);
+  const targetSeatIndex = getHistorySeatIndex(members, targetMemberId);
+  const presidentText = presidentSeatIndex ? `${presidentSeatIndex}号总统` : "总统";
+  const targetText = targetSeatIndex ? `${targetSeatIndex}号玩家` : "一名玩家";
+  const textByType = {
+    investigation: `${presidentText}调查了${targetText}`,
+    special_election: `${presidentText}特别任命了${targetText}`,
+    policy_peek: `${presidentText}查看了政策牌堆顶`,
+    execution: `${presidentText}处决了${targetText}`,
+  };
+  const result = {
+    type: resultType,
+    text: textByType[resultType] || "",
+    presidentMemberId,
+    presidentSeatIndex,
+  };
+  if (targetMemberId) {
+    result.targetMemberId = targetMemberId;
+  }
+  if (targetSeatIndex) {
+    result.targetSeatIndex = targetSeatIndex;
+  }
+  return result;
 }
 
 function applyPublicHistoryEventToRound(roundItem, historyItem, members, aliveMemberIds) {
@@ -754,40 +772,31 @@ function applyPublicHistoryEventToRound(roundItem, historyItem, members, aliveMe
 
   if (type === "EXEC_INVESTIGATED") {
     roundItem.status = "completed";
-    roundItem.outcome = {
-      type: "investigation",
-      label: "调查忠诚",
-      targetMemberId: historyItem.targetMemberId,
-    };
+    roundItem.executiveResult = buildExecutiveResult(historyItem, members, "investigation");
     return;
   }
 
   if (type === "EXEC_SPECIAL_ELECTION") {
     roundItem.status = "completed";
-    roundItem.outcome = {
-      type: "special_election",
-      label: "特别选举",
-      targetMemberId: historyItem.targetMemberId || historyItem.nextPresidentCandidateId,
-    };
+    roundItem.executiveResult = buildExecutiveResult(historyItem, members, "special_election");
     return;
   }
 
   if (type === "EXEC_POLICY_PEEK_ACKED") {
     roundItem.status = "completed";
-    roundItem.outcome = {
-      type: "policy_peek",
-      label: "政策预览",
-    };
+    roundItem.executiveResult = buildExecutiveResult(historyItem, members, "policy_peek");
     return;
   }
 
   if (type === "EXEC_PLAYER_EXECUTED") {
     roundItem.status = historyItem.winner ? "game_ended" : "completed";
-    roundItem.outcome = {
-      type: historyItem.winner ? "win" : "execution",
-      label: historyItem.winner ? buildHistoryWinLabel(historyItem.winner, historyItem.winReason) : "处决玩家",
-      targetMemberId: historyItem.targetMemberId,
-    };
+    roundItem.executiveResult = buildExecutiveResult(historyItem, members, "execution");
+    if (historyItem.winner) {
+      roundItem.outcome = {
+        type: "win",
+        label: buildHistoryWinLabel(historyItem.winner, historyItem.winReason),
+      };
+    }
   }
 }
 
@@ -843,18 +852,11 @@ function applyCurrentRoundToHistory(roundItem, publicState) {
       label: "否决待确认",
     };
   } else if (currentPhase === "executive_action") {
-    const actionType = publicState.executiveActionType;
-    const outcomeTypeByAction = {
-      INVESTIGATE: "investigation",
-      SPECIAL_ELECTION: "special_election",
-      POLICY_PEEK: "policy_peek",
-      EXECUTION: "execution",
-    };
     roundItem.status = "executing";
     if (!shouldPreserveExecutiveRoundOutcome(roundItem.outcome)) {
       roundItem.outcome = {
-        type: outcomeTypeByAction[actionType] || "pending_legislation",
-        label: `${getExecutiveActionLabel(actionType)}待执行`,
+        type: "pending_legislation",
+        label: "立法中",
       };
     }
   } else if (currentPhase === "game_ended" && voteResult && voteResult.hitlerCheck && voteResult.hitlerCheck.checked) {
@@ -2479,7 +2481,7 @@ async function submitCommand(payload, openid) {
 
         const publicEvent = appendPublicHistory(
           publicHistory,
-          nextGameCore,
+          { ...nextGameCore, round: gameCore.round, phase: gameCore.phase },
           eventType,
           eventTitle,
           eventSummary,

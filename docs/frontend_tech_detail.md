@@ -1115,14 +1115,17 @@ interface RoundHistoryViewModel {
       | 'fascist_policy'
       | 'vetoed'
       | 'chaos_policy'
-      | 'investigation'
-      | 'special_election'
-      | 'policy_peek'
-      | 'execution'
       | 'win'
     label: string
     targetText?: string
   }
+  executiveResult: {
+    type: 'investigation' | 'special_election' | 'policy_peek' | 'execution'
+    text: string
+    presidentSeatIndex: number
+    targetSeatIndex?: number
+    targetMemberId?: string
+  } | null
 }
 ```
 
@@ -1145,7 +1148,7 @@ interface RoundHistoryViewModel {
 | `legislative_president` | 展示投票通过；右侧徽章显示“总统立法中”，不展示总统手牌或弃牌 |
 | `legislative_chancellor` | 展示投票通过；右侧徽章显示“总理立法中”，不展示总理手牌 |
 | `veto_response` | 展示投票通过；右侧徽章显示“否决待确认” |
-| `executive_action` | 若政策已颁布则展示政策徽章，同时显示“权力执行中”；目标未公开前不预留空白 |
+| `executive_action` | 右侧徽章继续展示本轮已颁布政策；总统权力尚未完成时不在政策下方额外显示“权力执行中”，避免下一轮后残留阶段态 |
 | `round_result` | 展示本轮公开结算；若下一轮即将开始，右侧徽章显示最终结算 |
 
 显示原则：
@@ -1153,9 +1156,11 @@ interface RoundHistoryViewModel {
 1. 未公开单人投票前，不显示赞成 / 反对分布，避免泄露。
 2. 已出局玩家在投票条中使用骷髅态，并显示“已出局无法投票”。
 3. 尚未发生的节点使用明确状态文案，例如“等待提名”“投票中”“立法中”，不留空白。
-4. 调查忠诚只展示“调查 X 号玩家”，不展示阵营结果。
-5. 政策预览只展示“政策预览”，不展示牌面。
-6. 处决展示被处决座位与出局态；若处决直接终局，结果页再展示身份真相。
+4. 右侧徽章只展示本轮投票 / 政策 / 胜负结算，不展示“调查忠诚”“特别选举”“政策预览”“处决”等总统权力类型。
+5. 总统权力完成后，在本轮投票列表下方新增一行公开结果文案，例如“5号总统处决了6号玩家”“5号总统特别任命了6号玩家”“5号总统调查了6号玩家”；政策预览显示“5号总统查看了政策牌堆顶”。
+6. 调查忠诚只展示调查目标，不展示阵营结果。
+7. 政策预览只展示已查看动作，不展示牌面。
+8. 处决展示被处决座位与出局态；若处决直接终局，结果页再展示身份真相。
 
 ### 交互方案
 

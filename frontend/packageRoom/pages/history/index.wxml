@@ -64,10 +64,11 @@
               <view class="vote-mark">{{item.mark}}</view>
             </view>
           </view>
+          <view wx:if="{{item.executiveResultText}}" class="executive-result">{{item.executiveResultText}}</view>
         </view>
         <view class="round-outcome">
           <view class="{{item.outcomeClass}}">{{item.outcomeText}}</view>
-          <view class="round-status">{{item.statusText}}</view>
+          <view wx:if="{{item.showStatus}}" class="round-status">{{item.statusText}}</view>
         </view>
       </view>
     </view>

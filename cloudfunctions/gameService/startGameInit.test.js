@@ -577,32 +577,39 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
   };
   const executionHistory = buildPublicHistoryProjection(executionCore, members, []);
   assert.strictEqual(executionHistory.rounds[0].status, "executing", "executive round should be marked executing");
-  assert.strictEqual(executionHistory.rounds[0].outcome.type, "execution", "execution should be public outcome type");
-  assert.strictEqual(executionHistory.rounds[0].outcome.label, "处决待执行", "execution should have clear pending label");
+  assert.strictEqual(
+    executionHistory.rounds[0].outcome.type,
+    "pending_legislation",
+    "executive round without policy event should not expose action type in outcome",
+  );
+  assert.strictEqual(
+    executionHistory.rounds[0].executiveResult,
+    null,
+    "pending executive action should not create executive result",
+  );
 
   const enactedExecutionCore = {
     ...executionCore,
     fascistPolicyCount: 4,
   };
-  const enactedExecutionHistory = buildPublicHistoryProjection(enactedExecutionCore, members, [
-    {
-      eventId: "evt_game_history_4",
-      round: 1,
-      phase: "legislative_chancellor",
-      type: "POLICY_ENACTED",
-      title: "政策颁布",
-      summary: "3号玩家 颁布了 1 张极权派政策，触发总统权力",
-      createdAt: "2026-05-12T00:03:00.000Z",
-      presidentId: "mem_1",
-      chancellorId: "mem_3",
-      enactedPolicy: "FASCIST",
-      liberalPolicyCount: 0,
-      fascistPolicyCount: 4,
-      executiveActionType: "EXECUTION",
-      winner: null,
-      winReason: null,
-    },
-  ]);
+  const policyEnactedEvent = {
+    eventId: "evt_game_history_4",
+    round: 1,
+    phase: "legislative_chancellor",
+    type: "POLICY_ENACTED",
+    title: "政策颁布",
+    summary: "3号玩家 颁布了 1 张极权派政策，触发总统权力",
+    createdAt: "2026-05-12T00:03:00.000Z",
+    presidentId: "mem_1",
+    chancellorId: "mem_3",
+    enactedPolicy: "FASCIST",
+    liberalPolicyCount: 0,
+    fascistPolicyCount: 4,
+    executiveActionType: "EXECUTION",
+    winner: null,
+    winReason: null,
+  };
+  const enactedExecutionHistory = buildPublicHistoryProjection(enactedExecutionCore, members, [policyEnactedEvent]);
   assert.strictEqual(
     enactedExecutionHistory.rounds[0].status,
     "executing",
@@ -617,6 +624,203 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     enactedExecutionHistory.rounds[0].outcome.label,
     "极权派政策",
     "executive action should preserve enacted policy label",
+  );
+  assert.strictEqual(
+    enactedExecutionHistory.rounds[0].executiveResult,
+    null,
+    "POLICY_ENACTED should not create executive result before action completes",
+  );
+
+  const nextRoundCore = {
+    ...projection.gameCore,
+    version: 7,
+    round: 2,
+    phase: "nomination",
+    currentPresidentCandidateId: "mem_2",
+    currentChancellorCandidateId: null,
+    currentPresidentId: null,
+    currentChancellorId: null,
+    fascistPolicyCount: 4,
+    phaseData: {
+      presidentCandidateId: "mem_2",
+      eligibleChancellorIds: ["mem_1", "mem_3"],
+    },
+  };
+
+  const executedHistory = buildPublicHistoryProjection(nextRoundCore, members, [
+    policyEnactedEvent,
+    {
+      eventId: "evt_game_history_5",
+      round: 1,
+      phase: "executive_action",
+      type: "EXEC_PLAYER_EXECUTED",
+      title: "总统完成处决",
+      summary: "1号玩家 处决了 6号玩家",
+      createdAt: "2026-05-12T00:04:00.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      targetMemberId: "mem_6",
+      executiveActionType: "EXECUTION",
+      winner: null,
+      winReason: null,
+    },
+  ]);
+  assert.strictEqual(executedHistory.rounds[0].status, "completed", "completed execution should finish the round");
+  assert.strictEqual(
+    executedHistory.rounds[0].outcome.type,
+    "fascist_policy",
+    "execution should not replace policy outcome",
+  );
+  assert.strictEqual(
+    executedHistory.rounds[0].executiveResult.text,
+    "1号总统处决了6号玩家",
+    "execution result should be shown as a public result line",
+  );
+
+  const investigatedHistory = buildPublicHistoryProjection(nextRoundCore, members, [
+    policyEnactedEvent,
+    {
+      eventId: "evt_game_history_6",
+      round: 1,
+      phase: "executive_action",
+      type: "EXEC_INVESTIGATED",
+      title: "总统完成忠诚调查",
+      summary: "1号玩家 调查了 4号玩家 的忠诚",
+      createdAt: "2026-05-12T00:04:30.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      targetMemberId: "mem_4",
+      executiveActionType: "INVESTIGATE",
+      party: "LIBERAL",
+    },
+  ]);
+  assert.strictEqual(
+    investigatedHistory.rounds[0].outcome.type,
+    "fascist_policy",
+    "investigation should not replace policy outcome",
+  );
+  assert.strictEqual(
+    investigatedHistory.rounds[0].executiveResult.text,
+    "1号总统调查了4号玩家",
+    "investigation result should only show public target",
+  );
+  assert.strictEqual(
+    JSON.stringify(investigatedHistory).includes("LIBERAL"),
+    false,
+    "history projection should not expose investigation party",
+  );
+
+  const policyPeekHistory = buildPublicHistoryProjection(nextRoundCore, members, [
+    policyEnactedEvent,
+    {
+      eventId: "evt_game_history_7",
+      round: 1,
+      phase: "executive_action",
+      type: "EXEC_POLICY_PEEK_ACKED",
+      title: "总统完成政策预览",
+      summary: "1号玩家 已秘密查看政策牌堆顶",
+      createdAt: "2026-05-12T00:05:00.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      executiveActionType: "POLICY_PEEK",
+      peekedPolicies: ["LIBERAL", "FASCIST", "FASCIST"],
+    },
+  ]);
+  assert.strictEqual(
+    policyPeekHistory.rounds[0].executiveResult.text,
+    "1号总统查看了政策牌堆顶",
+    "policy peek result should not reveal cards",
+  );
+  assert.strictEqual(
+    JSON.stringify(policyPeekHistory).includes("LIBERAL") || JSON.stringify(policyPeekHistory).includes("FASCIST"),
+    false,
+    "history projection should not expose policy peek cards",
+  );
+
+  const specialElectionHistory = buildPublicHistoryProjection(nextRoundCore, members, [
+    policyEnactedEvent,
+    {
+      eventId: "evt_game_history_8",
+      round: 1,
+      phase: "executive_action",
+      type: "EXEC_SPECIAL_ELECTION",
+      title: "特别选举发动",
+      summary: "1号玩家 指定 6号玩家 成为下一任特别总统候选人",
+      createdAt: "2026-05-12T00:05:30.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      targetMemberId: "mem_6",
+      nextPresidentCandidateId: "mem_6",
+      executiveActionType: "SPECIAL_ELECTION",
+    },
+  ]);
+  assert.strictEqual(
+    specialElectionHistory.rounds[0].executiveResult.text,
+    "1号总统特别任命了6号玩家",
+    "special election result should show appointed player",
+  );
+
+  const nextRoundHistory = buildPublicHistoryProjection(nextRoundCore, members, [
+    policyEnactedEvent,
+    {
+      eventId: "evt_game_history_9",
+      round: 1,
+      phase: "executive_action",
+      type: "EXEC_PLAYER_EXECUTED",
+      title: "总统完成处决",
+      summary: "1号玩家 处决了 6号玩家",
+      createdAt: "2026-05-12T00:06:00.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      targetMemberId: "mem_6",
+      executiveActionType: "EXECUTION",
+      winner: null,
+      winReason: null,
+    },
+  ]);
+  assert.strictEqual(nextRoundHistory.rounds[0].status, "completed", "previous round should not remain executing");
+  assert.strictEqual(
+    nextRoundHistory.rounds[0].outcome.type,
+    "fascist_policy",
+    "previous round should keep policy outcome after next nomination starts",
+  );
+  assert.strictEqual(
+    nextRoundHistory.rounds[0].executiveResult.text,
+    "1号总统处决了6号玩家",
+    "previous round should keep completed executive result",
+  );
+  assert.strictEqual(nextRoundHistory.rounds[1].status, "nominating", "next round should show nomination state");
+
+  const gameEndedCore = {
+    ...enactedExecutionCore,
+    status: "game_ended",
+    phase: "game_ended",
+    winner: "LIBERAL",
+    winReason: "HITLER_EXECUTED",
+  };
+  const hitlerExecutedHistory = buildPublicHistoryProjection(gameEndedCore, members, [
+    policyEnactedEvent,
+    {
+      eventId: "evt_game_history_10",
+      round: 1,
+      phase: "executive_action",
+      type: "EXEC_PLAYER_EXECUTED",
+      title: "总统完成处决",
+      summary: "1号玩家 处决了 6号玩家，独裁者被处决，自由派获胜",
+      createdAt: "2026-05-12T00:07:00.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      targetMemberId: "mem_6",
+      executiveActionType: "EXECUTION",
+      winner: "LIBERAL",
+      winReason: "HITLER_EXECUTED",
+    },
+  ]);
+  assert.strictEqual(hitlerExecutedHistory.rounds[0].outcome.type, "win", "execution win should use win outcome");
+  assert.strictEqual(
+    hitlerExecutedHistory.rounds[0].executiveResult.text,
+    "1号总统处决了6号玩家",
+    "execution win should still keep public execution result",
   );
 }
 

@@ -3,7 +3,7 @@ const STATUS_LABELS = {
   voting: "投票中",
   vote_failed: "未通过",
   legislating: "立法中",
-  executing: "权力执行中",
+  executing: "执行中",
   completed: "已完成",
   chaos: "混乱政策",
   game_ended: "对局结束",
@@ -18,10 +18,6 @@ const OUTCOME_CLASS_BY_TYPE = {
   fascist_policy: "is-fascist",
   vetoed: "is-veto",
   chaos_policy: "is-chaos",
-  investigation: "is-power",
-  special_election: "is-power",
-  policy_peek: "is-power",
-  execution: "is-execution",
   win: "is-win",
 };
 
@@ -140,19 +136,21 @@ Page({
       const president = memberById[round.presidentId] || null;
       const chancellor = memberById[round.chancellorId] || null;
       const outcome = round.outcome || {};
-      const target = memberById[outcome.targetMemberId] || null;
       const voteSummary = round.voteSummary || {};
+      const executiveResult = round.executiveResult || null;
 
       return {
         round: round.round,
         statusText: STATUS_LABELS[round.status] || "进行中",
+        showStatus: round.status !== "executing",
         presidentText: getSeatLabel(president),
         chancellorText: getSeatLabel(chancellor),
         voteText: voteSummary.revealed
           ? `${voteSummary.ja || 0} 赞成 / ${voteSummary.nein || 0} 反对`
           : this.getHiddenVoteText(round.status),
-        outcomeText: this.createOutcomeText(outcome, target),
+        outcomeText: this.createOutcomeText(outcome),
         outcomeClass: `outcome-badge ${OUTCOME_CLASS_BY_TYPE[outcome.type] || "is-pending"}`,
+        executiveResultText: executiveResult && executiveResult.text ? executiveResult.text : "",
         votes: this.createVoteRows(round.votes || [], seatOrder),
       };
     });
@@ -168,21 +166,8 @@ Page({
     return "未公开";
   },
 
-  createOutcomeText(outcome, target) {
-    const label = outcome.label || "等待进展";
-    if (!target) {
-      return label;
-    }
-    if (outcome.type === "execution") {
-      return `处决 ${target.seatIndex}号玩家`;
-    }
-    if (outcome.type === "special_election") {
-      return `特别选举 ${target.seatIndex}号玩家`;
-    }
-    if (outcome.type === "investigation") {
-      return `调查 ${target.seatIndex}号玩家`;
-    }
-    return label;
+  createOutcomeText(outcome) {
+    return outcome.label || "等待进展";
   },
 
   createVoteRows(votes, seatOrder) {
