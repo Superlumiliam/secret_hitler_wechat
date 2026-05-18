@@ -178,6 +178,19 @@
               <view class="policy-card-action">{{canEnactPolicy ? '颁布此牌' : '弃掉此牌'}}</view>
             </view>
           </view>
+          <view wx:if="{{canRequestVeto}}" class="veto-request-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapRequestVeto" role="button" aria-label="提出否决">
+            提出否决
+          </view>
+        </view>
+
+        <view wx:if="{{vetoResponse}}" class="veto-response-panel">
+          <view class="veto-response-title">{{vetoResponse.title}}</view>
+          <view class="veto-response-hint">{{vetoResponse.hint}}</view>
+          <view wx:if="{{canRespondVeto}}" class="veto-response-actions">
+            <view class="veto-response-action accept-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapAcceptVeto" role="button" aria-label="同意否决">同意否决</view>
+            <view class="veto-response-action reject-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapRejectVeto" role="button" aria-label="拒绝否决">拒绝否决</view>
+          </view>
+          <view wx:else class="veto-response-waiting">等待 {{vetoResponse.presidentName}} 回应</view>
         </view>
 
         <view wx:if="{{canNominate}}" class="nominate-panel">

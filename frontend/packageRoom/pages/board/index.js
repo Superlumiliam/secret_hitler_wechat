@@ -61,6 +61,9 @@ Page({
     canDiscardPolicy: false,
     canEnactPolicy: false,
     canPickPolicy: false,
+    canRequestVeto: false,
+    canRespondVeto: false,
+    vetoResponse: null,
     policyCards: [],
     policyPickerTitle: "",
     policyPickerHint: "",
@@ -207,6 +210,9 @@ Page({
         snapshot.pendingTask &&
           ["PRESIDENT_DISCARD_POLICY", "CHANCELLOR_ENACT_POLICY"].includes(snapshot.pendingTask.taskType),
       ),
+      canRequestVeto: this.canRequestVeto(snapshot),
+      canRespondVeto: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "PRESIDENT_RESPOND_VETO"),
+      vetoResponse: this.createVetoResponse(snapshot),
       policyCards: this.createPolicyCards(snapshot),
       policyPickerTitle: this.createPolicyPickerTitle(snapshot),
       policyPickerHint: this.createPolicyPickerHint(snapshot),
@@ -423,10 +429,18 @@ Page({
       return `当前：${board.presidentSeatNo}号 ${board.presidentName} 正在秘密处理政策牌`;
     }
     if (snapshot.pendingTask && snapshot.pendingTask.taskType === "CHANCELLOR_ENACT_POLICY") {
-      return "当前：你是总理，请从 2 张政策牌中秘密颁布 1 张";
+      return this.canRequestVeto(snapshot)
+        ? "当前：你是总理，请颁布 1 张政策，或提出否决"
+        : "当前：你是总理，请从 2 张政策牌中秘密颁布 1 张";
     }
     if (snapshot.currentPhase === "legislative_chancellor") {
       return `当前：${board.chancellorSeatNo}号 ${board.chancellorName} 正在秘密处理政策牌`;
+    }
+    if (snapshot.pendingTask && snapshot.pendingTask.taskType === "PRESIDENT_RESPOND_VETO") {
+      return "当前：总理提出否决，请你决定是否同意";
+    }
+    if (snapshot.currentPhase === "veto_response") {
+      return `当前：${board.chancellorSeatNo}号 ${board.chancellorName} 提出否决，等待总统回应`;
     }
     if (snapshot.currentPhase === "executive_action") {
       const action = this.createExecutiveAction(snapshot);
@@ -540,9 +554,44 @@ Page({
       return "弃牌不会公开，事后你可以自由陈述。";
     }
     if (pendingTask.taskType === "CHANCELLOR_ENACT_POLICY") {
-      return "只公开最终颁布的政策，另一张弃牌不会公开。";
+      return this.canRequestVeto(snapshot)
+        ? "否决需要总统同意；若总统拒绝，你仍必须颁布 1 张政策。"
+        : "只公开最终颁布的政策，另一张弃牌不会公开。";
     }
     return "";
+  },
+
+  canRequestVeto(snapshot) {
+    const pendingTask = snapshot && snapshot.pendingTask;
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const legislative = privateState.legislative || {};
+    return Boolean(
+      pendingTask &&
+        pendingTask.taskType === "CHANCELLOR_ENACT_POLICY" &&
+        (legislative.canRequestVeto || (pendingTask.meta && pendingTask.meta.canRequestVeto)),
+    );
+  },
+
+  createVetoResponse(snapshot) {
+    if (!snapshot || snapshot.currentPhase !== "veto_response") {
+      return null;
+    }
+    const publicState = snapshot.publicState || {};
+    const seatOrder = publicState.seatOrder || [];
+    const president = seatOrder.find((member) => member.memberId === publicState.currentPresidentId);
+    const chancellor = seatOrder.find((member) => member.memberId === publicState.currentChancellorId);
+    const pendingTask = snapshot.pendingTask || {};
+    const trackerBefore =
+      (pendingTask.meta && Number.isFinite(Number(pendingTask.meta.electionTrackerBefore))
+        ? Number(pendingTask.meta.electionTrackerBefore)
+        : publicState.electionTracker) || 0;
+    const trackerAfter = Math.min(3, trackerBefore + 1);
+    return {
+      title: "否决请求",
+      presidentName: president ? `${president.seatIndex}号 ${president.displayName}` : "总统",
+      chancellorName: chancellor ? `${chancellor.seatIndex}号 ${chancellor.displayName}` : "总理",
+      hint: `${chancellor ? `${chancellor.seatIndex}号 ${chancellor.displayName}` : "总理"} 提出否决。若总统同意，本轮不颁布政策，选举轨 ${trackerBefore} → ${trackerAfter}。`,
+    };
   },
 
   createExecutiveAction(snapshot) {
@@ -917,6 +966,152 @@ Page({
       }
       wx.showToast({
         title: err.message || (isDiscard ? "提交弃牌失败" : "提交颁布失败"),
+        icon: "none",
+      });
+    } finally {
+      this.setData({
+        isSubmittingCommand: false,
+      });
+    }
+  },
+
+  async onTapRequestVeto() {
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+    if (!this.data.canRequestVeto || this.data.isSubmittingCommand) {
+      return;
+    }
+
+    const confirmRes = await new Promise((resolve) => {
+      wx.showModal({
+        title: "提出否决",
+        content: "确认请求总统否决本届议程？若总统拒绝，你仍需从这 2 张政策中颁布 1 张。",
+        confirmText: "提出否决",
+        cancelText: "取消",
+        success: resolve,
+        fail: () => resolve({ confirm: false }),
+      });
+    });
+    if (!confirmRes.confirm) {
+      return;
+    }
+
+    this.setData({
+      isSubmittingCommand: true,
+    });
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: "gameService",
+        data: {
+          action: "submitCommand",
+          payload: {
+            roomId: this.data.roomId,
+            controlledMemberId: this.data.controlledMemberId || "",
+            commandId: this.createCommandId("chancellor_request_veto"),
+            expectedVersion: snapshot.version,
+            taskId: pendingTask.taskId || "",
+            type: "CHANCELLOR_REQUEST_VETO",
+            body: {
+              request: true,
+            },
+          },
+        },
+      });
+      const result = res.result || {};
+      if (!result.success) {
+        throw this.createServiceError(result, "提出否决失败");
+      }
+      wx.showToast({
+        title: "已提出否决",
+        icon: "none",
+      });
+      await this.loadGameSnapshot({ silent: true });
+    } catch (err) {
+      console.error("提出否决失败", err);
+      if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
+        await this.loadGameSnapshot({ silent: true });
+      }
+      wx.showToast({
+        title: err.message || "提出否决失败",
+        icon: "none",
+      });
+    } finally {
+      this.setData({
+        isSubmittingCommand: false,
+      });
+    }
+  },
+
+  onTapAcceptVeto() {
+    this.submitVetoResponse(true);
+  },
+
+  onTapRejectVeto() {
+    this.submitVetoResponse(false);
+  },
+
+  async submitVetoResponse(accepted) {
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+    if (!this.data.canRespondVeto || this.data.isSubmittingCommand) {
+      return;
+    }
+
+    const confirmRes = await new Promise((resolve) => {
+      wx.showModal({
+        title: accepted ? "同意否决" : "拒绝否决",
+        content: accepted
+          ? "确认同意否决？本轮 2 张政策全部弃掉，不颁布政策，选举轨推进 1 格。"
+          : "确认拒绝否决？总理将必须从 2 张政策中颁布 1 张。",
+        confirmText: accepted ? "同意否决" : "拒绝否决",
+        cancelText: "取消",
+        success: resolve,
+        fail: () => resolve({ confirm: false }),
+      });
+    });
+    if (!confirmRes.confirm) {
+      return;
+    }
+
+    this.setData({
+      isSubmittingCommand: true,
+    });
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: "gameService",
+        data: {
+          action: "submitCommand",
+          payload: {
+            roomId: this.data.roomId,
+            controlledMemberId: this.data.controlledMemberId || "",
+            commandId: this.createCommandId(accepted ? "president_accept_veto" : "president_reject_veto"),
+            expectedVersion: snapshot.version,
+            taskId: pendingTask.taskId || "",
+            type: "PRESIDENT_RESPOND_VETO",
+            body: {
+              accepted,
+            },
+          },
+        },
+      });
+      const result = res.result || {};
+      if (!result.success) {
+        throw this.createServiceError(result, "回应否决失败");
+      }
+      wx.showToast({
+        title: accepted ? "已同意否决" : "已拒绝否决",
+        icon: "none",
+      });
+      await this.loadGameSnapshot({ silent: true });
+    } catch (err) {
+      console.error("回应否决失败", err);
+      if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
+        await this.loadGameSnapshot({ silent: true });
+      }
+      wx.showToast({
+        title: err.message || "回应否决失败",
         icon: "none",
       });
     } finally {

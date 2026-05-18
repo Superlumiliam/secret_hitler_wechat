@@ -323,6 +323,162 @@ function assertLegislativeChancellorVisibility() {
   });
 }
 
+function assertVetoPrivateAndHistoryProjection() {
+  const members = makeMembers(7);
+  const room = {
+    roomId: "room_veto",
+    roomCode: "778901",
+  };
+  const chancellorHand = ["LIBERAL", "FASCIST"];
+  const baseCore = createInitialGameProjection(room, members, {
+    gameId: "game_veto",
+    createdAt: new Date("2026-05-12T00:00:00.000Z"),
+    pickIndex: () => 0,
+  }).gameCore;
+  const chancellorCore = {
+    ...baseCore,
+    version: 9,
+    round: 4,
+    phase: "legislative_chancellor",
+    currentPresidentCandidateId: "mem_1",
+    currentChancellorCandidateId: "mem_2",
+    currentPresidentId: "mem_1",
+    currentChancellorId: "mem_2",
+    fascistPolicyCount: 5,
+    vetoUnlocked: true,
+    previousElectedPresidentId: "mem_1",
+    previousElectedChancellorId: "mem_2",
+    policyState: {
+      drawPile: ["FASCIST", "LIBERAL", "FASCIST"],
+      discardPile: ["LIBERAL"],
+      presidentHand: null,
+      chancellorHand,
+      peekPile: null,
+    },
+    phaseData: {
+      presidentId: "mem_1",
+      chancellorId: "mem_2",
+      cards: chancellorHand,
+      vetoAllowed: true,
+    },
+  };
+
+  const chancellorPrivate = buildPrivateSnapshotPayload(
+    chancellorCore,
+    members[1],
+    members,
+    new Date("2026-05-12T00:08:00.000Z"),
+  );
+  assert.strictEqual(
+    chancellorPrivate.pendingTask.meta.canRequestVeto,
+    true,
+    "chancellor enact task should advertise veto availability",
+  );
+  assert.strictEqual(
+    chancellorPrivate.privateState.legislative.canRequestVeto,
+    true,
+    "chancellor private legislative state should allow veto request",
+  );
+
+  const vetoCore = {
+    ...chancellorCore,
+    version: 10,
+    phase: "veto_response",
+    phaseData: {
+      presidentId: "mem_1",
+      chancellorId: "mem_2",
+      cards: chancellorHand,
+      requestedBy: "mem_2",
+    },
+  };
+  const publicPayload = buildPublicSnapshotPayload(room, vetoCore, members, [], new Date("2026-05-12T00:09:00.000Z"));
+  assert.strictEqual(hasSecretKey(publicPayload), false, "public veto snapshot should not contain secrets");
+  assert.strictEqual(
+    JSON.stringify(publicPayload).includes(chancellorHand.join(",")),
+    false,
+    "public veto snapshot should not reveal chancellor hand",
+  );
+
+  const presidentPrivate = buildPrivateSnapshotPayload(vetoCore, members[0], members, new Date("2026-05-12T00:09:00.000Z"));
+  assert.strictEqual(
+    presidentPrivate.pendingTask.taskType,
+    "PRESIDENT_RESPOND_VETO",
+    "president should receive veto response task",
+  );
+  assert.strictEqual(
+    presidentPrivate.privateState.legislative,
+    null,
+    "president should not see chancellor cards while responding to veto",
+  );
+
+  const chancellorDuringVeto = buildPrivateSnapshotPayload(
+    vetoCore,
+    members[1],
+    members,
+    new Date("2026-05-12T00:09:00.000Z"),
+  );
+  assert.strictEqual(chancellorDuringVeto.pendingTask, null, "chancellor waits while president responds to veto");
+  assert.strictEqual(
+    chancellorDuringVeto.privateState.legislative,
+    null,
+    "chancellor hand should not remain projected during veto response",
+  );
+
+  const requestedHistory = buildPublicHistoryProjection(vetoCore, members, [
+    {
+      eventId: "evt_game_veto_1",
+      round: 4,
+      phase: "legislative_chancellor",
+      type: "VETO_REQUESTED",
+      title: "总理提出否决",
+      summary: "玩家2 提出否决本届议程，等待总统回应",
+      createdAt: "2026-05-12T00:09:00.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_2",
+    },
+  ]);
+  assert.strictEqual(requestedHistory.rounds[3].outcome.type, "vetoed", "veto request should be public as pending veto");
+  assert.strictEqual(requestedHistory.rounds[3].outcome.label, "否决待确认");
+
+  const acceptedHistory = buildPublicHistoryProjection(
+    {
+      ...vetoCore,
+      version: 11,
+      round: 5,
+      phase: "nomination",
+      currentPresidentCandidateId: "mem_3",
+      currentChancellorCandidateId: null,
+      currentPresidentId: null,
+      currentChancellorId: null,
+      electionTracker: 2,
+    },
+    members,
+    [
+      {
+        eventId: "evt_game_veto_2",
+        round: 4,
+        phase: "veto_response",
+        type: "VETO_RESPONDED",
+        title: "总统同意否决",
+        summary: "玩家1 同意否决，本轮不颁布政策，选举轨 1 → 2",
+        createdAt: "2026-05-12T00:10:00.000Z",
+        presidentId: "mem_1",
+        chancellorId: "mem_2",
+        accepted: true,
+        electionTrackerBefore: 1,
+        electionTrackerAfter: 2,
+      },
+    ],
+  );
+  assert.strictEqual(acceptedHistory.rounds[3].status, "completed", "accepted veto should complete elected government round");
+  assert.strictEqual(acceptedHistory.rounds[3].outcome.type, "vetoed", "accepted veto should be a veto outcome");
+  assert.strictEqual(
+    acceptedHistory.rounds[3].outcome.label,
+    "否决通过",
+    "accepted veto should use compact public label",
+  );
+}
+
 function makeExecutiveCore(actionType, overrides = {}) {
   const members = makeMembers(7);
   const room = {
@@ -863,6 +1019,7 @@ Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
 assertNominationTargetOptions();
 assertLegislativePresidentVisibility();
 assertLegislativeChancellorVisibility();
+assertVetoPrivateAndHistoryProjection();
 assertExecutivePrivateAndPublicProjection();
 assertHistoryProjectionPrivacyAndCurrentRound();
 

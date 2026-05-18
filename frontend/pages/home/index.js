@@ -340,22 +340,28 @@ Page({
       isCreatingDevRoom: true,
     });
 
+    let uploadedAvatarFileId = "";
     try {
+      const commandId = createCommandId("dev_create_room");
+      uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
+
       const res = await wx.cloud.callFunction({
         name: "roomService",
         data: {
           action: "devCreateRoom",
           payload: {
-            commandId: createCommandId("dev_create_room"),
+            commandId,
             targetPlayerCount: this.data.selectedDevPlayerCount || developerMode.targetPlayerCount || 6,
             displayName: profile.displayName,
-            avatarUrl: "",
+            avatarUrl: uploadedAvatarFileId,
           },
         },
       });
       const result = res.result || {};
 
       if (!result.success) {
+        await this.deleteUploadedAvatar(uploadedAvatarFileId);
+        uploadedAvatarFileId = "";
         throw createServiceError(result, "创建开发者房间失败");
       }
 

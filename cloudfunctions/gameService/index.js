@@ -691,6 +691,16 @@ function buildExecutiveResult(historyItem, members, resultType) {
   return result;
 }
 
+function buildVetoOutcomeLabel(historyItem) {
+  if (historyItem.accepted) {
+    if (historyItem.chaosPolicy) {
+      return `否决通过，混乱政策：${getPolicyLabel(historyItem.chaosPolicy.policy)}`;
+    }
+    return "否决通过";
+  }
+  return "否决被拒绝";
+}
+
 function applyPublicHistoryEventToRound(roundItem, historyItem, members, aliveMemberIds) {
   const type = historyItem.type;
   if (historyItem.presidentId || historyItem.presidentCandidateId) {
@@ -762,6 +772,34 @@ function applyPublicHistoryEventToRound(roundItem, historyItem, members, aliveMe
       type: "pending_legislation",
       label: "立法中",
     };
+    return;
+  }
+
+  if (type === "VETO_REQUESTED") {
+    roundItem.status = "legislating";
+    roundItem.outcome = {
+      type: "vetoed",
+      label: "否决待确认",
+    };
+    return;
+  }
+
+  if (type === "VETO_RESPONDED") {
+    if (historyItem.accepted) {
+      roundItem.status = historyItem.winner ? "game_ended" : "completed";
+      roundItem.outcome = {
+        type: historyItem.winner ? "win" : historyItem.chaosPolicy ? "chaos_policy" : "vetoed",
+        label: historyItem.winner
+          ? buildHistoryWinLabel(historyItem.winner, historyItem.winReason)
+          : buildVetoOutcomeLabel(historyItem),
+      };
+    } else {
+      roundItem.status = "legislating";
+      roundItem.outcome = {
+        type: "pending_legislation",
+        label: "立法中",
+      };
+    }
     return;
   }
 
@@ -1147,6 +1185,21 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
     if (Array.isArray(chancellorHand)) {
       pendingTask.meta.cardCount = chancellorHand.length;
     }
+  }
+
+  if (gameCore.phase === "veto_response" && memberId === gameCore.currentPresidentId) {
+    pendingTask = {
+      taskId: `${gameCore.gameId}:${gameCore.version}:PRESIDENT_RESPOND_VETO:${memberId}`,
+      taskType: "PRESIDENT_RESPOND_VETO",
+      required: true,
+      deadline: null,
+      allowedTargets: [],
+      meta: {
+        options: ["accept", "reject"],
+        chancellorId: gameCore.currentChancellorId || (gameCore.phaseData && gameCore.phaseData.chancellorId) || null,
+        electionTrackerBefore: gameCore.electionTracker || 0,
+      },
+    };
   }
 
   if (gameCore.phase === "executive_action" && memberId === gameCore.currentPresidentId) {
@@ -2277,6 +2330,361 @@ async function submitCommand(payload, openid) {
             policyState: replaceFieldValue(nextGameCore.policyState),
             phaseData: replaceFieldValue(nextGameCore.phaseData),
             lastLegislativeResult: replaceFieldValue(nextGameCore.lastLegislativeResult),
+            winner: nextGameCore.winner,
+            winReason: nextGameCore.winReason,
+            endedAt: nextGameCore.endedAt,
+            updatedAt,
+          },
+        });
+
+        await transaction.collection("room_public_snapshots").doc(roomId).update({
+          data: {
+            roomStatus: nextGameCore.status,
+            version: nextGameCore.version,
+            payload: replaceFieldValue(publicSnapshotPayload),
+            updatedAt,
+          },
+        });
+
+        for (const snapshot of privateSnapshotPayloads) {
+          await transaction
+            .collection("player_private_snapshots")
+            .doc(snapshot.memberId)
+            .update({
+              data: {
+                roomStatus: nextGameCore.status,
+                version: nextGameCore.version,
+                payload: replaceFieldValue(snapshot.payload),
+                pendingTask: replaceFieldValue(snapshot.payload.pendingTask),
+                updatedAt,
+              },
+            });
+        }
+
+        await transaction.collection("game_events").doc(publicEvent.event.eventId).set({
+          data: {
+            ...publicEvent.event,
+            actorMemberId,
+          },
+        });
+
+        return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
+      }
+
+      if (type === "CHANCELLOR_REQUEST_VETO") {
+        if (gameCore.phase !== "legislative_chancellor") {
+          return fail("PHASE_MISMATCH", "当前阶段不能提出否决");
+        }
+        if (actorMemberId !== gameCore.currentChancellorId) {
+          return fail("NOT_CURRENT_ACTOR", "只有当前总理可以提出否决");
+        }
+
+        const taskError = validateTaskId(payload.taskId, gameCore, "CHANCELLOR_ENACT_POLICY", actorMemberId);
+        if (taskError) {
+          return taskError;
+        }
+
+        if (!gameCore.vetoUnlocked || !gameCore.phaseData || gameCore.phaseData.vetoAllowed !== true) {
+          return fail("ACTION_NOT_ALLOWED", "当前立法阶段尚不能提出否决");
+        }
+
+        const currentPolicyState = gameCore.policyState || buildInitialPolicyState();
+        const chancellorHand =
+          currentPolicyState.chancellorHand || (gameCore.phaseData && gameCore.phaseData.cards) || null;
+        if (!Array.isArray(chancellorHand) || chancellorHand.length !== 2) {
+          return fail("INTERNAL_ERROR", "总理政策手牌状态异常，请刷新后重试", true);
+        }
+
+        const nextGameCore = {
+          ...gameCore,
+          version: previousVersion + 1,
+          eventSeq: (gameCore.eventSeq || 0) + 1,
+          phase: "veto_response",
+          phaseData: {
+            presidentId: gameCore.currentPresidentId,
+            chancellorId: gameCore.currentChancellorId,
+            cards: chancellorHand,
+            requestedBy: actorMemberId,
+            requestedAt: updatedAt.toISOString(),
+          },
+          updatedAt,
+        };
+
+        const publicSnapshotRes = await transaction.collection("room_public_snapshots").doc(roomId).get();
+        const currentPublicPayload = (publicSnapshotRes.data && publicSnapshotRes.data.payload) || {};
+        const publicHistory = (((currentPublicPayload.publicState || {}).publicHistory) || []).slice();
+        const chancellor = members.find((member) => getMemberId(member) === actorMemberId);
+        const publicEvent = appendPublicHistory(
+          publicHistory,
+          nextGameCore,
+          "VETO_REQUESTED",
+          "总理提出否决",
+          `${chancellor ? chancellor.displayName : "总理"} 提出否决本届议程，等待总统回应`,
+          updatedAt,
+          {
+            presidentId: gameCore.currentPresidentId,
+            chancellorId: gameCore.currentChancellorId,
+          },
+        );
+
+        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const privateSnapshotPayloads = members.map((member) => ({
+          memberId: getMemberId(member),
+          ownerOpenId: getMemberOpenId(member),
+          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
+        }));
+
+        await transaction.collection("game_core").doc(gameId).update({
+          data: {
+            version: nextGameCore.version,
+            eventSeq: nextGameCore.eventSeq,
+            phase: nextGameCore.phase,
+            phaseData: replaceFieldValue(nextGameCore.phaseData),
+            updatedAt,
+          },
+        });
+
+        await transaction.collection("room_public_snapshots").doc(roomId).update({
+          data: {
+            version: nextGameCore.version,
+            payload: replaceFieldValue(publicSnapshotPayload),
+            updatedAt,
+          },
+        });
+
+        for (const snapshot of privateSnapshotPayloads) {
+          await transaction
+            .collection("player_private_snapshots")
+            .doc(snapshot.memberId)
+            .update({
+              data: {
+                version: nextGameCore.version,
+                payload: replaceFieldValue(snapshot.payload),
+                pendingTask: replaceFieldValue(snapshot.payload.pendingTask),
+                updatedAt,
+              },
+            });
+        }
+
+        await transaction.collection("game_events").doc(publicEvent.event.eventId).set({
+          data: {
+            ...publicEvent.event,
+            actorMemberId,
+          },
+        });
+
+        return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
+      }
+
+      if (type === "PRESIDENT_RESPOND_VETO") {
+        if (gameCore.phase !== "veto_response") {
+          return fail("PHASE_MISMATCH", "当前阶段不能回应否决");
+        }
+        if (actorMemberId !== gameCore.currentPresidentId) {
+          return fail("NOT_CURRENT_ACTOR", "只有当前总统可以回应否决");
+        }
+
+        const taskError = validateTaskId(payload.taskId, gameCore, type, actorMemberId);
+        if (taskError) {
+          return taskError;
+        }
+
+        const accepted = payload.body && payload.body.accepted;
+        if (typeof accepted !== "boolean") {
+          return fail("INVALID_PAYLOAD", "请选择同意或拒绝否决");
+        }
+
+        const currentPolicyState = gameCore.policyState || buildInitialPolicyState();
+        const chancellorHand =
+          currentPolicyState.chancellorHand || (gameCore.phaseData && gameCore.phaseData.cards) || null;
+        if (!Array.isArray(chancellorHand) || chancellorHand.length !== 2) {
+          return fail("INTERNAL_ERROR", "总理政策手牌状态异常，请刷新后重试", true);
+        }
+
+        const publicSnapshotRes = await transaction.collection("room_public_snapshots").doc(roomId).get();
+        const currentPublicPayload = (publicSnapshotRes.data && publicSnapshotRes.data.payload) || {};
+        const publicHistory = (((currentPublicPayload.publicState || {}).publicHistory) || []).slice();
+        const president = members.find((member) => getMemberId(member) === actorMemberId);
+        let nextGameCore = null;
+        let eventSummary = "";
+        const eventExtra = {
+          presidentId: gameCore.currentPresidentId,
+          chancellorId: gameCore.currentChancellorId,
+          accepted,
+          electionTrackerBefore: gameCore.electionTracker || 0,
+          electionTrackerAfter: gameCore.electionTracker || 0,
+        };
+
+        if (!accepted) {
+          nextGameCore = {
+            ...gameCore,
+            version: previousVersion + 1,
+            eventSeq: (gameCore.eventSeq || 0) + 1,
+            phase: "legislative_chancellor",
+            phaseData: {
+              presidentId: gameCore.currentPresidentId,
+              chancellorId: gameCore.currentChancellorId,
+              cards: chancellorHand,
+              vetoAllowed: false,
+              vetoRejected: true,
+            },
+            updatedAt,
+          };
+          eventSummary = `${president ? president.displayName : "总统"} 拒绝否决，总理必须继续颁布 1 张政策`;
+        } else {
+          let status = gameCore.status || "in_game";
+          let phase = "nomination";
+          let winner = gameCore.winner || null;
+          let winReason = gameCore.winReason || null;
+          let endedAt = gameCore.endedAt || null;
+          let liberalPolicyCount = gameCore.liberalPolicyCount || 0;
+          let fascistPolicyCount = gameCore.fascistPolicyCount || 0;
+          let electionTracker = (gameCore.electionTracker || 0) + 1;
+          const nominationTransition = getNextNominationTransition(gameCore, members);
+          let nextPresidentCandidateId = nominationTransition.nextPresidentCandidateId;
+          let nextPolicyState = {
+            drawPile: ((currentPolicyState && currentPolicyState.drawPile) || []).slice(),
+            discardPile: ((currentPolicyState && currentPolicyState.discardPile) || []).concat(chancellorHand),
+            presidentHand: null,
+            chancellorHand: null,
+            peekPile: currentPolicyState ? currentPolicyState.peekPile || null : null,
+          };
+
+          eventExtra.electionTrackerAfter = electionTracker;
+
+          if (electionTracker >= 3) {
+            nextPolicyState = ensurePolicyDrawPile(nextPolicyState);
+            if (!nextPolicyState.drawPile.length) {
+              return fail("INTERNAL_ERROR", "政策牌库为空，无法触发混乱政策", true);
+            }
+            const chaosPolicy = nextPolicyState.drawPile.shift();
+            if (chaosPolicy === "LIBERAL") {
+              liberalPolicyCount += 1;
+            } else {
+              fascistPolicyCount += 1;
+            }
+            electionTracker = 0;
+            eventExtra.electionTrackerAfter = 0;
+            eventExtra.chaosPolicy = {
+              policy: chaosPolicy,
+              liberalPolicyCount,
+              fascistPolicyCount,
+            };
+
+            if (liberalPolicyCount >= 5) {
+              status = "game_ended";
+              phase = "game_ended";
+              winner = "LIBERAL";
+              winReason = "LIBERAL_POLICIES";
+              endedAt = updatedAt;
+            } else if (fascistPolicyCount >= 6) {
+              status = "game_ended";
+              phase = "game_ended";
+              winner = "FASCIST";
+              winReason = "FASCIST_POLICIES";
+              endedAt = updatedAt;
+            }
+          }
+
+          nextPolicyState = reshufflePolicyDeckForNextLegislative(nextPolicyState);
+          if (phase === "game_ended") {
+            nextPresidentCandidateId = gameCore.currentPresidentCandidateId;
+          }
+
+          nextGameCore = {
+            ...gameCore,
+            status,
+            version: previousVersion + 1,
+            eventSeq: (gameCore.eventSeq || 0) + 1,
+            round: phase === "nomination" ? (gameCore.round || 1) + 1 : gameCore.round,
+            phase,
+            currentPresidentCandidateId: nextPresidentCandidateId,
+            currentChancellorCandidateId: phase === "nomination" ? null : gameCore.currentChancellorCandidateId,
+            currentPresidentId: phase === "nomination" ? null : gameCore.currentPresidentId,
+            currentChancellorId: phase === "nomination" ? null : gameCore.currentChancellorId,
+            specialElectionCallerId:
+              phase === "nomination" ? nominationTransition.specialElectionCallerId : gameCore.specialElectionCallerId || null,
+            forcedNextPresidentId:
+              phase === "nomination" ? nominationTransition.forcedNextPresidentId : gameCore.forcedNextPresidentId || null,
+            electionTracker,
+            liberalPolicyCount,
+            fascistPolicyCount,
+            vetoUnlocked: Boolean(gameCore.vetoUnlocked || fascistPolicyCount >= 5),
+            policyState: nextPolicyState,
+            phaseData:
+              phase === "nomination"
+                ? {
+                    presidentCandidateId: nextPresidentCandidateId,
+                    eligibleChancellorIds: [],
+                  }
+                : {},
+            lastLegislativeResult: {
+              round: gameCore.round,
+              presidentId: gameCore.currentPresidentId,
+              chancellorId: gameCore.currentChancellorId,
+              vetoed: true,
+              accepted: true,
+              electionTrackerBefore: eventExtra.electionTrackerBefore,
+              electionTrackerAfter: eventExtra.electionTrackerAfter,
+              chaosPolicy: eventExtra.chaosPolicy || null,
+            },
+            winner,
+            winReason,
+            endedAt,
+            updatedAt,
+          };
+          if (nextGameCore.phase === "nomination") {
+            nextGameCore.phaseData.eligibleChancellorIds = getEligibleChancellorIdsFromCore(nextGameCore);
+          }
+
+          eventExtra.winner = winner;
+          eventExtra.winReason = winReason;
+          eventSummary = `${president ? president.displayName : "总统"} 同意否决，本轮不颁布政策，选举轨 ${eventExtra.electionTrackerBefore} → ${eventExtra.electionTrackerAfter}`;
+          if (eventExtra.chaosPolicy) {
+            eventSummary = `${eventSummary}，触发混乱政策：${getPolicyLabel(eventExtra.chaosPolicy.policy)}`;
+          }
+          if (winner) {
+            eventSummary = `${eventSummary}，${winner === "LIBERAL" ? "自由派" : "极权派"}获胜`;
+          }
+        }
+
+        const publicEvent = appendPublicHistory(
+          publicHistory,
+          { ...nextGameCore, round: gameCore.round, phase: gameCore.phase },
+          "VETO_RESPONDED",
+          accepted ? "总统同意否决" : "总统拒绝否决",
+          eventSummary,
+          updatedAt,
+          eventExtra,
+        );
+
+        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const privateSnapshotPayloads = members.map((member) => ({
+          memberId: getMemberId(member),
+          ownerOpenId: getMemberOpenId(member),
+          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
+        }));
+
+        await transaction.collection("game_core").doc(gameId).update({
+          data: {
+            status: nextGameCore.status,
+            version: nextGameCore.version,
+            eventSeq: nextGameCore.eventSeq,
+            round: nextGameCore.round,
+            phase: nextGameCore.phase,
+            currentPresidentCandidateId: nextGameCore.currentPresidentCandidateId,
+            currentChancellorCandidateId: nextGameCore.currentChancellorCandidateId,
+            currentPresidentId: nextGameCore.currentPresidentId,
+            currentChancellorId: nextGameCore.currentChancellorId,
+            specialElectionCallerId: nextGameCore.specialElectionCallerId,
+            forcedNextPresidentId: nextGameCore.forcedNextPresidentId,
+            electionTracker: nextGameCore.electionTracker,
+            liberalPolicyCount: nextGameCore.liberalPolicyCount,
+            fascistPolicyCount: nextGameCore.fascistPolicyCount,
+            vetoUnlocked: nextGameCore.vetoUnlocked,
+            policyState: replaceFieldValue(nextGameCore.policyState),
+            phaseData: replaceFieldValue(nextGameCore.phaseData),
+            lastLegislativeResult: replaceFieldValue(nextGameCore.lastLegislativeResult || gameCore.lastLegislativeResult || null),
             winner: nextGameCore.winner,
             winReason: nextGameCore.winReason,
             endedAt: nextGameCore.endedAt,
