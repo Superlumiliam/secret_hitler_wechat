@@ -48,7 +48,7 @@
         </view>
 
         <view class="track-panel liberal-panel">
-          <view class="track-title">自由派政策轨（5格）</view>
+          <view class="track-title">自由派政策轨</view>
           <view class="policy-row liberal-row">
             <view wx:for="{{liberalTrack}}" wx:key="slot" class="{{item.cellClass}}">
               <text class="policy-label">{{item.label}}</text>
@@ -58,7 +58,7 @@
         </view>
 
         <view class="track-panel fascist-panel">
-          <view class="track-title fascist-title">极权派政策轨（6格）</view>
+          <view class="track-title fascist-title">极权派政策轨</view>
           <view class="policy-row fascist-row">
             <view wx:for="{{fascistTrack}}" wx:key="slot" class="{{item.cellClass}}">
               <text class="policy-label">{{item.label}}</text>
