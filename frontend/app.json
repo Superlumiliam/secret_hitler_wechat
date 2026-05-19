@@ -13,6 +13,12 @@
         "pages/identity/index",
         "pages/history/index"
       ]
+    },
+    {
+      "root": "packageResult",
+      "pages": [
+        "pages/result/index"
+      ]
     }
   ],
   "window": {

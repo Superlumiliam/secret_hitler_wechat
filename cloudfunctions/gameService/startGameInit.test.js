@@ -36,11 +36,15 @@ const { __testHooks } = require("./index");
 Module._load = originalLoad;
 
 const {
+  ROOM_TTL_ACTIVE_MS,
+  ROOM_TTL_RESULT_MS,
   ROLE_PRESET_BY_PLAYER_COUNT,
   buildPrivateSnapshotPayload,
   buildPublicHistoryProjection,
   buildPublicSnapshotPayload,
+  buildResultSnapshotPayload,
   createInitialGameProjection,
+  createResultExpireAt,
   drawPolicyCards,
   getExecutiveAllowedTargetIds,
   getExecutiveTaskType,
@@ -959,7 +963,7 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
 
   const gameEndedCore = {
     ...enactedExecutionCore,
-    status: "game_ended",
+    status: "ended",
     phase: "game_ended",
     winner: "LIBERAL",
     winReason: "HITLER_EXECUTED",
@@ -988,6 +992,83 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     "1号总统处决了6号玩家",
     "execution win should still keep public execution result",
   );
+}
+
+function assertResultSnapshotProjection() {
+  const members = makeMembers(5);
+  const room = {
+    roomId: "room_result",
+    roomCode: "482615",
+  };
+  const projection = createInitialGameProjection(room, members, {
+    gameId: "game_result",
+    createdAt: new Date("2026-05-12T00:00:00.000Z"),
+    pickIndex: () => 0,
+  });
+  const endedCore = {
+    ...projection.gameCore,
+    status: "ended",
+    phase: "game_ended",
+    version: 9,
+    liberalPolicyCount: 3,
+    fascistPolicyCount: 5,
+    winner: "LIBERAL",
+    winReason: "HITLER_EXECUTED",
+    endedAt: new Date("2026-05-12T00:08:00.000Z"),
+    aliveMemberIds: members.slice(0, 4).map((member) => member.memberId),
+  };
+  const result = buildResultSnapshotPayload(
+    room,
+    endedCore,
+    members,
+    [
+      {
+        eventId: "evt_result_1",
+        round: 6,
+        phase: "executive_action",
+        type: "EXEC_PLAYER_EXECUTED",
+        title: "总统完成处决",
+        summary: "玩家1 处决了 玩家5，独裁者被处决，自由派获胜",
+        createdAt: "2026-05-12T00:07:59.000Z",
+      },
+    ],
+    new Date("2026-05-12T00:08:00.000Z"),
+    "mem_1",
+  );
+
+  assert.strictEqual(result.roomStatus, "ended", "result snapshot should expose ended room status");
+  assert.strictEqual(result.myMemberId, "mem_1", "result snapshot should include viewer member id");
+  assert.strictEqual(result.winner, "LIBERAL", "result snapshot should include winner enum");
+  assert.strictEqual(result.policySummary.fascist, 5, "result snapshot should include final policy track");
+  assert.strictEqual(result.finalPlayers.length, 5, "result snapshot should include all final players");
+  assert(result.finalPlayers.every((player) => player.role && player.party), "result snapshot should reveal final identities");
+  assert.strictEqual(result.timeline[0].type, "EXEC_PLAYER_EXECUTED", "result snapshot should include key timeline events");
+}
+
+function assertRoomTtlPolicies() {
+  const createdAt = new Date("2026-05-12T00:00:00.000Z");
+  const room = {
+    roomId: "room_ttl",
+    roomCode: "112233",
+  };
+  const projection = createInitialGameProjection(room, makeMembers(5), {
+    gameId: "game_ttl",
+    createdAt,
+    pickIndex: () => 0,
+  });
+  assert.strictEqual(
+    projection.expireAt.getTime() - createdAt.getTime(),
+    ROOM_TTL_ACTIVE_MS,
+    "active game projection should keep active-room ttl",
+  );
+
+  const endedAt = new Date("2026-05-12T00:15:00.000Z");
+  assert.strictEqual(
+    createResultExpireAt(endedAt).getTime() - endedAt.getTime(),
+    ROOM_TTL_RESULT_MS,
+    "ended result projection should use 30-minute result ttl",
+  );
+  assert.strictEqual(ROOM_TTL_RESULT_MS, 30 * 60 * 1000, "result ttl should be 30 minutes");
 }
 
 Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
@@ -1022,5 +1103,7 @@ assertLegislativeChancellorVisibility();
 assertVetoPrivateAndHistoryProjection();
 assertExecutivePrivateAndPublicProjection();
 assertHistoryProjectionPrivacyAndCurrentRound();
+assertResultSnapshotProjection();
+assertRoomTtlPolicies();
 
 console.log("startGame initialization tests passed");

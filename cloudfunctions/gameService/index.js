@@ -11,6 +11,7 @@ const _ = db.command;
 const MIN_PLAYER_COUNT = 5;
 const MAX_PLAYER_COUNT = 10;
 const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
+const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const ROOM_MODE_NORMAL = "normal";
 const ROOM_MODE_DEV = "dev";
@@ -97,6 +98,10 @@ function createExpireAt(baseTime, ttlMs) {
   return new Date(base + ttlMs);
 }
 
+function createResultExpireAt(baseTime) {
+  return createExpireAt(baseTime, ROOM_TTL_RESULT_MS);
+}
+
 function randomInt(max) {
   return Math.floor(Math.random() * max);
 }
@@ -132,8 +137,41 @@ function isActiveMember(member) {
   return (member.memberStatus || member.status) === "active";
 }
 
+function isGameParticipantMember(member) {
+  const status = member.memberStatus || member.status;
+  return status === "active" || status === "offline";
+}
+
 function replaceFieldValue(value) {
   return _ && typeof _.set === "function" ? _.set(value) : value;
+}
+
+function toIsoString(value) {
+  if (!value) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value.toDate === "function") {
+    return value.toDate().toISOString();
+  }
+  return String(value);
+}
+
+function isGameEndedCore(gameCore) {
+  return Boolean(gameCore && (gameCore.phase === "game_ended" || gameCore.status === "ended" || gameCore.status === "game_ended"));
+}
+
+function getRoomStatusForGameCore(gameCore) {
+  return isGameEndedCore(gameCore) ? "ended" : gameCore.status || "in_game";
+}
+
+function getPublicSnapshotTypeForGameCore(gameCore) {
+  return isGameEndedCore(gameCore) ? "result_public" : "game_public";
 }
 
 function payloadHash(payload) {
@@ -965,10 +1003,9 @@ function buildPublicHistoryProjection(gameCore, members, publicHistory = []) {
   const rounds = Object.keys(roundsByNo)
     .map((round) => roundsByNo[round])
     .sort((a, b) => a.round - b.round);
-  const roundsCompleted =
-    gameCore.phase === "game_ended" || gameCore.status === "game_ended"
-      ? roundsStarted
-      : rounds.filter((round) => round.round < (gameCore.round || 1)).length;
+  const roundsCompleted = isGameEndedCore(gameCore)
+    ? roundsStarted
+    : rounds.filter((round) => round.round < (gameCore.round || 1)).length;
 
   return {
     roundsStarted,
@@ -1071,7 +1108,7 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
   return {
     roomId,
     roomCode: room.roomCode,
-    roomStatus: gameCore.status || "in_game",
+    roomStatus: getRoomStatusForGameCore(gameCore),
     version: gameCore.version,
     round: gameCore.round,
     currentPhase: gameCore.phase,
@@ -1106,6 +1143,104 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
       publicHistory,
     },
     updatedAt: updatedAt.toISOString(),
+  };
+}
+
+function buildResultTimeline(publicHistory) {
+  return (publicHistory || [])
+    .filter((item) =>
+      [
+        "GAME_STARTED",
+        "CHANCELLOR_NOMINATED",
+        "VOTES_REVEALED",
+        "POLICY_ENACTED",
+        "VETO_RESPONDED",
+        "EXEC_INVESTIGATED",
+        "EXEC_SPECIAL_ELECTION",
+        "EXEC_POLICY_PEEK_ACKED",
+        "EXEC_PLAYER_EXECUTED",
+      ].includes(item.type),
+    )
+    .map((item) => ({
+      eventId: item.eventId || "",
+      round: item.round || 1,
+      phase: item.phase || "",
+      type: item.type || "",
+      title: item.title || "",
+      summary: item.summary || "",
+      createdAt: toIsoString(item.createdAt),
+    }));
+}
+
+function buildResultSnapshotPayload(room, gameCore, members, publicHistory, updatedAt, viewerMemberId = "") {
+  const roomId = room.roomId || room._id;
+  const aliveMemberIds = gameCore.aliveMemberIds || [];
+  const roleAssignments = gameCore.roleAssignments || {};
+  return {
+    roomId,
+    roomCode: room.roomCode,
+    roomStatus: "ended",
+    myMemberId: viewerMemberId,
+    version: gameCore.version,
+    winner: gameCore.winner || "",
+    winReason: gameCore.winReason || "",
+    endedAt: toIsoString(gameCore.endedAt || updatedAt),
+    policySummary: {
+      liberal: gameCore.liberalPolicyCount || 0,
+      fascist: gameCore.fascistPolicyCount || 0,
+    },
+    finalPlayers: members.map((member) => {
+      const memberId = getMemberId(member);
+      const assignment = roleAssignments[memberId] || {};
+      return {
+        memberId,
+        displayName: member.displayName || "",
+        avatarUrl: member.avatarUrl || "",
+        seatIndex: member.seatIndex,
+        role: assignment.role || "",
+        party: assignment.party || (assignment.role ? getPartyForRole(assignment.role) : ""),
+        isAlive: aliveMemberIds.includes(memberId),
+      };
+    }),
+    timeline: buildResultTimeline(publicHistory),
+    updatedAt: updatedAt.toISOString(),
+  };
+}
+
+async function persistEndedRoomProjection(transaction, roomId, members, endedAt, updatedAt) {
+  const expireAt = createResultExpireAt(endedAt || updatedAt);
+  await transaction.collection("rooms").doc(roomId).update({
+    data: {
+      status: "ended",
+      endedAt: endedAt || updatedAt,
+      expireAt,
+      updatedAt,
+      version: _.inc(1),
+    },
+  });
+
+  for (const member of members) {
+    await transaction
+      .collection("user_profiles")
+      .where({
+        activeRoomId: roomId,
+        activeMemberId: getMemberId(member),
+      })
+      .update({
+        data: {
+          activeRoomStatus: "ended",
+          updatedAt,
+        },
+      });
+  }
+}
+
+function getTerminalExpirePatch(gameCore, updatedAt) {
+  if (!isGameEndedCore(gameCore)) {
+    return {};
+  }
+  return {
+    expireAt: createResultExpireAt(gameCore.endedAt || updatedAt),
   };
 }
 
@@ -1527,6 +1662,12 @@ async function getGameSnapshot(payload, openid) {
     return fail("ROOM_NOT_FOUND", "房间不存在");
   }
 
+  if (room.status === "ended") {
+    return fail("GAME_ALREADY_ENDED", "对局已经结束");
+  }
+  if (room.status === "expired") {
+    return fail("ROOM_EXPIRED", "房间已过期");
+  }
   if (room.status !== "in_game") {
     return fail("GAME_NOT_STARTED", "房间尚未开局");
   }
@@ -1591,16 +1732,18 @@ function validateOptionalTaskId(taskId, gameCore, commandType, actorMemberId) {
 }
 
 function buildCommandAccepted(roomId, previousVersion, gameCore, previousPhase, options = {}) {
+  const roomStatus = getRoomStatusForGameCore(gameCore);
   return ok({
     accepted: true,
     roomId,
-    roomStatus: gameCore.status || "in_game",
+    roomStatus,
     previousVersion,
     newVersion: gameCore.version,
     currentPhase: gameCore.phase,
     phaseChanged: previousPhase !== gameCore.phase,
     deduplicated: Boolean(options.deduplicated),
     needsRefresh: true,
+    routeHint: roomStatus === "ended" || gameCore.phase === "game_ended" ? "result" : "board",
   });
 }
 
@@ -1626,6 +1769,12 @@ async function submitCommand(payload, openid) {
       const room = roomRes.data;
       if (!room) {
         return fail("ROOM_NOT_FOUND", "房间不存在");
+      }
+      if (room.status === "ended") {
+        return fail("GAME_ALREADY_ENDED", "对局已经结束");
+      }
+      if (room.status === "expired") {
+        return fail("ROOM_EXPIRED", "房间已过期");
       }
       if (room.status !== "in_game") {
         return fail("GAME_NOT_STARTED", "房间尚未开局");
@@ -1691,7 +1840,7 @@ async function submitCommand(payload, openid) {
       ) {
         return buildCommandAccepted(roomId, expectedVersion, gameCore, gameCore.phase, { deduplicated: true });
       }
-      if (gameCore.status === "game_ended" || gameCore.phase === "game_ended") {
+      if (isGameEndedCore(gameCore)) {
         return fail("GAME_ALREADY_ENDED", "对局已经结束");
       }
       if (gameCore.version !== expectedVersion) {
@@ -1814,7 +1963,7 @@ async function submitCommand(payload, openid) {
 
             if ((gameCore.fascistPolicyCount || 0) >= 3) {
               if (chancellorAssignment.role === "HITLER") {
-                status = "game_ended";
+                status = "ended";
                 phase = "game_ended";
                 winner = "FASCIST";
                 winReason = "HITLER_ELECTED";
@@ -1911,13 +2060,13 @@ async function submitCommand(payload, openid) {
               previousElectedChancellorId = null;
 
               if (liberalPolicyCount >= 5) {
-                status = "game_ended";
+                status = "ended";
                 phase = "game_ended";
                 winner = "LIBERAL";
                 winReason = "LIBERAL_POLICIES";
                 endedAt = updatedAt;
               } else if (fascistPolicyCount >= 6) {
-                status = "game_ended";
+                status = "ended";
                 phase = "game_ended";
                 winner = "FASCIST";
                 winReason = "FASCIST_POLICIES";
@@ -1966,7 +2115,9 @@ async function submitCommand(payload, openid) {
           publicEvents.push(voteEvent.event);
         }
 
-        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const publicSnapshotPayload = isGameEndedCore(nextGameCore)
+          ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
+          : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = members.map((member) => ({
           memberId: getMemberId(member),
           ownerOpenId: getMemberOpenId(member),
@@ -2003,9 +2154,11 @@ async function submitCommand(payload, openid) {
 
         await transaction.collection("room_public_snapshots").doc(roomId).update({
           data: {
-            roomStatus: nextGameCore.status,
+            roomStatus: getRoomStatusForGameCore(nextGameCore),
+            snapshotType: getPublicSnapshotTypeForGameCore(nextGameCore),
             version: nextGameCore.version,
             payload: replaceFieldValue(publicSnapshotPayload),
+            ...getTerminalExpirePatch(nextGameCore, updatedAt),
             updatedAt,
           },
         });
@@ -2016,10 +2169,11 @@ async function submitCommand(payload, openid) {
             .doc(snapshot.memberId)
             .update({
               data: {
-                roomStatus: nextGameCore.status,
+                roomStatus: getRoomStatusForGameCore(nextGameCore),
                 version: nextGameCore.version,
                 payload: replaceFieldValue(snapshot.payload),
                 pendingTask: replaceFieldValue(snapshot.payload.pendingTask),
+                ...getTerminalExpirePatch(nextGameCore, updatedAt),
                 updatedAt,
               },
             });
@@ -2029,6 +2183,10 @@ async function submitCommand(payload, openid) {
           await transaction.collection("game_events").doc(event.eventId).set({
             data: event,
           });
+        }
+
+        if (isGameEndedCore(nextGameCore)) {
+          await persistEndedRoomProjection(transaction, roomId, members, nextGameCore.endedAt || updatedAt, updatedAt);
         }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
@@ -2098,7 +2256,9 @@ async function submitCommand(payload, openid) {
           updatedAt,
         );
 
-        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const publicSnapshotPayload = isGameEndedCore(nextGameCore)
+          ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
+          : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = members.map((member) => ({
           memberId: getMemberId(member),
           ownerOpenId: getMemberOpenId(member),
@@ -2192,13 +2352,13 @@ async function submitCommand(payload, openid) {
           enactedPolicy === "FASCIST" ? getExecutiveActionType(gameCore.playerCount, fascistPolicyCount) : null;
 
         if (liberalPolicyCount >= 5) {
-          status = "game_ended";
+          status = "ended";
           phase = "game_ended";
           winner = "LIBERAL";
           winReason = "LIBERAL_POLICIES";
           endedAt = updatedAt;
         } else if (fascistPolicyCount >= 6) {
-          status = "game_ended";
+          status = "ended";
           phase = "game_ended";
           winner = "FASCIST";
           winReason = "FASCIST_POLICIES";
@@ -2303,7 +2463,9 @@ async function submitCommand(payload, openid) {
           },
         );
 
-        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const publicSnapshotPayload = isGameEndedCore(nextGameCore)
+          ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
+          : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = members.map((member) => ({
           memberId: getMemberId(member),
           ownerOpenId: getMemberOpenId(member),
@@ -2339,9 +2501,11 @@ async function submitCommand(payload, openid) {
 
         await transaction.collection("room_public_snapshots").doc(roomId).update({
           data: {
-            roomStatus: nextGameCore.status,
+            roomStatus: getRoomStatusForGameCore(nextGameCore),
+            snapshotType: getPublicSnapshotTypeForGameCore(nextGameCore),
             version: nextGameCore.version,
             payload: replaceFieldValue(publicSnapshotPayload),
+            ...getTerminalExpirePatch(nextGameCore, updatedAt),
             updatedAt,
           },
         });
@@ -2352,10 +2516,11 @@ async function submitCommand(payload, openid) {
             .doc(snapshot.memberId)
             .update({
               data: {
-                roomStatus: nextGameCore.status,
+                roomStatus: getRoomStatusForGameCore(nextGameCore),
                 version: nextGameCore.version,
                 payload: replaceFieldValue(snapshot.payload),
                 pendingTask: replaceFieldValue(snapshot.payload.pendingTask),
+                ...getTerminalExpirePatch(nextGameCore, updatedAt),
                 updatedAt,
               },
             });
@@ -2367,6 +2532,10 @@ async function submitCommand(payload, openid) {
             actorMemberId,
           },
         });
+
+        if (isGameEndedCore(nextGameCore)) {
+          await persistEndedRoomProjection(transaction, roomId, members, nextGameCore.endedAt || updatedAt, updatedAt);
+        }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
       }
@@ -2427,7 +2596,9 @@ async function submitCommand(payload, openid) {
           },
         );
 
-        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const publicSnapshotPayload = isGameEndedCore(nextGameCore)
+          ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
+          : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = members.map((member) => ({
           memberId: getMemberId(member),
           ownerOpenId: getMemberOpenId(member),
@@ -2572,13 +2743,13 @@ async function submitCommand(payload, openid) {
             };
 
             if (liberalPolicyCount >= 5) {
-              status = "game_ended";
+              status = "ended";
               phase = "game_ended";
               winner = "LIBERAL";
               winReason = "LIBERAL_POLICIES";
               endedAt = updatedAt;
             } else if (fascistPolicyCount >= 6) {
-              status = "game_ended";
+              status = "ended";
               phase = "game_ended";
               winner = "FASCIST";
               winReason = "FASCIST_POLICIES";
@@ -2658,7 +2829,9 @@ async function submitCommand(payload, openid) {
           eventExtra,
         );
 
-        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const publicSnapshotPayload = isGameEndedCore(nextGameCore)
+          ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
+          : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = members.map((member) => ({
           memberId: getMemberId(member),
           ownerOpenId: getMemberOpenId(member),
@@ -2694,9 +2867,11 @@ async function submitCommand(payload, openid) {
 
         await transaction.collection("room_public_snapshots").doc(roomId).update({
           data: {
-            roomStatus: nextGameCore.status,
+            roomStatus: getRoomStatusForGameCore(nextGameCore),
+            snapshotType: getPublicSnapshotTypeForGameCore(nextGameCore),
             version: nextGameCore.version,
             payload: replaceFieldValue(publicSnapshotPayload),
+            ...getTerminalExpirePatch(nextGameCore, updatedAt),
             updatedAt,
           },
         });
@@ -2707,10 +2882,11 @@ async function submitCommand(payload, openid) {
             .doc(snapshot.memberId)
             .update({
               data: {
-                roomStatus: nextGameCore.status,
+                roomStatus: getRoomStatusForGameCore(nextGameCore),
                 version: nextGameCore.version,
                 payload: replaceFieldValue(snapshot.payload),
                 pendingTask: replaceFieldValue(snapshot.payload.pendingTask),
+                ...getTerminalExpirePatch(nextGameCore, updatedAt),
                 updatedAt,
               },
             });
@@ -2722,6 +2898,10 @@ async function submitCommand(payload, openid) {
             actorMemberId,
           },
         });
+
+        if (isGameEndedCore(nextGameCore)) {
+          await persistEndedRoomProjection(transaction, roomId, members, nextGameCore.endedAt || updatedAt, updatedAt);
+        }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
       }
@@ -2837,7 +3017,7 @@ async function submitCommand(payload, openid) {
           }`;
           eventExtra.targetMemberId = targetMemberId;
           if (assignment.role === "HITLER") {
-            status = "game_ended";
+            status = "ended";
             phase = "game_ended";
             winner = "LIBERAL";
             winReason = "HITLER_EXECUTED";
@@ -2910,7 +3090,9 @@ async function submitCommand(payload, openid) {
           targetMemberId: targetMemberId || null,
         });
 
-        const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
+        const publicSnapshotPayload = isGameEndedCore(nextGameCore)
+          ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
+          : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = members.map((member) => ({
           memberId: getMemberId(member),
           ownerOpenId: getMemberOpenId(member),
@@ -2944,9 +3126,11 @@ async function submitCommand(payload, openid) {
 
         await transaction.collection("room_public_snapshots").doc(roomId).update({
           data: {
-            roomStatus: nextGameCore.status,
+            roomStatus: getRoomStatusForGameCore(nextGameCore),
+            snapshotType: getPublicSnapshotTypeForGameCore(nextGameCore),
             version: nextGameCore.version,
             payload: replaceFieldValue(publicSnapshotPayload),
+            ...getTerminalExpirePatch(nextGameCore, updatedAt),
             updatedAt,
           },
         });
@@ -2957,10 +3141,11 @@ async function submitCommand(payload, openid) {
             .doc(snapshot.memberId)
             .update({
               data: {
-                roomStatus: nextGameCore.status,
+                roomStatus: getRoomStatusForGameCore(nextGameCore),
                 version: nextGameCore.version,
                 payload: replaceFieldValue(snapshot.payload),
                 pendingTask: replaceFieldValue(snapshot.payload.pendingTask),
+                ...getTerminalExpirePatch(nextGameCore, updatedAt),
                 updatedAt,
               },
             });
@@ -2970,6 +3155,10 @@ async function submitCommand(payload, openid) {
           await transaction.collection("game_events").doc(event.eventId).set({
             data: event,
           });
+        }
+
+        if (isGameEndedCore(nextGameCore)) {
+          await persistEndedRoomProjection(transaction, roomId, members, nextGameCore.endedAt || updatedAt, updatedAt);
         }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
@@ -3104,8 +3293,63 @@ async function submitCommand(payload, openid) {
   });
 }
 
-async function getResultSnapshot() {
-  return fail("NOT_IMPLEMENTED", "结果快照尚未接入");
+async function getResultSnapshot(payload, openid) {
+  const roomId = payload && payload.roomId;
+  if (!roomId || typeof roomId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+
+  const roomRes = await db.collection("rooms").doc(roomId).get();
+  const room = roomRes.data;
+  if (!room) {
+    return fail("ROOM_NOT_FOUND", "房间不存在");
+  }
+  if (room.status === "expired") {
+    return fail("ROOM_EXPIRED", "房间已过期");
+  }
+  if (room.status !== "ended") {
+    return fail(room.status === "lobby" ? "GAME_NOT_STARTED" : "ACTION_NOT_ALLOWED", "对局尚未结束");
+  }
+
+  const membersRes = await db
+    .collection("room_members")
+    .where({
+      roomId,
+    })
+    .get();
+  const members = membersRes.data.filter(isGameParticipantMember).sort((a, b) => a.seatIndex - b.seatIndex);
+  const member = members.find((item) => getMemberOpenId(item) === openid) || null;
+  if (!member) {
+    return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+  }
+
+  const publicRes = await db.collection("room_public_snapshots").doc(roomId).get();
+  const publicSnapshot = publicRes.data;
+  if (publicSnapshot && publicSnapshot.snapshotType === "result_public" && publicSnapshot.payload) {
+    return ok({
+      ...publicSnapshot.payload,
+      roomStatus: "ended",
+      myMemberId: getMemberId(member),
+    });
+  }
+
+  const gameId = room.currentGameId;
+  if (!gameId) {
+    return fail("GAME_NOT_STARTED", "对局尚未初始化");
+  }
+
+  const gameCoreRes = await db.collection("game_core").doc(gameId).get();
+  const gameCore = gameCoreRes.data;
+  if (!gameCore || gameCore.roomId !== roomId) {
+    return fail("GAME_NOT_STARTED", "对局状态不存在");
+  }
+  if (!isGameEndedCore(gameCore)) {
+    return fail("ACTION_NOT_ALLOWED", "对局尚未结束");
+  }
+
+  const currentPublicPayload = (publicSnapshot && publicSnapshot.payload) || {};
+  const publicHistory = (((currentPublicPayload.publicState || {}).publicHistory) || currentPublicPayload.timeline || []).slice();
+  return ok(buildResultSnapshotPayload(room, gameCore, members, publicHistory, new Date(), getMemberId(member)));
 }
 
 async function dispatchAction(action, payload, openid) {
@@ -3124,14 +3368,18 @@ async function dispatchAction(action, payload, openid) {
 }
 
 exports.__testHooks = {
+  ROOM_TTL_ACTIVE_MS,
+  ROOM_TTL_RESULT_MS,
   ROLE_PRESET_BY_PLAYER_COUNT,
   INITIAL_POLICY_DECK,
   buildRoleAssignments,
   buildInitialPolicyState,
   buildPublicHistoryProjection,
   buildPublicSnapshotPayload,
+  buildResultSnapshotPayload,
   buildPrivateSnapshotPayload,
   createInitialGameProjection,
+  createResultExpireAt,
   drawPolicyCards,
   getExecutiveAllowedTargetIds,
   getExecutiveTaskType,

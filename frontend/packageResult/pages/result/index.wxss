@@ -1,0 +1,265 @@
+.result-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 72rpx 28rpx 48rpx;
+  color: #f3e4c8;
+  background:
+    linear-gradient(180deg, rgba(5, 10, 10, 0.35), rgba(6, 10, 10, 0.94)),
+    #07100f;
+  font-family: "Songti SC", STSong, SimSun, serif;
+}
+
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  height: 64rpx;
+  padding: 22rpx 24rpx 10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(4, 8, 8, 0.88);
+  border-bottom: 1rpx solid rgba(184, 132, 66, 0.3);
+}
+
+.icon-button {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e8c88f;
+  border: 1rpx solid rgba(206, 151, 76, 0.55);
+  background: rgba(28, 19, 13, 0.84);
+  font-size: 28rpx;
+}
+
+.room-code {
+  color: rgba(243, 228, 200, 0.82);
+  font-size: 24rpx;
+  letter-spacing: 0;
+}
+
+.state-panel {
+  margin-top: 160rpx;
+  padding: 48rpx 28rpx;
+  text-align: center;
+  color: rgba(243, 228, 200, 0.8);
+  border: 1rpx solid rgba(184, 132, 66, 0.34);
+  background: rgba(25, 19, 14, 0.82);
+}
+
+.state-panel.is-error {
+  color: #f0b0a4;
+}
+
+.result-hero {
+  min-height: 300rpx;
+  padding: 42rpx 30rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border: 1rpx solid rgba(209, 158, 83, 0.5);
+  background:
+    linear-gradient(135deg, rgba(9, 28, 22, 0.86), rgba(46, 28, 18, 0.72)),
+    #15130f;
+  box-shadow: 0 18rpx 60rpx rgba(0, 0, 0, 0.34);
+}
+
+.result-hero.is-fascist {
+  background:
+    linear-gradient(135deg, rgba(58, 21, 18, 0.9), rgba(24, 25, 20, 0.8)),
+    #15130f;
+}
+
+.eyebrow,
+.ended-at {
+  color: rgba(232, 200, 143, 0.72);
+  font-size: 23rpx;
+}
+
+.winner-title {
+  margin-top: 18rpx;
+  font-size: 58rpx;
+  line-height: 1.08;
+  font-weight: 700;
+}
+
+.winner-reason {
+  margin-top: 14rpx;
+  color: rgba(243, 228, 200, 0.9);
+  font-size: 30rpx;
+}
+
+.ended-at {
+  margin-top: 18rpx;
+}
+
+.section {
+  margin-top: 34rpx;
+}
+
+.section-title {
+  margin-bottom: 18rpx;
+  color: #e6c27e;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.policy-row {
+  margin-bottom: 14rpx;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.policy-label {
+  width: 96rpx;
+  font-size: 24rpx;
+}
+
+.policy-label.is-liberal {
+  color: #9fc7d6;
+}
+
+.policy-label.is-fascist {
+  color: #d09a84;
+}
+
+.policy-track {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8rpx;
+}
+
+.policy-slot {
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(243, 228, 200, 0.36);
+  border: 1rpx solid rgba(184, 132, 66, 0.32);
+  background: rgba(18, 17, 14, 0.78);
+  font-size: 22rpx;
+}
+
+.policy-slot.is-liberal {
+  color: #e9f7ff;
+  border-color: rgba(112, 176, 196, 0.78);
+  background: rgba(38, 83, 92, 0.88);
+}
+
+.policy-slot.is-fascist {
+  color: #fff0e8;
+  border-color: rgba(185, 81, 62, 0.72);
+  background: rgba(91, 35, 29, 0.88);
+}
+
+.player-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12rpx;
+}
+
+.player-card {
+  min-height: 96rpx;
+  padding: 14rpx;
+  display: grid;
+  grid-template-columns: 72rpx 1fr auto;
+  align-items: center;
+  gap: 16rpx;
+  border: 1rpx solid rgba(184, 132, 66, 0.32);
+  background: rgba(22, 18, 14, 0.84);
+}
+
+.player-card.is-me {
+  border-color: rgba(232, 200, 143, 0.84);
+}
+
+.avatar {
+  width: 72rpx;
+  height: 72rpx;
+  background: rgba(232, 200, 143, 0.14);
+}
+
+.avatar.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e8c88f;
+}
+
+.player-name {
+  color: #f5e7cf;
+  font-size: 27rpx;
+  line-height: 1.2;
+}
+
+.player-role,
+.player-state {
+  margin-top: 6rpx;
+  color: rgba(243, 228, 200, 0.7);
+  font-size: 23rpx;
+}
+
+.player-state {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.timeline {
+  border-left: 1rpx solid rgba(184, 132, 66, 0.36);
+  padding-left: 22rpx;
+}
+
+.timeline-item {
+  position: relative;
+  padding: 0 0 24rpx;
+}
+
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -29rpx;
+  top: 8rpx;
+  width: 12rpx;
+  height: 12rpx;
+  background: #d3a45d;
+}
+
+.timeline-meta {
+  color: rgba(232, 200, 143, 0.64);
+  font-size: 22rpx;
+}
+
+.timeline-title {
+  margin-top: 6rpx;
+  color: #f5e7cf;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+
+.timeline-summary {
+  margin-top: 6rpx;
+  color: rgba(243, 228, 200, 0.74);
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.bottom-actions {
+  padding: 30rpx 0 10rpx;
+}
+
+.primary-action {
+  min-height: 76rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #20150f;
+  background: #d2a15c;
+  font-size: 28rpx;
+  font-weight: 700;
+}

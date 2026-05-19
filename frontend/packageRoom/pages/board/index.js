@@ -142,10 +142,17 @@ Page({
       if (!result.success) {
         throw this.createServiceError(result, "获取对局数据失败");
       }
+      if (this.redirectToResultIfNeeded(result.data)) {
+        return;
+      }
 
       await this.hydrateSnapshot(result.data);
     } catch (err) {
       console.error("获取对局数据失败", err);
+      if (err.code === "GAME_ALREADY_ENDED") {
+        this.redirectToResult();
+        return;
+      }
       if (!options.silent) {
         this.setData({
           board: null,
@@ -164,6 +171,10 @@ Page({
   },
 
   async hydrateSnapshot(snapshot) {
+    if (this.redirectToResultIfNeeded(snapshot)) {
+      return;
+    }
+
     const publicState = (snapshot && snapshot.publicState) || {};
     const seatOrder = publicState.seatOrder || [];
     const cloudFileIds = seatOrder.map((member) => member.avatarUrl).filter(isCloudFileId);
@@ -697,6 +708,29 @@ Page({
     return err;
   },
 
+  redirectToResultIfNeeded(snapshot) {
+    if (!snapshot) {
+      return false;
+    }
+    if (
+      snapshot.routeHint === "result" ||
+      snapshot.roomStatus === "ended" ||
+      snapshot.currentPhase === "game_ended"
+    ) {
+      this.redirectToResult(snapshot.roomCode || "");
+      return true;
+    }
+    return false;
+  },
+
+  redirectToResult(roomCode = "") {
+    this.stopRefreshTimer();
+    const query = `roomId=${encodeURIComponent(this.data.roomId)}&roomCode=${encodeURIComponent(roomCode || "")}`;
+    wx.redirectTo({
+      url: `/packageResult/pages/result/index?${query}`,
+    });
+  },
+
   onTapRules() {
     wx.showToast({
       title: "规则页待接入",
@@ -806,9 +840,16 @@ Page({
       if (!result.success) {
         throw this.createServiceError(result, "提交提名失败");
       }
+      if (this.redirectToResultIfNeeded(result.data)) {
+        return;
+      }
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交提名失败", err);
+      if (err.code === "GAME_ALREADY_ENDED") {
+        this.redirectToResult();
+        return;
+      }
       wx.showToast({
         title: err.message || "提交提名失败",
         icon: "none",
@@ -883,9 +924,16 @@ Page({
         title: "投票已提交",
         icon: "none",
       });
+      if (this.redirectToResultIfNeeded(result.data)) {
+        return;
+      }
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交投票失败", err);
+      if (err.code === "GAME_ALREADY_ENDED") {
+        this.redirectToResult();
+        return;
+      }
       if (err.code === "VERSION_CONFLICT" || err.code === "DUPLICATE_COMMAND" || err.code === "ACTION_NOT_ALLOWED") {
         await this.loadGameSnapshot({ silent: true });
       }
@@ -972,9 +1020,16 @@ Page({
         title: isDiscard ? "已交给总理" : "政策已颁布",
         icon: "none",
       });
+      if (this.redirectToResultIfNeeded(result.data)) {
+        return;
+      }
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error(isDiscard ? "提交总统弃牌失败" : "提交总理颁布失败", err);
+      if (err.code === "GAME_ALREADY_ENDED") {
+        this.redirectToResult();
+        return;
+      }
       if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
         await this.loadGameSnapshot({ silent: true });
       }
@@ -1040,9 +1095,16 @@ Page({
         title: "已提出否决",
         icon: "none",
       });
+      if (this.redirectToResultIfNeeded(result.data)) {
+        return;
+      }
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提出否决失败", err);
+      if (err.code === "GAME_ALREADY_ENDED") {
+        this.redirectToResult();
+        return;
+      }
       if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
         await this.loadGameSnapshot({ silent: true });
       }
@@ -1118,9 +1180,16 @@ Page({
         title: accepted ? "已同意否决" : "已拒绝否决",
         icon: "none",
       });
+      if (this.redirectToResultIfNeeded(result.data)) {
+        return;
+      }
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("回应否决失败", err);
+      if (err.code === "GAME_ALREADY_ENDED") {
+        this.redirectToResult();
+        return;
+      }
       if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
         await this.loadGameSnapshot({ silent: true });
       }
@@ -1227,9 +1296,16 @@ Page({
         title: options.toastText || "已提交",
         icon: "none",
       });
+      if (this.redirectToResultIfNeeded(result.data)) {
+        return;
+      }
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交总统权力失败", err);
+      if (err.code === "GAME_ALREADY_ENDED") {
+        this.redirectToResult();
+        return;
+      }
       if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
         await this.loadGameSnapshot({ silent: true });
       }

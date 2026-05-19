@@ -1,0 +1,68 @@
+<view class="result-page">
+  <view class="topbar">
+    <view class="icon-button" role="button" aria-label="返回首页" bindtap="onBackHome">⌂</view>
+    <view class="room-code">房间 {{displayRoomCode}}</view>
+    <view class="icon-button" role="button" aria-label="查看规则" bindtap="onTapRules">?</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="state-panel">正在打开复盘档案...</view>
+  <view wx:elif="{{errorText}}" class="state-panel is-error">
+    <view>{{errorText}}</view>
+    <view class="primary-action" role="button" aria-label="返回首页" bindtap="onBackHome">返回首页</view>
+  </view>
+
+  <block wx:elif="{{result}}">
+    <view class="result-hero {{result.winnerClass}}">
+      <view class="eyebrow">《揭秘独裁者》终局复盘</view>
+      <view class="winner-title">{{result.winnerText}}</view>
+      <view class="winner-reason">{{result.winReasonText}}</view>
+      <view class="ended-at">结束时间 {{result.endedAtText}}</view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">最终政策轨</view>
+      <view class="policy-row">
+        <view class="policy-label is-liberal">自由派</view>
+        <view class="policy-track">
+          <view wx:for="{{result.policySummary.liberalSlots}}" wx:key="slot" class="{{item.className}}">{{item.slot}}</view>
+        </view>
+      </view>
+      <view class="policy-row">
+        <view class="policy-label is-fascist">极权派</view>
+        <view class="policy-track">
+          <view wx:for="{{result.policySummary.fascistSlots}}" wx:key="slot" class="{{item.className}}">{{item.slot}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">最终身份</view>
+      <view class="player-grid">
+        <view wx:for="{{result.players}}" wx:key="memberId" class="{{item.className}}">
+          <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar placeholder">{{item.seatIndex}}</view>
+          <view class="player-main">
+            <view class="player-name">{{item.seatIndex}}号 {{item.displayName}}</view>
+            <view class="player-role">{{item.roleText}}</view>
+          </view>
+          <view class="player-state">{{item.aliveText}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section timeline-section">
+      <view class="section-title">关键时间线</view>
+      <view class="timeline">
+        <view wx:for="{{result.timeline}}" wx:key="eventId" class="timeline-item">
+          <view class="timeline-meta">{{item.roundText}} · {{item.timeText}}</view>
+          <view class="timeline-title">{{item.title}}</view>
+          <view class="timeline-summary">{{item.summary}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="bottom-actions">
+      <view class="primary-action" role="button" aria-label="返回首页" bindtap="onBackHome">返回首页</view>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,85 @@
+const WINNER_TEXT = {
+  LIBERAL: "自由派胜利",
+  FASCIST: "极权派胜利",
+};
+
+const WIN_REASON_TEXT = {
+  LIBERAL_POLICIES: "自由派完成 5 项政策",
+  FASCIST_POLICIES: "极权派完成 6 项政策",
+  HITLER_ELECTED: "独裁者当选总理",
+  HITLER_EXECUTED: "独裁者被处决",
+};
+
+const ROLE_TEXT = {
+  LIBERAL: "自由派",
+  FASCIST: "普通极权派",
+  HITLER: "独裁者",
+};
+
+function mapPolicySlots(count, total, activeClass) {
+  return Array.from({ length: total }).map((_, index) => ({
+    slot: index + 1,
+    isActive: index < count,
+    className: `policy-slot ${index < count ? activeClass : ""}`,
+  }));
+}
+
+function formatTime(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  const pad = (num) => String(num).padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function mapResultSnapshot(snapshot) {
+  const policySummary = snapshot.policySummary || {};
+  const finalPlayers = snapshot.finalPlayers || [];
+  const timeline = snapshot.timeline || [];
+  const winner = snapshot.winner || "";
+
+  return {
+    roomId: snapshot.roomId || "",
+    roomCode: snapshot.roomCode || "",
+    roomStatus: snapshot.roomStatus || "",
+    myMemberId: snapshot.myMemberId || "",
+    version: snapshot.version || 0,
+    winner,
+    winnerText: WINNER_TEXT[winner] || "对局结束",
+    winnerClass: winner === "LIBERAL" ? "is-liberal" : "is-fascist",
+    winReason: snapshot.winReason || "",
+    winReasonText: WIN_REASON_TEXT[snapshot.winReason] || "胜负已判定",
+    endedAtText: formatTime(snapshot.endedAt),
+    policySummary: {
+      liberal: policySummary.liberal || 0,
+      fascist: policySummary.fascist || 0,
+      liberalSlots: mapPolicySlots(policySummary.liberal || 0, 5, "is-liberal"),
+      fascistSlots: mapPolicySlots(policySummary.fascist || 0, 6, "is-fascist"),
+    },
+    players: finalPlayers
+      .slice()
+      .sort((a, b) => (a.seatIndex || 0) - (b.seatIndex || 0))
+      .map((player) => ({
+        ...player,
+        roleText: ROLE_TEXT[player.role] || "未知身份",
+        partyText: player.party === "LIBERAL" ? "自由派阵营" : "极权派阵营",
+        aliveText: player.isAlive ? "存活" : "已出局",
+        className: `player-card ${player.role === "LIBERAL" ? "is-liberal" : "is-fascist"} ${
+          player.memberId === snapshot.myMemberId ? "is-me" : ""
+        }`,
+      })),
+    timeline: timeline.map((item) => ({
+      ...item,
+      timeText: formatTime(item.createdAt),
+      roundText: `第 ${item.round || 1} 轮`,
+    })),
+  };
+}
+
+module.exports = {
+  mapResultSnapshot,
+};
