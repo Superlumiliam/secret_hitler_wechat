@@ -1,4 +1,4 @@
-const gameService = require("../../../services/gameService");
+const gameService = require("../../services/gameService");
 const { mapResultSnapshot } = require("./resultMapper");
 
 function isCloudFileId(fileId) {

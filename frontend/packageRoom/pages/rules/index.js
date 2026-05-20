@@ -1,4 +1,4 @@
-const { rulesContent } = require("../../../static/rulesContent");
+const { rulesContent } = require("../../static/rulesContent");
 
 Page({
   data: {
