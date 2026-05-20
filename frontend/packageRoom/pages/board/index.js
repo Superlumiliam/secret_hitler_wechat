@@ -44,13 +44,21 @@ const ERROR_MESSAGE_MAP = {
   INTERNAL_ERROR: "服务暂时异常，请稍后再试",
 };
 
+const GAME_POLL_INTERVAL_MS = 1500;
+const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
+const GAME_POLL_AFTER_COMMAND_INTERVAL_MS = 800;
+const COMMAND_REFRESH_WINDOW_MS = 5000;
 const REFRESH_AFTER_COMMAND_ERROR_CODES = [
   "VERSION_CONFLICT",
   "PHASE_MISMATCH",
+  "DUPLICATE_COMMAND",
   "ALREADY_ACTED",
   "FORBIDDEN",
   "ACTION_NOT_ALLOWED",
   "NOT_CURRENT_ACTOR",
+  "INVALID_TARGET",
+  "TARGET_ALREADY_DEAD",
+  "TARGET_ALREADY_INVESTIGATED",
 ];
 
 function isCloudFileId(fileId) {
@@ -60,6 +68,7 @@ function isCloudFileId(fileId) {
 Page({
   refreshTimer: null,
   lastSeatTap: null,
+  lastCommandSettledAt: 0,
 
   data: {
     roomId: "",
@@ -112,6 +121,7 @@ Page({
 
   onShow() {
     if (this.data.roomId) {
+      this.loadGameSnapshot({ silent: true });
       this.startRefreshTimer();
     }
   },
@@ -128,7 +138,7 @@ Page({
     this.stopRefreshTimer();
     this.refreshTimer = setInterval(() => {
       this.loadGameSnapshot({ silent: true });
-    }, 3000);
+    }, this.getPollIntervalMs());
   },
 
   stopRefreshTimer() {
@@ -173,6 +183,9 @@ Page({
       }
 
       await this.hydrateSnapshot(result.data);
+      if (this.refreshTimer) {
+        this.startRefreshTimer();
+      }
     } catch (err) {
       console.error("获取对局数据失败", err);
       if (err.code === "GAME_ALREADY_ENDED") {
@@ -798,7 +811,21 @@ Page({
   },
 
   shouldRefreshAfterCommandError(err) {
-    return REFRESH_AFTER_COMMAND_ERROR_CODES.includes(err && err.code);
+    return Boolean(err && (err.retryable || REFRESH_AFTER_COMMAND_ERROR_CODES.includes(err.code)));
+  },
+
+  getPollIntervalMs() {
+    if (Date.now() - this.lastCommandSettledAt <= COMMAND_REFRESH_WINDOW_MS) {
+      return GAME_POLL_AFTER_COMMAND_INTERVAL_MS;
+    }
+    if (this.data.snapshot && this.data.snapshot.pendingTask) {
+      return GAME_POLL_WITH_TASK_INTERVAL_MS;
+    }
+    return GAME_POLL_INTERVAL_MS;
+  },
+
+  markCommandSettled() {
+    this.lastCommandSettledAt = Date.now();
   },
 
   redirectToResultIfNeeded(snapshot) {
@@ -937,6 +964,7 @@ Page({
       if (this.redirectToResultIfNeeded(result.data)) {
         return;
       }
+      this.markCommandSettled();
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交提名失败", err);
@@ -949,6 +977,7 @@ Page({
         icon: "none",
       });
       if (this.shouldRefreshAfterCommandError(err)) {
+        this.markCommandSettled();
         this.loadGameSnapshot({ silent: true });
       }
     } finally {
@@ -1021,6 +1050,7 @@ Page({
       if (this.redirectToResultIfNeeded(result.data)) {
         return;
       }
+      this.markCommandSettled();
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交投票失败", err);
@@ -1029,6 +1059,7 @@ Page({
         return;
       }
       if (this.shouldRefreshAfterCommandError(err) || err.code === "DUPLICATE_COMMAND") {
+        this.markCommandSettled();
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
@@ -1117,6 +1148,7 @@ Page({
       if (this.redirectToResultIfNeeded(result.data)) {
         return;
       }
+      this.markCommandSettled();
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error(isDiscard ? "提交总统弃牌失败" : "提交总理颁布失败", err);
@@ -1125,6 +1157,7 @@ Page({
         return;
       }
       if (this.shouldRefreshAfterCommandError(err)) {
+        this.markCommandSettled();
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
@@ -1192,6 +1225,7 @@ Page({
       if (this.redirectToResultIfNeeded(result.data)) {
         return;
       }
+      this.markCommandSettled();
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提出否决失败", err);
@@ -1200,6 +1234,7 @@ Page({
         return;
       }
       if (this.shouldRefreshAfterCommandError(err)) {
+        this.markCommandSettled();
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
@@ -1277,6 +1312,7 @@ Page({
       if (this.redirectToResultIfNeeded(result.data)) {
         return;
       }
+      this.markCommandSettled();
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("回应否决失败", err);
@@ -1285,6 +1321,7 @@ Page({
         return;
       }
       if (this.shouldRefreshAfterCommandError(err)) {
+        this.markCommandSettled();
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
@@ -1393,6 +1430,7 @@ Page({
       if (this.redirectToResultIfNeeded(result.data)) {
         return;
       }
+      this.markCommandSettled();
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交总统权力失败", err);
@@ -1401,6 +1439,7 @@ Page({
         return;
       }
       if (this.shouldRefreshAfterCommandError(err)) {
+        this.markCommandSettled();
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({

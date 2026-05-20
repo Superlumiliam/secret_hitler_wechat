@@ -1,3 +1,42 @@
+const bootstrapService = require("./services/bootstrapService");
+
+function getCurrentPageRouteInfo() {
+  const pages = typeof getCurrentPages === "function" ? getCurrentPages() : [];
+  const page = pages[pages.length - 1] || {};
+  return {
+    route: page.route || "",
+    options: page.options || {},
+  };
+}
+
+function buildRouteForActiveRoom(activeRoom) {
+  if (!activeRoom || !activeRoom.roomId) {
+    return "";
+  }
+
+  const roomId = encodeURIComponent(activeRoom.roomId);
+  const memberId = encodeURIComponent(activeRoom.memberId || "");
+  if (activeRoom.routeHint === "lobby") {
+    return `/packageRoom/pages/lobby/index?roomId=${roomId}&memberId=${memberId}`;
+  }
+  if (activeRoom.routeHint === "board") {
+    return `/packageRoom/pages/board/index?roomId=${roomId}`;
+  }
+  if (activeRoom.routeHint === "result") {
+    return `/packageResult/pages/result/index?roomId=${roomId}&roomCode=${encodeURIComponent(activeRoom.roomCode || "")}`;
+  }
+  return "";
+}
+
+function getRoutePathForHint(routeHint) {
+  const pathByHint = {
+    lobby: "packageRoom/pages/lobby/index",
+    board: "packageRoom/pages/board/index",
+    result: "packageResult/pages/result/index",
+  };
+  return pathByHint[routeHint] || "";
+}
+
 App({
   globalData: {
     env: "cloud1-9gcbbsjv4ce11da4",
@@ -7,8 +46,10 @@ App({
       targetPlayerCount: 6,
     },
     userProfileStorageKey: "secret_hitler_user_profile",
+    activeRoom: null,
+    isRecoveringActiveRoom: false,
   },
-  onLaunch() {
+  onLaunch(options = {}) {
     if (!wx.cloud) {
       console.error("请使用 2.2.3 或以上的基础库以使用云能力");
       return;
@@ -17,6 +58,61 @@ App({
     wx.cloud.init({
       env: this.globalData.env,
       traceUser: true,
+    });
+
+    const roomCode = options.query && options.query.roomCode;
+    this.ensureSessionAndRecover({
+      source: "launch",
+      skipRecoverRoute: Boolean(roomCode),
+    });
+  },
+
+  onShow(options = {}) {
+    const roomCode = options.query && options.query.roomCode;
+    this.ensureSessionAndRecover({
+      source: "show",
+      skipRecoverRoute: Boolean(roomCode),
+    });
+  },
+
+  async ensureSessionAndRecover(options = {}) {
+    if (!wx.cloud || this.globalData.isRecoveringActiveRoom) {
+      return;
+    }
+
+    this.globalData.isRecoveringActiveRoom = true;
+    try {
+      const session = await bootstrapService.ensureSession();
+      const recovered = options.skipRecoverRoute ? session : await bootstrapService.recoverActiveRoom();
+      const activeRoom = recovered.activeRoom || session.activeRoom || null;
+      this.globalData.activeRoom = activeRoom;
+
+      if (!options.skipRecoverRoute) {
+        this.routeByActiveRoom(activeRoom);
+      }
+    } catch (err) {
+      console.error("恢复活跃房间失败", err);
+    } finally {
+      this.globalData.isRecoveringActiveRoom = false;
+    }
+  },
+
+  routeByActiveRoom(activeRoom) {
+    const url = buildRouteForActiveRoom(activeRoom);
+    if (!url) {
+      return;
+    }
+
+    const current = getCurrentPageRouteInfo();
+    const targetRoute = getRoutePathForHint(activeRoom.routeHint);
+    const currentRoomId = current.options.roomId || "";
+    if (current.route === targetRoute && currentRoomId === activeRoom.roomId) {
+      return;
+    }
+
+    const routeMethod = current.route ? "redirectTo" : "reLaunch";
+    wx[routeMethod]({
+      url,
     });
   },
 });

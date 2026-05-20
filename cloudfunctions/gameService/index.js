@@ -189,6 +189,35 @@ function isDocumentNotFoundError(err) {
   );
 }
 
+async function touchRoomMemberLastSeen(openid, roomId) {
+  if (!openid || !roomId) {
+    return;
+  }
+
+  const membersRes = await db
+    .collection("room_members")
+    .where({
+      roomId,
+      openId: openid,
+      memberStatus: _.in(["active", "offline"]),
+    })
+    .limit(1)
+    .get();
+  const member = membersRes.data[0];
+  if (!member) {
+    return;
+  }
+
+  const updatedAt = new Date();
+  await db.collection("room_members").doc(getMemberId(member)).update({
+    data: {
+      memberStatus: "active",
+      lastSeenAt: updatedAt,
+      updatedAt,
+    },
+  });
+}
+
 async function getCommandRecord(scopeKey, commandId) {
   const res = await db
     .collection("command_records")
@@ -3363,7 +3392,7 @@ async function dispatchAction(action, payload, openid) {
     case "getResultSnapshot":
       return await getResultSnapshot(payload, openid);
     default:
-      return fail("INVALID_ACTION", "未知 action");
+      return fail("INVALID_PAYLOAD", "未知 action");
   }
 }
 
@@ -3396,10 +3425,15 @@ exports.main = async (event) => {
     const payload = (event && event.payload) || {};
 
     if (!openid) {
-      return fail("UNAUTHORIZED", "无法获取用户身份");
+      return fail("INTERNAL_ERROR", "无法获取用户身份", true);
     }
 
-    return await dispatchAction(action, payload, openid, wxContext);
+    const response = await dispatchAction(action, payload, openid, wxContext);
+    const touchedRoomId = (payload && payload.roomId) || (response && response.data && response.data.roomId);
+    if (response && response.success && touchedRoomId) {
+      await touchRoomMemberLastSeen(openid, touchedRoomId);
+    }
+    return response;
   } catch (err) {
     console.error("gameService error", err);
     return fail("INTERNAL_ERROR", "服务异常，请稍后重试", true);

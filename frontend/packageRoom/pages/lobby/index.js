@@ -2,6 +2,16 @@ const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const LOBBY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-room-prepare.webp`;
+const LOBBY_POLL_INTERVAL_MS = 2000;
+const REFRESH_AFTER_ERROR_CODES = [
+  "VERSION_CONFLICT",
+  "PHASE_MISMATCH",
+  "DUPLICATE_COMMAND",
+  "ACTION_NOT_ALLOWED",
+  "NOT_ROOM_HOST",
+  "NOT_ALL_READY",
+  "GAME_ALREADY_STARTED",
+];
 
 function createCommandId(prefix) {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -13,8 +23,20 @@ function isCloudFileId(fileId) {
 
 function createServiceError(result, fallbackMessage) {
   const error = (result && result.error) || {};
-  const err = new Error(error.message || fallbackMessage);
-  err.code = error.code || "";
+  const code = error.code || "";
+  const messageByCode = {
+    INVALID_PAYLOAD: "请求参数有误",
+    ROOM_NOT_FOUND: "房间不存在",
+    ROOM_EXPIRED: "房间已失效",
+    NOT_ROOM_MEMBER: "当前用户不在房间中",
+    NOT_ROOM_HOST: "只有房主可执行该操作",
+    NOT_ALL_READY: "还有玩家未准备",
+    GAME_ALREADY_STARTED: "对局已开始，正在为你恢复",
+    ACTION_NOT_ALLOWED: "当前状态不允许执行该操作",
+    INTERNAL_ERROR: "系统繁忙，请稍后重试",
+  };
+  const err = new Error(messageByCode[code] || fallbackMessage || "操作失败");
+  err.code = code;
   err.retryable = Boolean(error.retryable);
   err.isBusinessFailure = true;
   return err;
@@ -96,6 +118,7 @@ Page({
 
   onShow() {
     if (this.data.roomId) {
+      this.loadLobbySnapshot({ silent: true });
       this.startRefreshTimer();
     }
   },
@@ -127,7 +150,7 @@ Page({
     this.stopRefreshTimer();
     this.refreshTimer = setInterval(() => {
       this.loadLobbySnapshot({ silent: true });
-    }, 3000);
+    }, LOBBY_POLL_INTERVAL_MS);
   },
 
   stopRefreshTimer() {
@@ -368,6 +391,10 @@ Page({
     return result.data || {};
   },
 
+  shouldRefreshAfterError(err) {
+    return Boolean(err && (err.retryable || REFRESH_AFTER_ERROR_CODES.includes(err.code)));
+  },
+
   async onReadyAction() {
     const lobby = this.data.lobby;
     const viewerState = (lobby && lobby.viewerState) || {};
@@ -393,12 +420,16 @@ Page({
       });
 
       await this.hydrateLobby(snapshot);
+      await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("准备状态更新失败", err);
       wx.showToast({
         title: err.message || "操作失败",
         icon: "none",
       });
+      if (this.shouldRefreshAfterError(err)) {
+        this.loadLobbySnapshot({ silent: true });
+      }
     } finally {
       this.setData({
         isSubmitting: false,
@@ -421,12 +452,16 @@ Page({
         roomId: this.data.roomId,
       });
       await this.hydrateLobby(snapshot);
+      await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("补齐虚拟玩家失败", err);
       wx.showToast({
-        title: err.code === "DEV_MODE_DISABLED" ? "开发者模式未启用" : err.message || "补齐失败",
+        title: err.message || "补齐失败",
         icon: "none",
       });
+      if (this.shouldRefreshAfterError(err)) {
+        this.loadLobbySnapshot({ silent: true });
+      }
     } finally {
       this.setData({
         isDevActionSubmitting: false,
@@ -449,12 +484,16 @@ Page({
         roomId: this.data.roomId,
       });
       await this.hydrateLobby(snapshot);
+      await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("虚拟玩家准备失败", err);
       wx.showToast({
-        title: err.code === "DEV_MODE_DISABLED" ? "开发者模式未启用" : err.message || "准备失败",
+        title: err.message || "准备失败",
         icon: "none",
       });
+      if (this.shouldRefreshAfterError(err)) {
+        this.loadLobbySnapshot({ silent: true });
+      }
     } finally {
       this.setData({
         isDevActionSubmitting: false,
@@ -488,6 +527,9 @@ Page({
         title: err.message || "开始失败",
         icon: "none",
       });
+      if (this.shouldRefreshAfterError(err)) {
+        this.loadLobbySnapshot({ silent: true });
+      }
       this.setData({
         isSubmitting: false,
       });

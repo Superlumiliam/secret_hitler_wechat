@@ -111,7 +111,7 @@ function getJoinErrorMessage(err) {
     ROOM_NOT_JOINABLE: "房间不可加入",
     ACTION_NOT_ALLOWED: "当前账号已有进行中的房间",
     PROFILE_REQUIRED: "请先创建用户资料",
-    UNAUTHORIZED: "无法获取用户身份",
+    INTERNAL_ERROR: "系统繁忙，请稍后重试",
   };
   return messages[code] || (err && err.message) || "加入房间失败";
 }
@@ -373,7 +373,7 @@ Page({
     } catch (err) {
       console.error("创建开发者房间失败", err);
       wx.showToast({
-        title: err.code === "DEV_MODE_DISABLED" ? "开发者模式未启用" : err.message || "创建开发者房间失败",
+        title: err.message || "创建开发者房间失败",
         icon: "none",
       });
       this.setData({
