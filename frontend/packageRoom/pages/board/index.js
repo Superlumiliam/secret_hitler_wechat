@@ -35,7 +35,11 @@ const ERROR_MESSAGE_MAP = {
   ALREADY_ACTED: "你已经完成过该操作",
   ACTION_NOT_ALLOWED: "当前局势不允许执行该操作",
   ROOM_NOT_FOUND: "房间不存在或已失效",
+  ROOM_EXPIRED: "房间已过期",
+  NOT_ROOM_MEMBER: "当前用户不在房间中",
+  GAME_NOT_STARTED: "房间尚未开局",
   GAME_ALREADY_ENDED: "对局已结束",
+  INVALID_PAYLOAD: "请求参数有误",
   DUPLICATE_COMMAND: "该操作已提交，请勿重复操作",
   NOT_CURRENT_ACTOR: "当前不是你的操作阶段",
   INVALID_TARGET: "目标不符合当前规则",
@@ -803,7 +807,7 @@ Page({
   createServiceError(result, fallbackMessage) {
     const error = (result && result.error) || {};
     const code = error.code || "";
-    const err = new Error(ERROR_MESSAGE_MAP[code] || fallbackMessage || "操作失败");
+    const err = new Error(ERROR_MESSAGE_MAP[code] || error.message || fallbackMessage || "操作失败");
     err.code = code;
     err.retryable = Boolean(error.retryable);
     err.isBusinessFailure = true;
