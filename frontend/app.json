@@ -11,7 +11,8 @@
         "pages/lobby/index",
         "pages/board/index",
         "pages/identity/index",
-        "pages/history/index"
+        "pages/history/index",
+        "pages/rules/index"
       ]
     },
     {

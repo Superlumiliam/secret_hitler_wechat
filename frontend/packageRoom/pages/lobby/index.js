@@ -331,9 +331,10 @@ Page({
   },
 
   onTapRules() {
-    wx.showToast({
-      title: "规则说明待开放",
-      icon: "none",
+    wx.navigateTo({
+      url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(this.data.roomId || "")}&memberId=${encodeURIComponent(
+        this.data.memberId || "",
+      )}`,
     });
   },
 

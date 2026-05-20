@@ -1,7 +1,15 @@
 function createServiceError(result, fallbackMessage) {
   const error = (result && result.error) || {};
-  const err = new Error(error.message || fallbackMessage);
-  err.code = error.code || "";
+  const code = error.code || "";
+  const messageByCode = {
+    ROOM_NOT_FOUND: "房间不存在或已失效",
+    GAME_ALREADY_ENDED: "对局已结束",
+    ACTION_NOT_ALLOWED: "当前状态不允许执行该操作",
+    FORBIDDEN: "你当前不能执行该操作",
+    INTERNAL_ERROR: "服务暂时异常，请稍后再试",
+  };
+  const err = new Error(messageByCode[code] || fallbackMessage || "操作失败");
+  err.code = code;
   err.retryable = Boolean(error.retryable);
   err.isBusinessFailure = true;
   return err;

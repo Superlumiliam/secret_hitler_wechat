@@ -100,7 +100,10 @@
 
         <view class="status-strip">
           <view class="status-icon">♟</view>
-          <view class="status-text">{{statusText}}</view>
+          <view class="status-copy">
+            <view class="status-text">{{statusText}}</view>
+            <view wx:if="{{phaseHintText}}" class="phase-hint-text">{{phaseHintText}}</view>
+          </view>
         </view>
 
         <view wx:if="{{voteProgressText || voteResult}}" class="vote-panel {{voteResult ? voteResult.resultClass : ''}}">

@@ -1,0 +1,45 @@
+<view class="rules-page">
+  <view class="rules-noise"></view>
+
+  <view class="top-bar">
+    <view class="back-control" bindtap="onTapBack" hover-class="icon-hover" role="button" aria-label="返回">‹</view>
+    <view class="page-title">局内规则</view>
+  </view>
+
+  <view class="rules-hero">
+    <view class="eyebrow">《secret hitler》 · 《揭秘独裁者》</view>
+    <view class="hero-title">规则档案</view>
+    <view class="hero-copy">只查阅，不记录行动，不改变当前局势。</view>
+  </view>
+
+  <scroll-view class="section-tabs" scroll-x enhanced show-scrollbar="{{false}}">
+    <view class="section-tab-row">
+      <view
+        wx:for="{{sections}}"
+        wx:key="id"
+        class="section-tab {{activeSectionId === item.id ? 'is-active' : ''}}"
+        bindtap="onTapSection"
+        data-section-id="{{item.id}}"
+        role="button"
+        aria-label="查看{{item.title}}规则"
+      >
+        {{item.title}}
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="rules-list">
+    <view wx:for="{{sections}}" wx:key="id" id="{{item.id}}" class="rule-section {{activeSectionId === item.id ? 'is-active' : ''}}">
+      <view class="section-heading">
+        <view class="section-index">{{index + 1}}</view>
+        <view class="section-title">{{item.title}}</view>
+      </view>
+      <view class="rule-items">
+        <view wx:for="{{item.items}}" wx:for-item="rule" wx:key="*this" class="rule-item">
+          <view class="rule-bullet"></view>
+          <view class="rule-text">{{rule}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

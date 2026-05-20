@@ -34,6 +34,14 @@ const ACTION_TIPS = {
   HITLER: ["谨慎接受总理提名", "隐藏真实身份，避免过早暴露", "三张极权派政策后争取当选总理"],
 };
 
+const ERROR_MESSAGE_MAP = {
+  ROOM_NOT_FOUND: "房间不存在或已失效",
+  GAME_ALREADY_ENDED: "对局已结束",
+  FORBIDDEN: "你当前不能查看该信息",
+  ACTION_NOT_ALLOWED: "当前状态不允许查看该信息",
+  INTERNAL_ERROR: "服务暂时异常，请稍后再试",
+};
+
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
 }
@@ -233,8 +241,9 @@ Page({
 
   createServiceError(result, fallbackMessage) {
     const error = (result && result.error) || {};
-    const err = new Error(error.message || fallbackMessage);
-    err.code = error.code || "";
+    const code = error.code || "";
+    const err = new Error(ERROR_MESSAGE_MAP[code] || fallbackMessage || "操作失败");
+    err.code = code;
     err.retryable = Boolean(error.retryable);
     err.isBusinessFailure = true;
     return err;
@@ -266,9 +275,10 @@ Page({
   },
 
   onTapRules() {
-    wx.showToast({
-      title: "规则页待接入",
-      icon: "none",
+    wx.navigateTo({
+      url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(this.data.roomId || "")}&controlledMemberId=${encodeURIComponent(
+        this.data.controlledMemberId || "",
+      )}`,
     });
   },
 

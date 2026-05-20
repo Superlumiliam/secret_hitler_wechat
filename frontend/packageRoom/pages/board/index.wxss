@@ -721,6 +721,18 @@
   line-height: 1.25;
 }
 
+.status-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.phase-hint-text {
+  margin-top: 5rpx;
+  color: rgba(224, 207, 174, 0.7);
+  font-size: 19rpx;
+  line-height: 1.3;
+}
+
 .vote-panel {
   margin-top: 10rpx;
   padding: 10rpx 12rpx;

@@ -28,6 +28,31 @@ const PHASE_NAME_MAP = {
   game_ended: "对局结束",
 };
 
+const ERROR_MESSAGE_MAP = {
+  VERSION_CONFLICT: "局势已更新，请按最新页面操作",
+  PHASE_MISMATCH: "当前阶段已变化，请按最新页面操作",
+  FORBIDDEN: "你当前不能执行该操作",
+  ALREADY_ACTED: "你已经完成过该操作",
+  ACTION_NOT_ALLOWED: "当前局势不允许执行该操作",
+  ROOM_NOT_FOUND: "房间不存在或已失效",
+  GAME_ALREADY_ENDED: "对局已结束",
+  DUPLICATE_COMMAND: "该操作已提交，请勿重复操作",
+  NOT_CURRENT_ACTOR: "当前不是你的操作阶段",
+  INVALID_TARGET: "目标不符合当前规则",
+  TARGET_ALREADY_DEAD: "目标已出局",
+  TARGET_ALREADY_INVESTIGATED: "该玩家已被调查过",
+  INTERNAL_ERROR: "服务暂时异常，请稍后再试",
+};
+
+const REFRESH_AFTER_COMMAND_ERROR_CODES = [
+  "VERSION_CONFLICT",
+  "PHASE_MISMATCH",
+  "ALREADY_ACTED",
+  "FORBIDDEN",
+  "ACTION_NOT_ALLOWED",
+  "NOT_CURRENT_ACTOR",
+];
+
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
 }
@@ -48,6 +73,7 @@ Page({
     fascistTrack: [],
     electionTrack: [],
     statusText: "",
+    phaseHintText: "",
     canVote: false,
     votingSubmitted: false,
     voteProgressText: "",
@@ -206,6 +232,7 @@ Page({
       fascistTrack: this.createFascistTrack(board.targetPlayerCount, board.fascistPolicyCount),
       electionTrack: this.createElectionTrack(board.electionTracker),
       statusText: this.createStatusText(snapshot, board),
+      phaseHintText: this.createPhaseHintText(snapshot, board),
       isDevRoom: snapshot.roomMode === "dev",
       controlledSeatText: this.createControlledSeatText(snapshot),
       canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
@@ -467,6 +494,67 @@ Page({
     return `当前阶段：${board.phaseName}`;
   },
 
+  createPhaseHintText(snapshot, board) {
+    const pendingTask = snapshot.pendingTask || null;
+    const taskType = pendingTask && pendingTask.taskType;
+    const action = this.createExecutiveAction(snapshot);
+
+    if (taskType === "NOMINATE_CHANCELLOR") {
+      return "你负责提名总理候选人；其他玩家可继续讨论，只有最终提名会公开。";
+    }
+    if (snapshot.currentPhase === "nomination") {
+      return `${board.presidentSeatNo}号等待提名总理；其他玩家可讨论局势，暂时不需要提交操作。`;
+    }
+    if (snapshot.currentPhase === "voting") {
+      return "所有存活玩家同时投票；提交前彼此看不到选择，公开后会显示每个人的票。";
+    }
+    if (snapshot.currentPhase === "hitler_check") {
+      return "政府已通过，正在结算危险胜利条件；不会公开真实身份，只公开是否触发终局。";
+    }
+    if (taskType === "PRESIDENT_DISCARD_POLICY") {
+      return "你秘密摸 3 弃 1；其他人等待，手牌与弃牌都不会公开。";
+    }
+    if (snapshot.currentPhase === "legislative_president") {
+      return "总统正在秘密处理政策牌；其他玩家等待，不能看到总统手牌或弃牌。";
+    }
+    if (taskType === "CHANCELLOR_ENACT_POLICY") {
+      return this.canRequestVeto(snapshot)
+        ? "你可颁布 1 张政策或请求否决；未颁布的牌不会公开。"
+        : "你秘密从 2 张中颁布 1 张；另一张弃牌不会公开。";
+    }
+    if (snapshot.currentPhase === "legislative_chancellor") {
+      return "总理正在秘密处理政策牌；其他玩家等待，只会公开最终颁布的政策。";
+    }
+    if (taskType === "PRESIDENT_RESPOND_VETO") {
+      return "你决定是否同意否决；同意则本轮无政策颁布，拒绝则总理必须颁布。";
+    }
+    if (snapshot.currentPhase === "veto_response") {
+      return "总理已提出否决，等待总统回应；总理手中政策牌内容不会公开。";
+    }
+    if (snapshot.currentPhase === "executive_action") {
+      if (taskType === "EXEC_POLICY_PEEK_ACK") {
+        return "你秘密查看牌库顶 3 张并按原顺序放回；牌面不会公开。";
+      }
+      if (taskType === "EXEC_INVESTIGATE") {
+        return "你选择调查对象并秘密查看其党派归属；结果是否公开由你发言决定。";
+      }
+      if (taskType === "EXEC_SPECIAL_ELECTION") {
+        return "你指定下一轮特别总统候选人；该选择会公开，但不会永久改变轮换顺序。";
+      }
+      if (taskType === "EXECUTE_PLAYER") {
+        return "你选择处决 1 名玩家；只有处决到独裁者时才会公开并立即终局。";
+      }
+      return `${board.presidentSeatNo}号正在执行${(action && action.title) || "总统权力"}；其他玩家等待，私密结果不会自动公开。`;
+    }
+    if (snapshot.currentPhase === "round_result") {
+      return "本轮公开结算中；隐藏身份、弃牌和调查结果仍不公开。";
+    }
+    if (snapshot.currentPhase === "game_ended") {
+      return "对局已结束，可进入复盘查看最终身份与关键时间线。";
+    }
+    return "当前无需主动操作；按桌面公开信息讨论，隐藏信息仍由玩家自行陈述。";
+  },
+
   hasSubmittedVote(snapshot) {
     const privateState = (snapshot && snapshot.privateState) || {};
     const voting = privateState.voting || {};
@@ -701,11 +789,16 @@ Page({
 
   createServiceError(result, fallbackMessage) {
     const error = (result && result.error) || {};
-    const err = new Error(error.message || fallbackMessage);
-    err.code = error.code || "";
+    const code = error.code || "";
+    const err = new Error(ERROR_MESSAGE_MAP[code] || fallbackMessage || "操作失败");
+    err.code = code;
     err.retryable = Boolean(error.retryable);
     err.isBusinessFailure = true;
     return err;
+  },
+
+  shouldRefreshAfterCommandError(err) {
+    return REFRESH_AFTER_COMMAND_ERROR_CODES.includes(err && err.code);
   },
 
   redirectToResultIfNeeded(snapshot) {
@@ -732,9 +825,10 @@ Page({
   },
 
   onTapRules() {
-    wx.showToast({
-      title: "规则页待接入",
-      icon: "none",
+    wx.navigateTo({
+      url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(this.data.roomId || "")}&controlledMemberId=${encodeURIComponent(
+        this.data.controlledMemberId || "",
+      )}`,
     });
   },
 
@@ -854,7 +948,7 @@ Page({
         title: err.message || "提交提名失败",
         icon: "none",
       });
-      if (err.code === "VERSION_CONFLICT") {
+      if (this.shouldRefreshAfterCommandError(err)) {
         this.loadGameSnapshot({ silent: true });
       }
     } finally {
@@ -934,7 +1028,7 @@ Page({
         this.redirectToResult();
         return;
       }
-      if (err.code === "VERSION_CONFLICT" || err.code === "DUPLICATE_COMMAND" || err.code === "ACTION_NOT_ALLOWED") {
+      if (this.shouldRefreshAfterCommandError(err) || err.code === "DUPLICATE_COMMAND") {
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
@@ -1030,7 +1124,7 @@ Page({
         this.redirectToResult();
         return;
       }
-      if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
+      if (this.shouldRefreshAfterCommandError(err)) {
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
@@ -1105,7 +1199,7 @@ Page({
         this.redirectToResult();
         return;
       }
-      if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
+      if (this.shouldRefreshAfterCommandError(err)) {
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
@@ -1190,7 +1284,7 @@ Page({
         this.redirectToResult();
         return;
       }
-      if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
+      if (this.shouldRefreshAfterCommandError(err)) {
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
@@ -1306,7 +1400,7 @@ Page({
         this.redirectToResult();
         return;
       }
-      if (err.code === "VERSION_CONFLICT" || err.code === "ACTION_NOT_ALLOWED") {
+      if (this.shouldRefreshAfterCommandError(err)) {
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
