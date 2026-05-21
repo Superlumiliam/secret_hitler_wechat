@@ -1567,6 +1567,7 @@ type ApplyCommandResult = {
 - 调查结果
 - 牌顶预览内容
 - 未公开投票
+- 玩家个人身份判断标记
 
 ### 13.2.1 历史记录公共投影
 
@@ -1615,9 +1616,17 @@ type ApplyCommandResult = {
     "canRequestVeto": false
   },
   "investigationResult": null,
+  "investigationMarks": [],
   "policyPeek": null
 }
 ```
+
+字段约束：
+
+- `investigationResult` 用于当前玩家最近一次调查结果提示。
+- `investigationMarks` 用于当前玩家桌面席位上的私密调查印章，元素包含 `targetMemberId`、`party`、`round`、`revealedAt`。
+- `investigationMarks` 只能由当前玩家实际执行过的调查忠诚结果生成；不得把其他总统的调查结果、公共事件或终局身份映射混入。
+- 玩家个人身份判断标记是前端本地辅助笔记，不属于后端快照字段。
 
 ## 13.4 `pendingTask` 生成规则
 

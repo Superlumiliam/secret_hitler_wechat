@@ -394,6 +394,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - 调查结果
 - 牌顶预览内容
 - 未公开投票
+- 玩家个人身份判断标记
 
 ### 4.4.1 `publicState.history`
 
@@ -489,6 +490,7 @@ interface PublicHistoryProjection {
     "canRequestVeto": false
   },
   "investigationResult": null,
+  "investigationMarks": [],
   "policyPeek": null
 }
 ```
@@ -499,7 +501,8 @@ interface PublicHistoryProjection {
 - `knownMembers` 只包含按规则可见的队友信息
 - `voting.myVote` 仅当前玩家可见
 - `legislative.hand` 只在当前玩家持牌阶段出现，否则为 `null`
-- `investigationResult` 在总统调查后对该总统个人可见
+- `investigationResult` 在总统调查后对该总统个人可见，用于展示最近一次调查结果提示
+- `investigationMarks` 汇总当前玩家曾经通过调查忠诚获得的目标阵营结果，用于在对局桌面席位右上角盖私密调查印章；只对行使过调查权的玩家本人可见
 - `policyPeek` 在总统预览牌顶后对该总统个人可见
 
 推荐子结构：
@@ -512,6 +515,14 @@ interface PublicHistoryProjection {
     "party": "LIBERAL",
     "revealedAt": "2026-04-12T12:11:10.000Z"
   },
+  "investigationMarks": [
+    {
+      "targetMemberId": "mem_5",
+      "party": "LIBERAL",
+      "round": 4,
+      "revealedAt": "2026-04-12T12:11:10.000Z"
+    }
+  ],
   "policyPeek": {
     "cards": ["FASCIST", "FASCIST", "LIBERAL"],
     "viewedAt": "2026-04-12T12:12:30.000Z"
@@ -540,6 +551,7 @@ interface PublicHistoryProjection {
 - `taskType` 必须与命令类型一一对应；唯一例外是 `CHANCELLOR_REQUEST_VETO` 作为 `CHANCELLOR_ENACT_POLICY` 阶段的可选子动作，不单独生成任务卡
 - `allowedTargets` 是权威目标列表；前端不得自行扩大
 - `meta` 只放“无法从快照其他字段可靠推导”的附加信息；目标类任务可在 `meta.targetOptions` 下发禁用原因供前端展示
+- `NOMINATE_CHANCELLOR` 的目标资格仍由 `allowedTargets + meta.targetOptions` 提供；前端可以把交互呈现在玩家席位上，而不是目标选择面板中
 
 正式 `meta` 契约如下：
 

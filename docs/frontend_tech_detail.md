@@ -1034,6 +1034,10 @@ interface BoardPageData {
   board: GameBoardViewModel | null
   task: PendingTaskViewModel | null
   actionPanelVisible: boolean
+  selectedSeatMemberId: string
+  nominationConfirmVisible: boolean
+  nominationBlockedVisible: boolean
+  identityMarkPickerMemberId: string
   submitting: boolean
 }
 ```
@@ -1047,6 +1051,9 @@ interface BoardPageData {
 5. 已出局玩家显示只读提示，不显示操作入口。
 6. 规则入口固定在右上角。
 7. 政策轨区域同时展示抽牌堆与弃牌堆：使用政策牌背图做堆叠卡牌视觉，旁边显示公开张数，不显示牌面、牌序或弃牌构成。
+8. 当前总统候选人的提名操作不再打开独立目标选择面板，而是在玩家席位上完成：先点击席位形成当前选中目标，再点击底部“提名”按钮。
+9. 玩家席位右下角常驻个人身份判断状态框，默认“未知”，可随时为其他玩家标记“未知 / 自由派 / 极权派”；该标记只是当前用户的个人判断，不进入真实游戏状态。
+10. 总统完成调查忠诚后，若当前用户就是行使调查权的玩家，被调查席位右上角展示斜 45 度自由派或极权派印章；其他玩家视图不可见。
 
 ## 12.7 历史记录页 `history`
 
@@ -1246,7 +1253,7 @@ interface RuleSection {
 
 | 组件 | 作用 | 核心 props | 核心事件 |
 | --- | --- | --- | --- |
-| `seat-list` | 渲染座位列表 | `players`, `mode`, `allowedTargets` | `move`, `select` |
+| `seat-list` | 渲染座位列表与席位级交互 | `players`, `mode`, `allowedTargets`, `selectedMemberId` | `move`, `select`, `markTap`, `markChange` |
 | `phase-banner` | 阶段提示 | `phase`, `title`, `description`, `danger` | 无 |
 | `policy-track` | 渲染政策轨 | `liberalCount`, `fascistCount`, `vetoUnlocked` | 无 |
 | `election-track` | 渲染选举轨 | `count` | 无 |
@@ -1257,7 +1264,7 @@ interface RuleSection {
 | `pending-task-card` | 当前待办入口 | `task`, `submitting` | `open` |
 | `vote-panel` | 投票面板 | `visible` | `confirmVote`, `cancel` |
 | `policy-picker` | 政策牌选择 | `visible`, `cards`, `mode` | `confirmPick`, `cancel` |
-| `target-picker` | 选择玩家目标 | `visible`, `targets`, `mode` | `confirmTarget`, `cancel` |
+| `target-picker` | 选择玩家目标，不用于总理提名 | `visible`, `targets`, `mode` | `confirmTarget`, `cancel` |
 | `secret-panel` | 展示当前玩家临时可见信息，如政策预览 | `visible`, `contentType`, `content` | `confirm`, `close` |
 | `state-feedback` | 空态 / 错误 / loading | `status`, `text` | `retry` |
 
@@ -1267,6 +1274,14 @@ interface RuleSection {
 
 - 默认线性列表，不做圆桌布局
 - 每一项展示：座位号、昵称、存活状态、准备状态、政府标记、可选择高亮
+- 对局桌面模式下，每个席位右下角展示圆形个人身份判断状态框：
+  - `unknown`：灰色圆点或灰色档案章
+  - `liberal`：自由派鸽标 logo
+  - `fascist`：极权派鹰标 logo
+- 点击其他玩家的状态框时，在状态框右侧滑出一列三行图标，依次为未知、自由派、极权派；点击图标后立即更新本地标记并收起。
+- 当前用户自己的状态框由 `privateState.identity.party` 映射得出，不允许点击修改。
+- 个人身份判断标记只保存在前端本地视角，例如按 `roomId + viewerMemberId + targetMemberId` 写入本地缓存；不得提交到云函数，不得进入公共快照或私密快照。
+- 若 `SeatViewModel.privateInvestigationMark` 存在，席位右上角展示斜 45 度调查印章：自由派使用自由派印章，极权派使用极权派印章；该字段只来自当前用户私密快照。
 - MVP 大厅模式不展示 `上移` / `下移`，P1 座位管理再扩展移动事件
 
 #### `public-log`
@@ -1359,6 +1374,28 @@ interface GameBoardViewModel {
 }
 ```
 
+`SeatViewModel` 至少应包含以下席位级 UI 字段：
+
+```ts
+interface SeatViewModel {
+  memberId: string
+  seatIndex: number
+  displayName: string
+  avatarUrl: string
+  isSelf: boolean
+  isAlive: boolean
+  governmentTags: Array<'president_candidate' | 'chancellor_candidate' | 'president' | 'chancellor'>
+  selectableState: 'none' | 'selected' | 'allowed' | 'blocked'
+  disabledReason: string
+  personalIdentityMark: 'unknown' | 'liberal' | 'fascist'
+  privateInvestigationMark: {
+    party: 'LIBERAL' | 'FASCIST'
+    round: number
+    revealedAt: string
+  } | null
+}
+```
+
 ### 14.4 `taskMapper`
 
 输出统一任务模型：
@@ -1389,10 +1426,14 @@ interface PendingTaskViewModel {
 ## 15.1 `NOMINATE_CHANCELLOR`
 
 - 页面：`board`
-- 组件：`target-picker`
+- 组件：`seat-list` + 底部提名按钮
 - 数据源：`pendingTask.allowedTargets`、`pendingTask.meta.targetOptions`
 - UI 要求：
-  - 不可选玩家显示置灰和禁用原因
+  - 不再展示独立提名面板；总统候选人点击玩家席位后，在桌面底部点击“提名”按钮
+  - 可提名玩家席位高亮为可选态；不可提名玩家仍可被点击选中，但必须保留禁用原因
+  - 点击底部“提名”按钮时，若选中玩家可提名，弹出确认弹窗：“确认提名 X 号玩家为总理候选人？”
+  - 点击确认后才提交 `NOMINATE_CHANCELLOR`
+  - 若选中玩家不可提名，弹框展示不可提名理由，例如“不能提名自己”“受上一届总理任期限制影响”“该玩家已出局”
   - 显示“上一届政府任期限制”提示文案
 
 ## 15.2 `SUBMIT_VOTE`
@@ -1438,6 +1479,7 @@ interface PendingTaskViewModel {
 - UI：
   - 只显示合法目标
   - 已调查过的人不出现在可选列表中，或显示禁用原因
+  - 调查提交成功后，当前总统的视图中目标席位右上角盖调查印章；印章阵营来自 `privateState.investigationMarks`，不是玩家手动判断标记
 
 ## 15.8 `EXEC_SPECIAL_ELECTION`
 
@@ -1476,7 +1518,7 @@ interface PendingTaskViewModel {
 
 | `taskType` | 正式 `meta` |
 | --- | --- |
-| `NOMINATE_CHANCELLOR` | `ruleHint` |
+| `NOMINATE_CHANCELLOR` | `ruleHint`、`targetOptions = [{ memberId, canNominate, disabledReason }]` |
 | `SUBMIT_VOTE` | `options = ["JA", "NEIN"]` |
 | `PRESIDENT_DISCARD_POLICY` | `selectionMode = "discard_one"` |
 | `CHANCELLOR_ENACT_POLICY` | `selectionMode = "enact_one"`、`canRequestVeto` |
@@ -1488,7 +1530,7 @@ interface PendingTaskViewModel {
 
 实现原则：
 
-1. 目标类任务的候选人列表统一从 `pendingTask.allowedTargets + publicState.seatOrder` 派生。
+1. 目标类任务的候选人列表统一从 `pendingTask.allowedTargets + publicState.seatOrder` 派生；总理提名虽然不使用 `target-picker` 面板，但仍消费同一份目标资格数据。
 2. 命名、文案和危险提示优先消费 `meta`，但不以 `meta` 复制公共状态字段。
 3. `CHANCELLOR_REQUEST_VETO` 不单独生成任务卡，而是作为 `CHANCELLOR_ENACT_POLICY` 的次级动作。
 
@@ -1518,6 +1560,12 @@ interface PrivateState {
     party: 'LIBERAL' | 'FASCIST'
     revealedAt: string
   } | null
+  investigationMarks: Array<{
+    targetMemberId: string
+    party: 'LIBERAL' | 'FASCIST'
+    round: number
+    revealedAt: string
+  }>
   policyPeek: {
     cards: Array<'LIBERAL' | 'FASCIST'>
     viewedAt: string
