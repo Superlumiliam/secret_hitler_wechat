@@ -348,7 +348,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
   "updatedAt": "2026-04-12T12:05:00.000Z",
   "startedAt": null,
   "endedAt": null,
-  "expireAt": "2026-04-12T14:00:00.000Z",
+  "expireAt": "2026-04-12T12:30:00.000Z",
   "assetFileIds": [
     "cloud://xxx/room_assets/room_xxx/avatars/member_xxx.png"
   ]
@@ -360,7 +360,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - `rooms.version` 仅用于大厅阶段版本控制
 - `targetPlayerCount` 来自创建房间页选择，仅用于大厅展示和开局前提示；开局合法性仍以后端当前有效成员数为准
 - 开局后 `playerCount` 不再变化
-- `expireAt` 每次有效操作后更新
+- `expireAt` 按房间阶段固定设置：大厅创建后 30 分钟、开局后 2 小时、游戏结束后 30 分钟；准备、加入、退出、游戏命令等有效操作不延长该时间
 - `assetFileIds` 记录该房间已关联的临时云存储资源，用于房间过期或销毁时统一删除；默认头像等公共静态资源不得写入该字段
 
 ## 7.4 `room_members`
@@ -647,6 +647,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 
 - `ensureSession`
 - `recoverActiveRoom`
+- `clearActiveRoom`
 
 ### `ensureSession`
 
@@ -681,10 +682,10 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 流程：
 
 1. 通过 `cloud.getWXContext()` 取得 `OPENID`
-2. 查询 `room_members` 中当前 openid 仍有效的成员记录
-3. 按 `updatedAt/lastSeenAt` 选择最近的未失效房间；若没有，返回 `null`
-4. 读取对应 `rooms`，若房间已过期或成员已失效，返回 `null`
-5. 若仍有效，返回：
+2. 读取 `user_profiles.activeRoomId / activeMemberId`
+3. 读取对应 `rooms`，若房间已过期或不是 `lobby / in_game / ended`，清理资料中的活跃房间字段并返回 `null`
+4. 按 `activeMemberId` 读取 `room_members` 并校验 openid 与成员状态；若成员不匹配或已失效，清理资料中的活跃房间字段并返回 `null`
+5. 若仍有效，刷新成员 `lastSeenAt` 并返回：
    - `roomId`
    - `roomCode`
    - `roomStatus`
@@ -696,6 +697,20 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - `lobby`
 - `board`
 - `result`
+
+### `clearActiveRoom`
+
+流程：
+
+1. 通过 `cloud.getWXContext()` 取得 `OPENID`
+2. 将当前用户 `user_profiles` 中的 `activeRoomId`、`activeMemberId`、`activeRoomStatus` 清空
+3. 返回 `activeRoom: null`
+
+约束：
+
+- 只清理当前用户的恢复锚点，不修改 `rooms.status`
+- 不删除房间、成员、快照或头像资源；房间过期与资源清理由 `maintenanceService` 负责
+- 前端页面超时、房间失效后回首页前可调用此 action，避免启动恢复再次进入旧页面
 
 ## 8.2 `roomService`
 
@@ -1832,11 +1847,13 @@ MVP 不做自动托管或自动跳过。
 
 ## 16.1 房间过期规则
 
-- `lobby`：最后一次有效操作后 30 分钟过期。正常组局通常 5-15 分钟，30 分钟足够覆盖拉人、掉线重进和临时等待。
-- `in_game`：最后一次有效操作后 2 小时过期。正常对局多在 45-90 分钟内结束，2 小时可覆盖 10 人局、慢节奏讨论和短暂中断。
-- `ended`：结束后保留 30 分钟，再转 `expired`。结果页复盘通常是短时查看，30 分钟足够用户截图、回看关键结果。
+- `lobby`：房间创建后 30 分钟过期，不因加入、准备、退出或开发者填充虚拟玩家而延长。
+- `in_game`：开局后 2 小时过期，不因投票、立法、总统权力等游戏命令而延长。
+- `ended`：游戏结束后保留 30 分钟，再转 `expired`。结果页复盘通常是短时查看，30 分钟足够用户截图、回看关键结果。
 
 ## 16.2 过期处理动作
+
+大厅、对局与结果快照读取接口必须同步检查 `rooms.expireAt`：若 `expireAt <= now` 或 `status = expired`，直接返回 `ROOM_EXPIRED`，让前端轮询链路立即回首页并清理恢复锚点。该检查不替代维护任务，维护任务仍负责最终标记与资源清理。
 
 当 `maintenanceService` 发现房间过期时：
 

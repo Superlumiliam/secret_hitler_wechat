@@ -313,7 +313,7 @@ frontend/
 - `history -> board`：点击左上角回退按钮或系统返回后 `wx.navigateBack`
 - `board -> result`：`wx.redirectTo`
 - `rules`：统一 `wx.navigateTo`
-- 退出房间 / 房间失效：`wx.reLaunch({ url: '/pages/home/index' })`
+- 退出房间 / 房间失效 / 页面超时：`wx.reLaunch({ url: '/pages/home/index' })`
 
 原因：
 
@@ -714,7 +714,29 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 6. 收到 `PHASE_MISMATCH`
 7. 收到 `DUPLICATE_COMMAND`
 
-### 10.6 快照消费规则
+### 10.6 页面超时处理
+
+大厅、对局桌面、结果页及其辅助页必须按后端房间 TTL 设置前端页面超时，避免页面长时间停留后继续展示旧房间：
+
+- 大厅页：30 分钟
+- 大厅规则页：沿用大厅页的同一个超时截止时间
+- 对局桌面页：2 小时
+- 身份页、历史记录页、对局规则页：沿用对局桌面页的同一个超时截止时间
+- 结果页：30 分钟
+- 结果页进入的规则页：沿用结果页的同一个超时截止时间
+
+超时或轮询拉取快照收到 `ROOM_EXPIRED`、`ROOM_NOT_FOUND`、`NOT_ROOM_MEMBER` 时，页面必须：
+
+1. 停止当前页轮询和页面超时定时器。
+2. 清理前端运行态房间数据，例如 `activeRoom` 与初始大厅快照缓存。
+3. 调用 `bootstrapService.clearActiveRoom` 清理当前用户的活跃房间恢复锚点。
+4. `wx.reLaunch({ url: '/pages/home/index?pageTimedOut=1' })` 回到首页。
+5. `App.onLaunch/onShow` 检测到 `pageTimedOut=1` 时跳过本轮活跃房间自动恢复。
+6. 首页检测到 `pageTimedOut=1` 后弹出单按钮弹框，标题“页面已超时”，用户点击“确认”后关闭弹框。
+
+页面首次进入时可使用本地阶段 TTL 建立兜底定时器；一旦成功拿到 `getLobbySnapshot`、`getGameSnapshot` 或 `getResultSnapshot`，必须以服务端返回的 `expireAt` 校准本地截止时间。辅助页通过路由参数继承主页面的绝对截止时间，不重新计算新的 TTL。
+
+### 10.7 快照消费规则
 
 页面始终按以下顺序消费：
 
@@ -1514,10 +1536,11 @@ interface ResultSnapshot {
   roomStatus: 'ended'
   myMemberId: string
   version: number
-  winner: 'LIBERAL' | 'FASCIST'
-  winReason: string
-  endedAt: string
-  policySummary: {
+	  winner: 'LIBERAL' | 'FASCIST'
+	  winReason: string
+	  endedAt: string
+	  expireAt: string
+	  policySummary: {
     liberal: number
     fascist: number
   }

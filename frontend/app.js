@@ -60,18 +60,18 @@ App({
       traceUser: true,
     });
 
-    const roomCode = options.query && options.query.roomCode;
+    const query = options.query || {};
     this.ensureSessionAndRecover({
       source: "launch",
-      skipRecoverRoute: Boolean(roomCode),
+      skipRecoverRoute: Boolean(query.roomCode || query.pageTimedOut),
     });
   },
 
   onShow(options = {}) {
-    const roomCode = options.query && options.query.roomCode;
+    const query = options.query || {};
     this.ensureSessionAndRecover({
       source: "show",
-      skipRecoverRoute: Boolean(roomCode),
+      skipRecoverRoute: Boolean(query.roomCode || query.pageTimedOut),
     });
   },
 

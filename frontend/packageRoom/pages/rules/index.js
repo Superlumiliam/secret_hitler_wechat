@@ -1,6 +1,19 @@
 const { rulesContent } = require("../../static/rulesContent");
+const {
+  GAME_PAGE_TIMEOUT_MS,
+  clearPageTimeout,
+  schedulePageTimeout,
+  setupPageTimeout,
+} = require("../../../utils/pageTimeout");
+
+function normalizeTimeoutMs(value) {
+  const timeoutMs = Number(value);
+  return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : GAME_PAGE_TIMEOUT_MS;
+}
 
 Page({
+  pageTimeoutMs: GAME_PAGE_TIMEOUT_MS,
+
   data: {
     roomId: "",
     controlledMemberId: "",
@@ -9,10 +22,29 @@ Page({
   },
 
   onLoad(options = {}) {
+    this.pageTimeoutMs = normalizeTimeoutMs(options.timeoutMs);
     this.setData({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
     });
+    setupPageTimeout(this, {
+      timeoutMs: this.pageTimeoutMs,
+      deadlineAt: options.timeoutDeadlineAt,
+    });
+  },
+
+  onShow() {
+    schedulePageTimeout(this, {
+      timeoutMs: this.pageTimeoutMs,
+    });
+  },
+
+  onHide() {
+    clearPageTimeout(this);
+  },
+
+  onUnload() {
+    clearPageTimeout(this);
   },
 
   onTapBack() {

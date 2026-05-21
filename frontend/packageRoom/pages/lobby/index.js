@@ -3,6 +3,14 @@ const CLOUD_ASSET_ROOT =
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const LOBBY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-room-prepare.webp`;
 const LOBBY_POLL_INTERVAL_MS = 2000;
+const {
+  LOBBY_PAGE_TIMEOUT_MS,
+  clearPageTimeout,
+  handlePageTimeout,
+  schedulePageTimeout,
+  setupPageTimeout,
+  syncPageTimeoutDeadline,
+} = require("../../../utils/pageTimeout");
 const REFRESH_AFTER_ERROR_CODES = [
   "VERSION_CONFLICT",
   "PHASE_MISMATCH",
@@ -40,6 +48,10 @@ function createServiceError(result, fallbackMessage) {
   err.retryable = Boolean(error.retryable);
   err.isBusinessFailure = true;
   return err;
+}
+
+function isRoomUnavailableError(err) {
+  return Boolean(err && ["ROOM_EXPIRED", "ROOM_NOT_FOUND", "NOT_ROOM_MEMBER"].includes(err.code));
 }
 
 function takeInitialLobbySnapshot(roomId) {
@@ -102,6 +114,10 @@ Page({
       roomId,
       memberId: (initialLobby && initialLobby.memberId) || options.memberId || "",
     });
+    setupPageTimeout(this, {
+      timeoutMs: LOBBY_PAGE_TIMEOUT_MS,
+      beforeRedirect: () => this.stopRefreshTimer(),
+    });
     this.loadPageAssets();
     if (initialLobby && initialLobby.lobbySnapshot) {
       this.hydrateLobby(initialLobby.lobbySnapshot).then(() => {
@@ -117,6 +133,10 @@ Page({
   },
 
   onShow() {
+    schedulePageTimeout(this, {
+      timeoutMs: LOBBY_PAGE_TIMEOUT_MS,
+      beforeRedirect: () => this.stopRefreshTimer(),
+    });
     if (this.data.roomId) {
       this.loadLobbySnapshot({ silent: true });
       this.startRefreshTimer();
@@ -125,10 +145,12 @@ Page({
 
   onHide() {
     this.stopRefreshTimer();
+    clearPageTimeout(this);
   },
 
   onUnload() {
     this.stopRefreshTimer();
+    clearPageTimeout(this);
   },
 
   onShareAppMessage() {
@@ -284,12 +306,22 @@ Page({
         throw createServiceError(result, "获取大厅失败");
       }
 
+      syncPageTimeoutDeadline(this, result.data && result.data.expireAt, {
+        beforeRedirect: () => this.stopRefreshTimer(),
+      });
       await this.hydrateLobby(result.data);
       this.setData({
         isLoading: false,
       });
     } catch (err) {
       console.error("获取大厅失败", err);
+      if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
+        handlePageTimeout(this, {
+          beforeRedirect: () => this.stopRefreshTimer(),
+        });
+        return;
+      }
+
       if (err.code === "GAME_ALREADY_STARTED") {
         this.redirectToBoard();
         return;
@@ -354,10 +386,11 @@ Page({
   },
 
   onTapRules() {
+    const timeoutDeadlineAt = this.__pageTimeoutDeadline || Date.now() + LOBBY_PAGE_TIMEOUT_MS;
     wx.navigateTo({
       url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(this.data.roomId || "")}&memberId=${encodeURIComponent(
         this.data.memberId || "",
-      )}`,
+      )}&timeoutMs=${LOBBY_PAGE_TIMEOUT_MS}&timeoutDeadlineAt=${timeoutDeadlineAt}`,
     });
   },
 
@@ -395,6 +428,17 @@ Page({
     return Boolean(err && (err.retryable || REFRESH_AFTER_ERROR_CODES.includes(err.code)));
   },
 
+  handleRoomUnavailable(err) {
+    if (!isRoomUnavailableError(err)) {
+      return false;
+    }
+
+    handlePageTimeout(this, {
+      beforeRedirect: () => this.stopRefreshTimer(),
+    });
+    return true;
+  },
+
   async onReadyAction() {
     const lobby = this.data.lobby;
     const viewerState = (lobby && lobby.viewerState) || {};
@@ -423,6 +467,9 @@ Page({
       await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("准备状态更新失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       wx.showToast({
         title: err.message || "操作失败",
         icon: "none",
@@ -455,6 +502,9 @@ Page({
       await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("补齐虚拟玩家失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       wx.showToast({
         title: err.message || "补齐失败",
         icon: "none",
@@ -487,6 +537,9 @@ Page({
       await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("虚拟玩家准备失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       wx.showToast({
         title: err.message || "准备失败",
         icon: "none",
@@ -523,6 +576,9 @@ Page({
       });
     } catch (err) {
       console.error("开始游戏失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       wx.showToast({
         title: err.message || "开始失败",
         icon: "none",

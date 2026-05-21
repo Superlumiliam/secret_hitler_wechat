@@ -54,6 +54,36 @@ function createExpireAt(baseTime, ttlMs) {
   return new Date(base + ttlMs);
 }
 
+function toDate(value) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value.toDate === "function") {
+    return value.toDate();
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toIsoString(value) {
+  const date = toDate(value);
+  return date ? date.toISOString() : "";
+}
+
+function isRoomExpired(room, now = new Date()) {
+  if (!room) {
+    return false;
+  }
+  if (room.status === "expired") {
+    return true;
+  }
+  const expireAt = toDate(room.expireAt || room.expiresAt);
+  return Boolean(expireAt && expireAt.getTime() <= now.getTime());
+}
+
 function splitEnvList(value) {
   return String(value || "")
     .split(/[\s,;]+/)
@@ -512,6 +542,7 @@ function buildLobbySnapshotFromData(room, members, openid) {
     targetPlayerCount: room.targetPlayerCount,
     minPlayerCount: MIN_PLAYER_COUNT,
     maxPlayerCount: MAX_PLAYER_COUNT,
+    expireAt: toIsoString(room.expireAt || room.expiresAt),
     seatOrder: activeMembers.map((member) => ({
       memberId: getMemberId(member),
       displayName: member.displayName,
@@ -690,8 +721,7 @@ async function joinRoom(payload, openid) {
     }
 
     const resolvedRoomId = room.roomId || room._id;
-    const expireAt = room.expireAt || room.expiresAt;
-    if (expireAt && new Date(expireAt).getTime() <= Date.now()) {
+    if (isRoomExpired(room)) {
       return fail("ROOM_EXPIRED", "房间已过期");
     }
 
@@ -773,7 +803,6 @@ async function joinRoom(payload, openid) {
       data: {
         playerCount: members.length + 1,
         assetFileIds,
-        expireAt: createExpireAt(joinedAt, ROOM_TTL_LOBBY_MS),
         version: _.inc(1),
         updatedAt: joinedAt,
       },
@@ -808,6 +837,15 @@ async function getLobbySnapshot(payload, openid) {
   const roomId = payload && payload.roomId;
   if (!roomId || typeof roomId !== "string") {
     return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+
+  const roomRes = await db.collection("rooms").doc(roomId).get();
+  const room = roomRes.data;
+  if (!room) {
+    return fail("ROOM_NOT_FOUND", "房间不存在");
+  }
+  if (isRoomExpired(room)) {
+    return fail("ROOM_EXPIRED", "房间已过期");
   }
 
   const snapshot = await buildLobbySnapshot(roomId, openid);
@@ -983,7 +1021,6 @@ async function leaveRoom(payload, openid) {
       data: {
         hostMemberId: newHostMemberId,
         playerCount: remainingMembers.length,
-        expireAt: createExpireAt(updatedAt, ROOM_TTL_LOBBY_MS),
         version: _.inc(1),
         updatedAt,
       },
@@ -1017,6 +1054,9 @@ async function setReady(payload, openid) {
     if (room.status !== "lobby") {
       return fail("ACTION_NOT_ALLOWED", "房间已开局");
     }
+    if (isRoomExpired(room)) {
+      return fail("ROOM_EXPIRED", "房间已过期");
+    }
 
     const member = await getRoomMember(roomId, openid);
     if (!member) {
@@ -1034,7 +1074,6 @@ async function setReady(payload, openid) {
 
     await db.collection("rooms").doc(roomId).update({
       data: {
-        expireAt: createExpireAt(updatedAt, ROOM_TTL_LOBBY_MS),
         version: _.inc(1),
         updatedAt,
       },
@@ -1069,6 +1108,11 @@ async function assertDevRoomHost(roomId, openid) {
   if (room.status !== "lobby") {
     return {
       error: fail("ACTION_NOT_ALLOWED", "房间已开局"),
+    };
+  }
+  if (isRoomExpired(room)) {
+    return {
+      error: fail("ROOM_EXPIRED", "房间已过期"),
     };
   }
 
@@ -1163,7 +1207,6 @@ async function devFillVirtualPlayers(payload, openid, wxContext) {
     await db.collection("rooms").doc(roomId).update({
       data: {
         playerCount: members.length + virtualMembers.length,
-        expireAt: createExpireAt(createdAt, ROOM_TTL_LOBBY_MS),
         version: _.inc(1),
         updatedAt: createdAt,
       },
@@ -1212,7 +1255,6 @@ async function devReadyAllVirtualPlayers(payload, openid, wxContext) {
 
     await db.collection("rooms").doc(roomId).update({
       data: {
-        expireAt: createExpireAt(updatedAt, ROOM_TTL_LOBBY_MS),
         version: _.inc(1),
         updatedAt,
       },

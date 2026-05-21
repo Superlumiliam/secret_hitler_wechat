@@ -65,6 +65,19 @@ const REFRESH_AFTER_COMMAND_ERROR_CODES = [
   "TARGET_ALREADY_INVESTIGATED",
 ];
 
+function isRoomUnavailableError(err) {
+  return Boolean(err && ["ROOM_EXPIRED", "ROOM_NOT_FOUND", "NOT_ROOM_MEMBER"].includes(err.code));
+}
+
+const {
+  GAME_PAGE_TIMEOUT_MS,
+  clearPageTimeout,
+  handlePageTimeout,
+  schedulePageTimeout,
+  setupPageTimeout,
+  syncPageTimeoutDeadline,
+} = require("../../../utils/pageTimeout");
+
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
 }
@@ -120,10 +133,18 @@ Page({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
     });
+    setupPageTimeout(this, {
+      timeoutMs: GAME_PAGE_TIMEOUT_MS,
+      beforeRedirect: () => this.stopRefreshTimer(),
+    });
     this.loadGameSnapshot();
   },
 
   onShow() {
+    schedulePageTimeout(this, {
+      timeoutMs: GAME_PAGE_TIMEOUT_MS,
+      beforeRedirect: () => this.stopRefreshTimer(),
+    });
     if (this.data.roomId) {
       this.loadGameSnapshot({ silent: true });
       this.startRefreshTimer();
@@ -132,10 +153,12 @@ Page({
 
   onHide() {
     this.stopRefreshTimer();
+    clearPageTimeout(this);
   },
 
   onUnload() {
     this.stopRefreshTimer();
+    clearPageTimeout(this);
   },
 
   startRefreshTimer() {
@@ -186,12 +209,22 @@ Page({
         return;
       }
 
+      syncPageTimeoutDeadline(this, result.data && result.data.expireAt, {
+        beforeRedirect: () => this.stopRefreshTimer(),
+      });
       await this.hydrateSnapshot(result.data);
       if (this.refreshTimer) {
         this.startRefreshTimer();
       }
     } catch (err) {
       console.error("获取对局数据失败", err);
+      if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
+        handlePageTimeout(this, {
+          beforeRedirect: () => this.stopRefreshTimer(),
+        });
+        return;
+      }
+
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
         return;
@@ -818,6 +851,17 @@ Page({
     return Boolean(err && (err.retryable || REFRESH_AFTER_COMMAND_ERROR_CODES.includes(err.code)));
   },
 
+  handleRoomUnavailable(err) {
+    if (!isRoomUnavailableError(err)) {
+      return false;
+    }
+
+    handlePageTimeout(this, {
+      beforeRedirect: () => this.stopRefreshTimer(),
+    });
+    return true;
+  },
+
   getPollIntervalMs() {
     if (Date.now() - this.lastCommandSettledAt <= COMMAND_REFRESH_WINDOW_MS) {
       return GAME_POLL_AFTER_COMMAND_INTERVAL_MS;
@@ -849,6 +893,7 @@ Page({
 
   redirectToResult(roomCode = "") {
     this.stopRefreshTimer();
+    clearPageTimeout(this);
     const query = `roomId=${encodeURIComponent(this.data.roomId)}&roomCode=${encodeURIComponent(roomCode || "")}`;
     wx.redirectTo({
       url: `/packageResult/pages/result/index?${query}`,
@@ -856,10 +901,11 @@ Page({
   },
 
   onTapRules() {
+    const timeoutDeadlineAt = this.__pageTimeoutDeadline || Date.now() + GAME_PAGE_TIMEOUT_MS;
     wx.navigateTo({
       url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(this.data.roomId || "")}&controlledMemberId=${encodeURIComponent(
         this.data.controlledMemberId || "",
-      )}`,
+      )}&timeoutMs=${GAME_PAGE_TIMEOUT_MS}&timeoutDeadlineAt=${timeoutDeadlineAt}`,
     });
   },
 
@@ -872,10 +918,11 @@ Page({
       return;
     }
 
+    const timeoutDeadlineAt = this.__pageTimeoutDeadline || Date.now() + GAME_PAGE_TIMEOUT_MS;
     wx.navigateTo({
       url: `/packageRoom/pages/identity/index?roomId=${encodeURIComponent(this.data.roomId)}&controlledMemberId=${encodeURIComponent(
         this.data.controlledMemberId || "",
-      )}`,
+      )}&timeoutDeadlineAt=${timeoutDeadlineAt}`,
     });
   },
 
@@ -888,10 +935,11 @@ Page({
       return;
     }
 
+    const timeoutDeadlineAt = this.__pageTimeoutDeadline || Date.now() + GAME_PAGE_TIMEOUT_MS;
     wx.navigateTo({
       url: `/packageRoom/pages/history/index?roomId=${encodeURIComponent(this.data.roomId)}&controlledMemberId=${encodeURIComponent(
         this.data.controlledMemberId || "",
-      )}`,
+      )}&timeoutDeadlineAt=${timeoutDeadlineAt}`,
     });
   },
 
@@ -972,6 +1020,9 @@ Page({
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交提名失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
         return;
@@ -1058,6 +1109,9 @@ Page({
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交投票失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
         return;
@@ -1156,6 +1210,9 @@ Page({
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error(isDiscard ? "提交总统弃牌失败" : "提交总理颁布失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
         return;
@@ -1233,6 +1290,9 @@ Page({
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提出否决失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
         return;
@@ -1320,6 +1380,9 @@ Page({
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("回应否决失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
         return;
@@ -1438,6 +1501,9 @@ Page({
       await this.loadGameSnapshot({ silent: true });
     } catch (err) {
       console.error("提交总统权力失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
         return;

@@ -9,6 +9,14 @@ const OUTCOME_CLASS_BY_TYPE = {
   chaos_policy: "is-chaos",
   win: "is-win",
 };
+const {
+  GAME_PAGE_TIMEOUT_MS,
+  clearPageTimeout,
+  handlePageTimeout,
+  schedulePageTimeout,
+  setupPageTimeout,
+  syncPageTimeoutDeadline,
+} = require("../../../utils/pageTimeout");
 
 function getSeatLabel(member, fallback = "待定") {
   if (!member) {
@@ -33,7 +41,25 @@ Page({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
     });
+    setupPageTimeout(this, {
+      timeoutMs: GAME_PAGE_TIMEOUT_MS,
+      deadlineAt: options.timeoutDeadlineAt,
+    });
     this.loadHistorySnapshot();
+  },
+
+  onShow() {
+    schedulePageTimeout(this, {
+      timeoutMs: GAME_PAGE_TIMEOUT_MS,
+    });
+  },
+
+  onHide() {
+    clearPageTimeout(this);
+  },
+
+  onUnload() {
+    clearPageTimeout(this);
   },
 
   async loadHistorySnapshot() {
@@ -65,9 +91,15 @@ Page({
       if (!result.success) {
         throw this.createServiceError(result, "获取历史记录失败");
       }
+      syncPageTimeoutDeadline(this, result.data && result.data.expireAt);
       this.hydrateHistory(result.data);
     } catch (err) {
       console.error("获取历史记录失败", err);
+      if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
+        handlePageTimeout(this);
+        return;
+      }
+
       this.setData({
         errorText: err.message || "获取历史记录失败",
       });

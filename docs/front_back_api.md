@@ -70,7 +70,7 @@ MVP 阶段固定为以下三类对外云函数：
 
 | 云函数 | 职责 | 允许 action |
 | --- | --- | --- |
-| `bootstrapService` | 会话初始化与活跃房间恢复 | `ensureSession`、`recoverActiveRoom` |
+| `bootstrapService` | 会话初始化与活跃房间恢复 | `ensureSession`、`recoverActiveRoom`、`clearActiveRoom` |
 | `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`setReady` |
 | `gameService` | 游戏开局、对局快照、命令处理、结果快照 | `startGame`、`getGameSnapshot`、`submitCommand`、`getResultSnapshot` |
 
@@ -244,15 +244,16 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
       "isReady": true
     }
   ],
-  "viewerState": {
-    "myMemberId": "mem_host",
-    "isHost": true,
-    "myIsReady": true,
-    "canStart": true
-  },
-  "version": 3,
-  "updatedAt": "2026-04-12T12:00:00.000Z"
-}
+	  "viewerState": {
+	    "myMemberId": "mem_host",
+	    "isHost": true,
+	    "myIsReady": true,
+	    "canStart": true
+	  },
+	  "version": 3,
+	  "expireAt": "2026-04-12T12:30:00.000Z",
+	  "updatedAt": "2026-04-12T12:00:00.000Z"
+	}
 ```
 
 字段约束：
@@ -261,6 +262,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `seatOrder` 只包含当前有效大厅成员，MVP 顺序由加入顺序初始化
 - `viewerState` 由后端根据当前 openid 与房间成员即时派生，只存在于 API 响应，不写入数据库
 - `viewerState.canStart` 仅表示“从当前查看者视角是否满足开始条件”，不额外授予权限
+- `expireAt` 为服务端房间阶段过期时间，前端页面超时以该字段校准
 - 大厅视图绝不包含角色、党派、牌堆、投票等游戏真相
 - 大厅阶段不维护 `room_public_snapshots` 或 `player_private_snapshots`
 
@@ -279,10 +281,11 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
   "currentPhase": "voting",
   "publicState": {},
   "privateState": {},
-  "pendingTask": null,
-  "serverHints": [],
-  "updatedAt": "2026-04-12T12:10:00.000Z"
-}
+	  "pendingTask": null,
+	  "serverHints": [],
+	  "expireAt": "2026-04-12T14:00:00.000Z",
+	  "updatedAt": "2026-04-12T12:10:00.000Z"
+	}
 ```
 
 字段约束：
@@ -291,6 +294,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 - `myMemberId` 由后端根据当前身份定位，不接受前端指定
 - `publicState` 和 `privateState` 必须按本节定义生成
 - `pendingTask` 为当前玩家待办；无待办时返回 `null`
+- `expireAt` 为开局后固定 2 小时的服务端过期时间，游戏命令不延长该时间
 
 ## 4.4 `publicState`
 
@@ -562,10 +566,11 @@ interface PublicHistoryProjection {
   "roomStatus": "ended",
   "myMemberId": "mem_2",
   "version": 32,
-  "winner": "LIBERAL",
-  "winReason": "HITLER_EXECUTED",
-  "endedAt": "2026-04-12T13:30:00.000Z",
-  "policySummary": {
+	  "winner": "LIBERAL",
+	  "winReason": "HITLER_EXECUTED",
+	  "endedAt": "2026-04-12T13:30:00.000Z",
+	  "expireAt": "2026-04-12T14:00:00.000Z",
+	  "policySummary": {
     "liberal": 3,
     "fascist": 5
   },
@@ -599,6 +604,7 @@ interface PublicHistoryProjection {
 - `winner` 只允许为 `LIBERAL` 或 `FASCIST`
 - `winReason` 必须使用枚举，不能直接返回展示文案
 - `timeline` 只记录复盘所需关键节点
+- `expireAt` 为游戏结束后固定 30 分钟的服务端过期时间
 
 ## 5. `bootstrapService` 详细接口
 
@@ -703,6 +709,40 @@ interface PublicHistoryProjection {
 
 - 若活跃房间无效，返回 `activeRoom = null`
 - `routeHint` 由后端根据房间状态与阶段决定
+
+主要失败错误码：
+
+- `INTERNAL_ERROR`
+
+## 5.3 `clearActiveRoom`
+
+用途：
+
+- 页面超时或前端确认退出恢复上下文时，清理当前用户的活跃房间恢复锚点
+- 只更新当前 openid 对应的 `user_profiles.activeRoomId / activeMemberId / activeRoomStatus`
+- 不负责把房间置为过期，也不替代 `maintenanceService` 的房间数据清理
+
+请求：
+
+```json
+{
+  "action": "clearActiveRoom",
+  "payload": {}
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "activeRoom": null
+  }
+}
+```
 
 主要失败错误码：
 
@@ -1310,12 +1350,13 @@ MVP 阶段前端只能通过云函数读取大厅视图或对局快照：
     "roomId": "room_xxx",
     "roomCode": "482615",
     "roomStatus": "in_game",
-    "version": 18,
-    "round": 3,
-    "currentPhase": "voting",
-    "publicState": {},
-    "updatedAt": "2026-04-12T12:10:00.000Z"
-  },
+	    "version": 18,
+	    "round": 3,
+	    "currentPhase": "voting",
+	    "expireAt": "2026-04-12T14:00:00.000Z",
+	    "publicState": {},
+	    "updatedAt": "2026-04-12T12:10:00.000Z"
+	  },
   "updatedAt": "2026-04-12T12:10:00.000Z",
   "expireAt": "2026-04-13T00:10:00.000Z"
 }

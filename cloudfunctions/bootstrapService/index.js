@@ -278,12 +278,21 @@ async function recoverActiveRoom(openid) {
   });
 }
 
+async function clearActiveRoom(openid) {
+  await clearActiveRoomForProfile(openid, new Date());
+  return ok({
+    activeRoom: null,
+  });
+}
+
 async function dispatchAction(action, payload, openid) {
   switch (action) {
     case "ensureSession":
       return await ensureSession(openid);
     case "recoverActiveRoom":
       return await recoverActiveRoom(openid);
+    case "clearActiveRoom":
+      return await clearActiveRoom(openid);
     default:
       return fail("INVALID_PAYLOAD", "未知 action");
   }

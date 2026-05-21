@@ -6,6 +6,14 @@ const IDENTITY_CARD_FILE_ID_BY_ROLE = {
   FASCIST: `${CLOUD_ASSET_ROOT}identity-fascist.webp`,
   HITLER: `${CLOUD_ASSET_ROOT}identity-hitler.webp`,
 };
+const {
+  GAME_PAGE_TIMEOUT_MS,
+  clearPageTimeout,
+  handlePageTimeout,
+  schedulePageTimeout,
+  setupPageTimeout,
+  syncPageTimeoutDeadline,
+} = require("../../../utils/pageTimeout");
 
 const ROLE_META = {
   LIBERAL: {
@@ -36,6 +44,7 @@ const ACTION_TIPS = {
 
 const ERROR_MESSAGE_MAP = {
   ROOM_NOT_FOUND: "房间不存在或已失效",
+  ROOM_EXPIRED: "房间已过期",
   GAME_ALREADY_ENDED: "对局已结束",
   FORBIDDEN: "你当前不能查看该信息",
   ACTION_NOT_ALLOWED: "当前状态不允许查看该信息",
@@ -69,7 +78,25 @@ Page({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
     });
+    setupPageTimeout(this, {
+      timeoutMs: GAME_PAGE_TIMEOUT_MS,
+      deadlineAt: options.timeoutDeadlineAt,
+    });
     this.loadIdentitySnapshot();
+  },
+
+  onShow() {
+    schedulePageTimeout(this, {
+      timeoutMs: GAME_PAGE_TIMEOUT_MS,
+    });
+  },
+
+  onHide() {
+    clearPageTimeout(this);
+  },
+
+  onUnload() {
+    clearPageTimeout(this);
   },
 
   async loadIdentitySnapshot() {
@@ -103,9 +130,15 @@ Page({
         throw this.createServiceError(result, "获取身份信息失败");
       }
 
+      syncPageTimeoutDeadline(this, result.data && result.data.expireAt);
       await this.hydrateIdentity(result.data);
     } catch (err) {
       console.error("获取身份信息失败", err);
+      if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
+        handlePageTimeout(this);
+        return;
+      }
+
       this.setData({
         errorText: err.message || "获取身份信息失败",
       });
@@ -275,10 +308,11 @@ Page({
   },
 
   onTapRules() {
+    const timeoutDeadlineAt = this.__pageTimeoutDeadline || Date.now() + GAME_PAGE_TIMEOUT_MS;
     wx.navigateTo({
       url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(this.data.roomId || "")}&controlledMemberId=${encodeURIComponent(
         this.data.controlledMemberId || "",
-      )}`,
+      )}&timeoutMs=${GAME_PAGE_TIMEOUT_MS}&timeoutDeadlineAt=${timeoutDeadlineAt}`,
     });
   },
 

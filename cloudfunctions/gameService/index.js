@@ -162,6 +162,31 @@ function toIsoString(value) {
   return String(value);
 }
 
+function toDate(value) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value.toDate === "function") {
+    return value.toDate();
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isRoomExpired(room, now = new Date()) {
+  if (!room) {
+    return false;
+  }
+  if (room.status === "expired") {
+    return true;
+  }
+  const expireAt = toDate(room.expireAt || room.expiresAt);
+  return Boolean(expireAt && expireAt.getTime() <= now.getTime());
+}
+
 function isGameEndedCore(gameCore) {
   return Boolean(gameCore && (gameCore.phase === "game_ended" || gameCore.status === "ended" || gameCore.status === "game_ended"));
 }
@@ -1141,6 +1166,7 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
     version: gameCore.version,
     round: gameCore.round,
     currentPhase: gameCore.phase,
+    expireAt: toIsoString(gameCore.expireAt || room.expireAt || room.expiresAt),
     publicState: {
       seatOrder: members.map((member) => ({
         memberId: getMemberId(member),
@@ -1214,6 +1240,7 @@ function buildResultSnapshotPayload(room, gameCore, members, publicHistory, upda
     winner: gameCore.winner || "",
     winReason: gameCore.winReason || "",
     endedAt: toIsoString(gameCore.endedAt || updatedAt),
+    expireAt: toIsoString(createResultExpireAt(gameCore.endedAt || updatedAt)),
     policySummary: {
       liberal: gameCore.liberalPolicyCount || 0,
       fascist: gameCore.fascistPolicyCount || 0,
@@ -1551,6 +1578,9 @@ async function startGame(payload, openid) {
       if (room.status !== "lobby") {
         return fail("GAME_ALREADY_STARTED", "房间已开局");
       }
+      if (isRoomExpired(room)) {
+        return fail("ROOM_EXPIRED", "房间已过期");
+      }
 
       const membersRes = await transaction
         .collection("room_members")
@@ -1691,11 +1721,11 @@ async function getGameSnapshot(payload, openid) {
     return fail("ROOM_NOT_FOUND", "房间不存在");
   }
 
+  if (isRoomExpired(room)) {
+    return fail("ROOM_EXPIRED", "房间已过期");
+  }
   if (room.status === "ended") {
     return fail("GAME_ALREADY_ENDED", "对局已经结束");
-  }
-  if (room.status === "expired") {
-    return fail("ROOM_EXPIRED", "房间已过期");
   }
   if (room.status !== "in_game") {
     return fail("GAME_NOT_STARTED", "房间尚未开局");
@@ -1737,6 +1767,7 @@ async function getGameSnapshot(payload, openid) {
     privateState: privatePayload.privateState || {},
     pendingTask: privatePayload.pendingTask || privateSnapshot.pendingTask || null,
     serverHints: [],
+    expireAt: publicPayload.expireAt || toIsoString(room.expireAt || room.expiresAt),
     updatedAt: publicPayload.updatedAt || nowIso(),
   });
 }
@@ -1799,11 +1830,11 @@ async function submitCommand(payload, openid) {
       if (!room) {
         return fail("ROOM_NOT_FOUND", "房间不存在");
       }
+      if (isRoomExpired(room)) {
+        return fail("ROOM_EXPIRED", "房间已过期");
+      }
       if (room.status === "ended") {
         return fail("GAME_ALREADY_ENDED", "对局已经结束");
-      }
-      if (room.status === "expired") {
-        return fail("ROOM_EXPIRED", "房间已过期");
       }
       if (room.status !== "in_game") {
         return fail("GAME_NOT_STARTED", "房间尚未开局");
@@ -3333,7 +3364,7 @@ async function getResultSnapshot(payload, openid) {
   if (!room) {
     return fail("ROOM_NOT_FOUND", "房间不存在");
   }
-  if (room.status === "expired") {
+  if (isRoomExpired(room)) {
     return fail("ROOM_EXPIRED", "房间已过期");
   }
   if (room.status !== "ended") {
@@ -3359,6 +3390,7 @@ async function getResultSnapshot(payload, openid) {
       ...publicSnapshot.payload,
       roomStatus: "ended",
       myMemberId: getMemberId(member),
+      expireAt: publicSnapshot.payload.expireAt || toIsoString(room.expireAt || room.expiresAt),
     });
   }
 

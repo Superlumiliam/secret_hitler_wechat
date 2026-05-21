@@ -3,6 +3,7 @@ function createServiceError(result, fallbackMessage) {
   const code = error.code || "";
   const messageByCode = {
     ROOM_NOT_FOUND: "房间不存在或已失效",
+    ROOM_EXPIRED: "房间已过期",
     GAME_ALREADY_ENDED: "对局已结束",
     ACTION_NOT_ALLOWED: "当前状态不允许执行该操作",
     FORBIDDEN: "你当前不能执行该操作",

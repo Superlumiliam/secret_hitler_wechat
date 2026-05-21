@@ -1,5 +1,13 @@
 const gameService = require("../../services/gameService");
 const { mapResultSnapshot } = require("./resultMapper");
+const {
+  RESULT_PAGE_TIMEOUT_MS,
+  clearPageTimeout,
+  handlePageTimeout,
+  schedulePageTimeout,
+  setupPageTimeout,
+  syncPageTimeoutDeadline,
+} = require("../../../utils/pageTimeout");
 
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
@@ -21,7 +29,24 @@ Page({
       roomCode: options.roomCode || "",
       displayRoomCode: options.roomCode || "------",
     });
+    setupPageTimeout(this, {
+      timeoutMs: RESULT_PAGE_TIMEOUT_MS,
+    });
     this.loadResult();
+  },
+
+  onShow() {
+    schedulePageTimeout(this, {
+      timeoutMs: RESULT_PAGE_TIMEOUT_MS,
+    });
+  },
+
+  onHide() {
+    clearPageTimeout(this);
+  },
+
+  onUnload() {
+    clearPageTimeout(this);
   },
 
   async loadResult() {
@@ -40,6 +65,7 @@ Page({
 
     try {
       const snapshot = await gameService.getResultSnapshot(this.data.roomId);
+      syncPageTimeoutDeadline(this, snapshot && snapshot.expireAt);
       const hydrated = await this.hydrateAvatarUrls(snapshot);
       this.setData({
         result: mapResultSnapshot(hydrated),
@@ -48,6 +74,11 @@ Page({
       });
     } catch (err) {
       console.error("获取结果失败", err);
+      if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
+        handlePageTimeout(this);
+        return;
+      }
+
       this.setData({
         errorText: err.message || "获取结果失败",
       });
@@ -99,8 +130,11 @@ Page({
   },
 
   onTapRules() {
+    const timeoutDeadlineAt = this.__pageTimeoutDeadline || Date.now() + RESULT_PAGE_TIMEOUT_MS;
     wx.navigateTo({
-      url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(this.data.roomId || "")}`,
+      url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(
+        this.data.roomId || "",
+      )}&timeoutMs=${RESULT_PAGE_TIMEOUT_MS}&timeoutDeadlineAt=${timeoutDeadlineAt}`,
     });
   },
 });

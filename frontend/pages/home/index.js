@@ -4,6 +4,7 @@ const DEFAULT_AVATAR_FILE_ID =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/man-in-black.webp";
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const INITIAL_LOBBY_SNAPSHOT_TTL_MS = 30 * 1000;
+const { showTimeoutModalIfNeeded } = require("../../utils/pageTimeout");
 
 function createCommandId(prefix) {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -166,6 +167,7 @@ Page({
 
   onLoad(options = {}) {
     enableDeveloperModeFromOptions(options);
+    showTimeoutModalIfNeeded(options);
 
     const sharedRoomCode = parseJoinTarget(options.roomCode);
     if (sharedRoomCode && sharedRoomCode.roomCode) {

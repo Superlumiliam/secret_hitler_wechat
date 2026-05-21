@@ -1,0 +1,127 @@
+const HOME_TIMEOUT_QUERY = "pageTimedOut=1";
+
+function clearRuntimeRoomState() {
+  const app = typeof getApp === "function" ? getApp() : null;
+  if (!app || !app.globalData) {
+    return;
+  }
+
+  app.globalData.activeRoom = null;
+  app.globalData.initialLobbySnapshots = {};
+}
+
+async function clearActiveRoomOnServer() {
+  if (!wx.cloud) {
+    return;
+  }
+
+  try {
+    const res = await wx.cloud.callFunction({
+      name: "bootstrapService",
+      data: {
+        action: "clearActiveRoom",
+        payload: {},
+      },
+    });
+    const result = res.result || {};
+    if (!result.success) {
+      console.error("清理活跃房间失败", result.error || result);
+    }
+  } catch (err) {
+    console.error("清理活跃房间失败", err);
+  }
+}
+
+function redirectHomeWithTimeoutNotice() {
+  wx.reLaunch({
+    url: `/pages/home/index?${HOME_TIMEOUT_QUERY}`,
+  });
+}
+
+async function handlePageTimeout(page, options = {}) {
+  if (page.__pageTimeoutHandling) {
+    return;
+  }
+
+  page.__pageTimeoutHandling = true;
+  if (typeof options.beforeRedirect === "function") {
+    options.beforeRedirect();
+  }
+
+  clearRuntimeRoomState();
+  await clearActiveRoomOnServer();
+  redirectHomeWithTimeoutNotice();
+}
+
+function setupPageTimeout(page, options) {
+  const timeoutMs = options && options.timeoutMs;
+  const deadlineAt = Number(options && options.deadlineAt);
+  if (Number.isFinite(deadlineAt) && deadlineAt > 0) {
+    page.__pageTimeoutDeadline = deadlineAt;
+    schedulePageTimeout(page, options);
+    return;
+  }
+
+  if (!timeoutMs || timeoutMs <= 0) {
+    return;
+  }
+
+  page.__pageTimeoutDeadline = Date.now() + timeoutMs;
+  schedulePageTimeout(page, options);
+}
+
+function syncPageTimeoutDeadline(page, expireAt, options = {}) {
+  const deadline = Date.parse(expireAt || "");
+  if (!Number.isFinite(deadline)) {
+    return;
+  }
+
+  page.__pageTimeoutDeadline = deadline;
+  schedulePageTimeout(page, options);
+}
+
+function schedulePageTimeout(page, options) {
+  clearPageTimeout(page);
+
+  const deadline = page.__pageTimeoutDeadline;
+  if (!deadline || page.__pageTimeoutHandling) {
+    return;
+  }
+
+  const remainingMs = Math.max(0, deadline - Date.now());
+  page.__pageTimeoutTimer = setTimeout(() => {
+    handlePageTimeout(page, options);
+  }, remainingMs);
+}
+
+function clearPageTimeout(page) {
+  if (page.__pageTimeoutTimer) {
+    clearTimeout(page.__pageTimeoutTimer);
+    page.__pageTimeoutTimer = null;
+  }
+}
+
+function showTimeoutModalIfNeeded(options = {}) {
+  if (!options.pageTimedOut) {
+    return;
+  }
+
+  wx.showModal({
+    title: "页面已超时",
+    content: "房间页面停留时间过长，已回到首页并清理相关状态。",
+    showCancel: false,
+    confirmText: "确认",
+  });
+}
+
+module.exports = {
+  LOBBY_PAGE_TIMEOUT_MS: 30 * 60 * 1000,
+  GAME_PAGE_TIMEOUT_MS: 2 * 60 * 60 * 1000,
+  RESULT_PAGE_TIMEOUT_MS: 30 * 60 * 1000,
+  clearPageTimeout,
+  handlePageTimeout,
+  schedulePageTimeout,
+  setupPageTimeout,
+  syncPageTimeoutDeadline,
+  showTimeoutModalIfNeeded,
+};
