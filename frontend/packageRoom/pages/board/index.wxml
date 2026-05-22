@@ -34,7 +34,7 @@
         <view wx:for="{{seats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="双击切换操控席位">
           <view class="seat-no">{{item.seatNo}}</view>
           <view class="avatar">
-            <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill"></image>
+            <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
           </view>
           <view class="seat-name">{{item.name}}</view>
           <view wx:if="{{item.roleLabel}}" class="role-badge">{{item.roleLabel}}</view>

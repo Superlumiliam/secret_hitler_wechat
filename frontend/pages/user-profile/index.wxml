@@ -4,6 +4,7 @@
     class="profile-background"
     src="{{backgroundSrc}}"
     mode="aspectFill"
+    webp="{{true}}"
     binderror="onBackgroundError"
   />
 
@@ -32,7 +33,7 @@
       aria-label="选择头像"
     >
       <view class="avatar-ring">
-        <image class="avatar-image" src="{{avatarPreviewSrc || defaultAvatarSrc}}" mode="aspectFill" />
+        <image class="avatar-image" src="{{avatarPreviewSrc || defaultAvatarSrc}}" mode="aspectFill" webp="{{true}}" />
       </view>
     </button>
   </view>

@@ -57,7 +57,7 @@
         <view wx:if="{{knownMembers.length}}" class="known-list">
           <view wx:for="{{knownMembers}}" wx:key="memberId" class="known-member">
             <view class="known-avatar">
-              <image wx:if="{{item.avatarSrc}}" class="known-avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" />
+              <image wx:if="{{item.avatarSrc}}" class="known-avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}" />
               <text wx:else>{{item.initial}}</text>
             </view>
             <view class="known-main">

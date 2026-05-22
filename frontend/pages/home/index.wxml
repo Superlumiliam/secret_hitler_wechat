@@ -4,6 +4,7 @@
     class="background-home"
     src="{{homeBackgroundSrc}}"
     mode="aspectFill"
+    webp="{{true}}"
     binderror="onBackgroundError"
   />
 
@@ -19,6 +20,7 @@
       class="profile-avatar"
       src="{{profileAvatarSrc}}"
       mode="aspectFill"
+      webp="{{true}}"
     />
   </view>
 

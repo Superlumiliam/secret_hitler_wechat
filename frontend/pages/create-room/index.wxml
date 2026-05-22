@@ -28,7 +28,7 @@
       </view>
       <view class="role-grid liberal-grid">
         <view wx:for="{{liberalCards}}" wx:key="index" class="role-card">
-          <image wx:if="{{item.avatarSrc}}" class="role-avatar" src="{{item.avatarSrc}}" mode="aspectFit" />
+          <image wx:if="{{item.avatarSrc}}" class="role-avatar" src="{{item.avatarSrc}}" mode="aspectFit" webp="{{true}}" />
           <view wx:else class="role-avatar role-avatar-empty"></view>
         </view>
       </view>
@@ -42,7 +42,7 @@
       </view>
       <view class="role-grid fascist-grid">
         <view wx:for="{{fascistCards}}" wx:key="index" class="role-card fascist-card {{item.isDictator ? 'dictator-card' : ''}}">
-          <image wx:if="{{item.avatarSrc}}" class="role-avatar" src="{{item.avatarSrc}}" mode="aspectFit" />
+          <image wx:if="{{item.avatarSrc}}" class="role-avatar" src="{{item.avatarSrc}}" mode="aspectFit" webp="{{true}}" />
           <view wx:else class="role-avatar role-avatar-empty"></view>
         </view>
       </view>
@@ -60,6 +60,6 @@
   </button>
 
   <view class="avatar-preload" aria-hidden="true">
-    <image wx:for="{{preloadedAvatars}}" wx:key="*this" class="avatar-preload-image" src="{{item}}" mode="aspectFit" />
+    <image wx:for="{{preloadedAvatars}}" wx:key="*this" class="avatar-preload-image" src="{{item}}" mode="aspectFit" webp="{{true}}" />
   </view>
 </view>
