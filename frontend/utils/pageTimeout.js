@@ -1,4 +1,5 @@
 const HOME_TIMEOUT_QUERY = "pageTimedOut=1";
+const PAGE_TIMEOUT_MAX_TIMER_MS = 30 * 1000;
 
 function clearRuntimeRoomState() {
   const app = typeof getApp === "function" ? getApp() : null;
@@ -88,10 +89,15 @@ function schedulePageTimeout(page, options) {
     return;
   }
 
-  const remainingMs = Math.max(0, deadline - Date.now());
-  page.__pageTimeoutTimer = setTimeout(() => {
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) {
     handlePageTimeout(page, options);
-  }, remainingMs);
+    return;
+  }
+
+  page.__pageTimeoutTimer = setTimeout(() => {
+    schedulePageTimeout(page, options);
+  }, Math.min(remainingMs, PAGE_TIMEOUT_MAX_TIMER_MS));
 }
 
 function clearPageTimeout(page) {
@@ -108,7 +114,7 @@ function showTimeoutModalIfNeeded(options = {}) {
 
   wx.showModal({
     title: "页面已超时",
-    content: "房间页面停留时间过长，已回到首页并清理相关状态。",
+    content: "页面停留时间过长，请回到首页开始新的对局。",
     showCancel: false,
     confirmText: "确认",
   });
