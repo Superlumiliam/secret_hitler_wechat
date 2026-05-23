@@ -1,4 +1,4 @@
-# 《secret hitler》后端详细技术方案
+# 《secret dictator》后端详细技术方案
 
 ## 1. 文档定位
 

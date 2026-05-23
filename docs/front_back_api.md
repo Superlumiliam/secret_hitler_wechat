@@ -1,8 +1,8 @@
-# 《secret hitler》前后端交互 API 详细设计
+# 《secret dictator》前后端交互 API 详细设计
 
 ## 1. 文档目标
 
-本文档用于统一《secret hitler》微信小程序的前后端交互协议，覆盖：
+本文档用于统一《secret dictator》微信小程序的前后端交互协议，覆盖：
 
 - 云函数 action 划分
 - 请求与响应 envelope

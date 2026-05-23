@@ -156,7 +156,7 @@ Page({
   onShareAppMessage() {
     const roomCode = this.data.lobby && this.data.lobby.roomCode;
     return {
-      title: `加入 secret hitler 房间 ${roomCode || ""}`.trim(),
+      title: `加入 secret dictator 房间 ${roomCode || ""}`.trim(),
       path: `/pages/home/index?roomCode=${encodeURIComponent(roomCode || "")}`,
     };
   },

@@ -1,4 +1,4 @@
-# 《secret hitler》游戏规则与流程说明
+# 《secret dictator》游戏规则与流程说明
 
 ## 文档目的
 

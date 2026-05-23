@@ -1,4 +1,4 @@
-# 《secret hitler》前端详细技术方案
+# 《secret dictator》前端详细技术方案
 
 ## 1. 文档目标
 
