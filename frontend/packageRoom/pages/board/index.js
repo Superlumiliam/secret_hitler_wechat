@@ -7,13 +7,27 @@ const FASCIST_POWER_MAP = {
   10: ["调查忠诚", "调查忠诚", "特别选举", "处决", "处决"],
 };
 
-const POWER_ICON_MAP = {
-  无: "○",
-  政策预览: "览",
-  调查忠诚: "查",
-  特别选举: "选",
-  处决: "锤",
-  极权派胜利: "冠",
+const CLOUD_ASSET_ROOT =
+  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
+
+const POLICY_TRACK_ASSET_FILE_IDS = {
+  liberalBg: `${CLOUD_ASSET_ROOT}policy-track-liberal-bg.webp`,
+  authoritarianBg: `${CLOUD_ASSET_ROOT}policy-track-authoritarian-bg.webp`,
+  liberalCard: `${CLOUD_ASSET_ROOT}policy-card-liberal.webp`,
+  authoritarianCard: `${CLOUD_ASSET_ROOT}policy-card-authoritarian.webp`,
+  liberalSlot: `${CLOUD_ASSET_ROOT}slot-empty-liberal.webp`,
+  authoritarianSlot: `${CLOUD_ASSET_ROOT}slot-empty-authoritarian.webp`,
+  execution: `${CLOUD_ASSET_ROOT}power-badge-execution.webp`,
+  investigate: `${CLOUD_ASSET_ROOT}power-badge-investigate.webp`,
+  policyPeek: `${CLOUD_ASSET_ROOT}power-badge-policy-peek.webp`,
+  specialElection: `${CLOUD_ASSET_ROOT}power-badge-special-election.webp`,
+};
+
+const POWER_BADGE_ASSET_KEY_MAP = {
+  政策预览: "policyPeek",
+  调查忠诚: "investigate",
+  特别选举: "specialElection",
+  处决: "execution",
 };
 
 const PHASE_NAME_MAP = {
@@ -95,6 +109,8 @@ Page({
     snapshot: null,
     board: null,
     seats: [],
+    policyAssets: {},
+    activePowerTipSlot: 0,
     liberalTrack: [],
     fascistTrack: [],
     electionTrack: [],
@@ -253,8 +269,15 @@ Page({
 
     const publicState = (snapshot && snapshot.publicState) || {};
     const seatOrder = publicState.seatOrder || [];
-    const cloudFileIds = seatOrder.map((member) => member.avatarUrl).filter(isCloudFileId);
+    const cachedPolicyAssets = this.data.policyAssets || {};
+    const hasCachedPolicyAssets = Object.keys(POLICY_TRACK_ASSET_FILE_IDS).every((key) => Boolean(cachedPolicyAssets[key]));
+    const policyAssetFileIds = Object.values(POLICY_TRACK_ASSET_FILE_IDS);
+    const cloudFileIds = seatOrder
+      .map((member) => member.avatarUrl)
+      .filter(isCloudFileId)
+      .concat(hasCachedPolicyAssets ? [] : policyAssetFileIds);
     const avatarUrlByFileId = {};
+    const policyAssetUrlByKey = { ...cachedPolicyAssets };
 
     if (cloudFileIds.length && wx.cloud) {
       try {
@@ -266,20 +289,42 @@ Page({
             avatarUrlByFileId[file.fileID] = file.tempFileURL;
           }
         });
+        if (!hasCachedPolicyAssets) {
+          Object.keys(POLICY_TRACK_ASSET_FILE_IDS).forEach((key) => {
+            const fileId = POLICY_TRACK_ASSET_FILE_IDS[key];
+            policyAssetUrlByKey[key] = avatarUrlByFileId[fileId] || "";
+          });
+        }
       } catch (err) {
-        console.error("对局头像临时链接获取失败", err);
+        console.error("对局图片临时链接获取失败", err);
       }
     }
 
     const board = this.createBoard(snapshot);
     const seats = this.createSeats(snapshot, avatarUrlByFileId);
+    const previousBoard = this.data.board || {};
+    const shouldAnimateNewPolicy = Boolean(this.data.snapshot);
+    const newLiberalPolicySlot =
+      shouldAnimateNewPolicy && board.liberalPolicyCount > (previousBoard.liberalPolicyCount || 0)
+        ? board.liberalPolicyCount
+        : 0;
+    const newFascistPolicySlot =
+      shouldAnimateNewPolicy && board.fascistPolicyCount > (previousBoard.fascistPolicyCount || 0)
+        ? board.fascistPolicyCount
+        : 0;
 
     this.setData({
       snapshot,
       board,
       seats,
-      liberalTrack: this.createLiberalTrack(board.liberalPolicyCount),
-      fascistTrack: this.createFascistTrack(board.targetPlayerCount, board.fascistPolicyCount),
+      policyAssets: policyAssetUrlByKey,
+      liberalTrack: this.createLiberalTrack(board.liberalPolicyCount, policyAssetUrlByKey, newLiberalPolicySlot),
+      fascistTrack: this.createFascistTrack(
+        board.targetPlayerCount,
+        board.fascistPolicyCount,
+        policyAssetUrlByKey,
+        newFascistPolicySlot,
+      ),
       electionTrack: this.createElectionTrack(board.electionTracker),
       statusText: this.createStatusText(snapshot, board),
       phaseHintText: this.createPhaseHintText(snapshot, board),
@@ -456,36 +501,60 @@ Page({
     return pendingTask.allowedTargets || [];
   },
 
-  createLiberalTrack(liberalPolicyCount) {
+  createLiberalTrack(liberalPolicyCount, assets = {}, newPolicySlot = 0) {
     return Array.from({ length: 5 }, (_, index) => {
       const slot = index + 1;
       const isVictory = slot === 5;
       const isEnacted = slot <= liberalPolicyCount;
+      const cardSrc = isEnacted ? assets.liberalCard : assets.liberalSlot;
 
       return {
         slot,
         label: isVictory ? "自由派胜利" : String(slot),
         isVictory,
-        cellClass: `policy-cell liberal-cell ${isEnacted ? "is-enacted" : ""} ${isVictory ? "is-victory" : ""}`,
+        isEnacted,
+        cardSrc,
+        cellClass: [
+          "policy-cell",
+          "liberal-cell",
+          isEnacted ? "is-enacted" : "is-empty",
+          slot === newPolicySlot ? "is-new-policy" : "",
+          isVictory ? "is-victory" : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
       };
     });
   },
 
-  createFascistTrack(targetPlayerCount, fascistPolicyCount) {
+  createFascistTrack(targetPlayerCount, fascistPolicyCount, assets = {}, newPolicySlot = 0) {
     const powers = FASCIST_POWER_MAP[targetPlayerCount] || FASCIST_POWER_MAP[6];
 
     return Array.from({ length: 6 }, (_, index) => {
       const slot = index + 1;
       const isVictory = slot === 6;
       const isEnacted = slot <= fascistPolicyCount;
+      const power = isVictory ? "极权派胜利" : powers[index];
+      const powerBadgeAssetKey = POWER_BADGE_ASSET_KEY_MAP[power] || "";
+      const cardSrc = isEnacted ? assets.authoritarianCard : assets.authoritarianSlot;
 
       return {
         slot,
         label: isVictory ? "极权派胜利" : String(slot),
-        power: isVictory ? "极权派胜利" : powers[index],
-        powerIcon: POWER_ICON_MAP[isVictory ? "极权派胜利" : powers[index]],
+        power,
+        powerBadgeSrc: powerBadgeAssetKey ? assets[powerBadgeAssetKey] : "",
+        isEnacted,
         isVictory,
-        cellClass: `policy-cell fascist-cell ${isEnacted ? "is-enacted" : ""} ${isVictory ? "is-victory" : ""}`,
+        cardSrc,
+        cellClass: [
+          "policy-cell",
+          "fascist-cell",
+          isEnacted ? "is-enacted" : "is-empty",
+          slot === newPolicySlot ? "is-new-policy" : "",
+          isVictory ? "is-victory" : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
       };
     });
   },
@@ -897,6 +966,13 @@ Page({
     const query = `roomId=${encodeURIComponent(this.data.roomId)}&roomCode=${encodeURIComponent(roomCode || "")}`;
     wx.redirectTo({
       url: `/packageResult/pages/result/index?${query}`,
+    });
+  },
+
+  onTogglePowerTip(event) {
+    const slot = Number(event.currentTarget.dataset.slot) || 0;
+    this.setData({
+      activePowerTipSlot: this.data.activePowerTipSlot === slot ? 0 : slot,
     });
   },
 

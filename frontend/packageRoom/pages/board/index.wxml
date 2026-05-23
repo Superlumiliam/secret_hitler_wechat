@@ -48,26 +48,42 @@
         </view>
 
         <view class="track-panel liberal-panel">
-          <view class="track-title">自由派政策轨</view>
-          <view class="policy-row liberal-row">
-            <view wx:for="{{liberalTrack}}" wx:key="slot" class="{{item.cellClass}}">
-              <text class="policy-label">{{item.label}}</text>
+          <view class="policy-track-shell liberal-track-shell">
+            <image wx:if="{{policyAssets.liberalBg}}" class="policy-track-bg" src="{{policyAssets.liberalBg}}" mode="aspectFill" webp="{{true}}"></image>
+            <view class="policy-row liberal-row">
+              <view wx:for="{{liberalTrack}}" wx:key="slot" class="{{item.cellClass}}">
+                <image wx:if="{{item.cardSrc}}" class="policy-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
+                <text wx:else class="policy-label">{{item.label}}</text>
+              </view>
             </view>
           </view>
           <view class="track-progress">已颁布 <text class="progress-count">{{board.liberalPolicyCount}}</text> / 5</view>
         </view>
 
         <view class="track-panel fascist-panel">
-          <view class="track-title fascist-title">极权派政策轨</view>
-          <view class="policy-row fascist-row">
-            <view wx:for="{{fascistTrack}}" wx:key="slot" class="{{item.cellClass}}">
-              <text class="policy-label">{{item.label}}</text>
-            </view>
-          </view>
-          <view class="power-row">
-            <view wx:for="{{fascistTrack}}" wx:key="slot" class="power-cell {{item.isVictory ? 'is-victory' : ''}}">
-              <view class="power-icon">{{item.powerIcon}}</view>
-              <view class="power-label {{item.isVictory ? 'power-victory-label' : ''}}">{{item.power}}</view>
+          <view class="policy-track-shell fascist-track-shell">
+            <image wx:if="{{policyAssets.authoritarianBg}}" class="policy-track-bg" src="{{policyAssets.authoritarianBg}}" mode="aspectFill" webp="{{true}}"></image>
+            <view class="policy-row fascist-row">
+              <view wx:for="{{fascistTrack}}" wx:key="slot" class="{{item.cellClass}}">
+                <image wx:if="{{item.cardSrc}}" class="policy-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
+                <text wx:else class="policy-label">{{item.label}}</text>
+                <view
+                  wx:if="{{item.powerBadgeSrc}}"
+                  class="power-badge-control"
+                  catchtap="onTogglePowerTip"
+                  data-slot="{{item.slot}}"
+                  role="button"
+                  aria-label="总统权力：{{item.power}}"
+                >
+                  <image
+                    class="power-badge-image"
+                    src="{{item.powerBadgeSrc}}"
+                    mode="aspectFit"
+                    webp="{{true}}"
+                  ></image>
+                  <view wx:if="{{activePowerTipSlot == item.slot}}" class="power-tip">总统权力：{{item.power}}</view>
+                </view>
+              </view>
             </view>
           </view>
           <view class="track-progress fascist-progress">已颁布 <text class="progress-count fascist-count">{{board.fascistPolicyCount}}</text> / 6</view>
