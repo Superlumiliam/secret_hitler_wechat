@@ -32,7 +32,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return originalLoad(request, parent, isMain);
 };
 
-const { __testHooks } = require("./index");
+const { __testHooks } = require("../../../cloudfunctions/gameService/index");
 Module._load = originalLoad;
 
 const {
