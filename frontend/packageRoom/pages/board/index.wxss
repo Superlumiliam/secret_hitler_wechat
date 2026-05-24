@@ -401,12 +401,13 @@
 
 .identity-mark {
   position: absolute;
-  right: 20rpx;
+  left: 50%;
   top: 180rpx;
   z-index: 7;
   width: 36rpx;
   height: 36rpx;
   box-sizing: border-box;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
