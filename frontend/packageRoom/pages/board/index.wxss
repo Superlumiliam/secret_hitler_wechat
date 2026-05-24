@@ -314,7 +314,7 @@
 
 .seat-no {
   position: absolute;
-  left: 10rpx;
+  left: 15rpx;
   top: 15rpx;
   z-index: 2;
   color: #deb073;
@@ -327,10 +327,10 @@
 .avatar {
   position: absolute;
   left: 50%;
-  top: 58rpx;
+  top: 40rpx;
   z-index: 2;
-  width: 56rpx;
-  height: 56rpx;
+  width: 70rpx;
+  height: 70rpx;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -353,13 +353,13 @@
 .seat-name {
   position: absolute;
   left: 50%;
-  top: 123rpx;
+  top: 124rpx;
   z-index: 2;
-  width: 100rpx;
+  width: 88rpx;
   transform: translateX(-50%);
   margin-top: 0;
   color: #e9bf83;
-  font-size: 19rpx;
+  font-size: 17rpx;
   line-height: 1.12;
   text-align: center;
   overflow: hidden;
@@ -373,18 +373,11 @@
 .role-badge {
   position: absolute;
   left: 50%;
-  top: 153rpx;
+  top: 148rpx;
   z-index: 5;
-  width: 92rpx;
-  height: 32rpx;
+  width: 84rpx;
+  height: 24rpx;
   transform: translateX(-50%);
-  padding: 0 10rpx;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
 }
 
 .role-badge-image {
@@ -392,18 +385,7 @@
   inset: 0;
   width: 100%;
   height: 100%;
-}
-
-.role-badge-text {
-  position: relative;
-  z-index: 1;
-  max-width: 72rpx;
-  color: #2a1a0d;
-  font-size: 14rpx;
-  font-weight: 900;
-  line-height: 1.05;
-  text-align: center;
-  text-shadow: 0 1rpx 0 rgba(255, 224, 159, 0.46);
+  pointer-events: none;
 }
 
 .investigation-stamp {
@@ -419,11 +401,11 @@
 
 .identity-mark {
   position: absolute;
-  right: 10rpx;
-  top: 197rpx;
+  right: 20rpx;
+  top: 180rpx;
   z-index: 7;
-  width: 31rpx;
-  height: 31rpx;
+  width: 36rpx;
+  height: 36rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;

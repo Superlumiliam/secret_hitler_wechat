@@ -22,7 +22,8 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   policyPeek: `${CLOUD_ASSET_ROOT}power-badge-policy-peek.webp`,
   specialElection: `${CLOUD_ASSET_ROOT}power-badge-special-election.webp`,
   playerSeat: `${CLOUD_ASSET_ROOT}player-seat.webp`,
-  playerTablet: `${CLOUD_ASSET_ROOT}player-tablet.webp`,
+  playerTabletPresident: `${CLOUD_ASSET_ROOT}player-tablet-president.webp`,
+  playerTabletMinister: `${CLOUD_ASSET_ROOT}player-tablet-minister.webp`,
   stampFascist: `${CLOUD_ASSET_ROOT}stamp-fascist.webp`,
   stampLiberal: `${CLOUD_ASSET_ROOT}stamp-liberal.webp`,
   liberalBadge: `${CLOUD_ASSET_ROOT}icon-liberal-badge.webp`,
@@ -447,6 +448,12 @@ Page({
           : member.memberId === chancellorCandidateId
             ? "总理候选人"
             : "";
+      const roleBadgeSrc =
+        member.memberId === presidentCandidateId
+          ? assets.playerTabletPresident || POLICY_TRACK_ASSET_FILE_IDS.playerTabletPresident
+          : member.memberId === chancellorCandidateId
+            ? assets.playerTabletMinister || POLICY_TRACK_ASSET_FILE_IDS.playerTabletMinister
+            : "";
       const avatarSrc = avatarUrlByFileId[member.avatarUrl] || "";
       const defaultAvatarSrc = assets.defaultAvatar || POLICY_TRACK_ASSET_FILE_IDS.defaultAvatar;
       const isSelf = member.memberId === currentViewerMemberId;
@@ -462,6 +469,7 @@ Page({
         name: member.displayName,
         avatarSrc: (isCloudFileId(member.avatarUrl) ? avatarSrc : member.avatarUrl || "") || defaultAvatarSrc,
         roleLabel,
+        roleBadgeSrc,
         isAlive: member.isAlive,
         isOffline: member.isOffline,
         canChangeIdentityMark: !isSelf,

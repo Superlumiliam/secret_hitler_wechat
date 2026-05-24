@@ -39,9 +39,8 @@
               <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
             </view>
             <view class="seat-name">{{item.name}}</view>
-            <view wx:if="{{item.roleLabel}}" class="role-badge">
-              <image wx:if="{{policyAssets.playerTablet}}" class="role-badge-image" src="{{policyAssets.playerTablet}}" mode="aspectFill" webp="{{true}}"></image>
-              <text class="role-badge-text">{{item.roleLabel}}</text>
+            <view wx:if="{{item.roleBadgeSrc}}" class="role-badge" aria-label="{{item.roleLabel}}">
+              <image class="role-badge-image" src="{{item.roleBadgeSrc}}" mode="aspectFill" webp="{{true}}"></image>
             </view>
             <image
               wx:if="{{item.investigationStampSrc}}"
