@@ -1114,7 +1114,7 @@ const initialDeck: PolicyType[] = [
 - `currentPresidentCandidateId`
 - `phase = nomination`
 
-身份信息生成后即进入首轮 `nomination`。玩家可从对局桌面页点击“我的身份”查看，不影响阶段推进。
+身份信息生成后即进入首轮 `nomination`。玩家可从对局桌面页点击“我的身份 / 查看身份”入口，或点击自己的席位头像查看，不影响阶段推进；两种入口都只读取当前玩家私密快照，不新增后端命令。
 
 ## 10.5 提名资格计算
 

@@ -131,7 +131,14 @@
           <view class="seat-art">
             <image wx:if="{{policyAssets.playerSeat}}" class="seat-frame-image" src="{{policyAssets.playerSeat}}" mode="aspectFill" webp="{{true}}"></image>
             <view class="seat-no">{{item.seatNo}}</view>
-            <view class="avatar">
+            <view
+              class="avatar"
+              catchtap="onTapAvatar"
+              data-member-id="{{item.memberId}}"
+              data-is-self="{{item.isSelf}}"
+              role="button"
+              aria-label="{{item.isSelf ? '查看我的身份' : '选择玩家席位'}}"
+            >
               <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
             </view>
             <view class="seat-name">{{item.name}}</view>

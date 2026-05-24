@@ -479,6 +479,7 @@ Page({
         avatarSrc: (isCloudFileId(member.avatarUrl) ? avatarSrc : member.avatarUrl || "") || defaultAvatarSrc,
         roleLabel,
         roleBadgeSrc,
+        isSelf,
         isAlive: member.isAlive,
         isOffline: member.isOffline,
         canChangeIdentityMark: !isSelf,
@@ -1266,6 +1267,16 @@ Page({
       errorText: "",
     });
     this.loadGameSnapshot();
+  },
+
+  onTapAvatar(event) {
+    const isSelf = event.currentTarget.dataset.isSelf === true || event.currentTarget.dataset.isSelf === "true";
+    if (isSelf) {
+      this.onTapIdentity();
+      return;
+    }
+
+    this.onTapSeat(event);
   },
 
   onTapIdentityMark(event) {
