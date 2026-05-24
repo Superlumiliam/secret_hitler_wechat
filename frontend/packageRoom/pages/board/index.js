@@ -248,6 +248,7 @@ Page({
       console.error("获取对局数据失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
         handlePageTimeout(this, {
+          reasonCode: err.code,
           beforeRedirect: () => this.stopRefreshTimer(),
         });
         return;
@@ -1102,6 +1103,7 @@ Page({
     }
 
     handlePageTimeout(this, {
+      reasonCode: err.code,
       beforeRedirect: () => this.stopRefreshTimer(),
     });
     return true;

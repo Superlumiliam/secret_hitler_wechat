@@ -96,7 +96,9 @@ Page({
     } catch (err) {
       console.error("获取历史记录失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
-        handlePageTimeout(this);
+        handlePageTimeout(this, {
+          reasonCode: err.code,
+        });
         return;
       }
 

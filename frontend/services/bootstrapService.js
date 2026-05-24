@@ -1,7 +1,7 @@
 const ERROR_MESSAGE_MAP = {
   INVALID_PAYLOAD: "请求参数有误",
   ROOM_NOT_FOUND: "房间不存在",
-  ROOM_EXPIRED: "房间已失效",
+  ROOM_EXPIRED: "房间已过期",
   NOT_ROOM_MEMBER: "当前用户不在房间中",
   ACTION_NOT_ALLOWED: "当前状态不允许执行该操作",
   INTERNAL_ERROR: "系统繁忙，请稍后重试",

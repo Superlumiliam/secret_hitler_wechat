@@ -35,7 +35,7 @@ function createServiceError(result, fallbackMessage) {
   const messageByCode = {
     INVALID_PAYLOAD: "请求参数有误",
     ROOM_NOT_FOUND: "房间不存在",
-    ROOM_EXPIRED: "房间已失效",
+    ROOM_EXPIRED: "房间已过期",
     NOT_ROOM_MEMBER: "当前用户不在房间中",
     NOT_ROOM_HOST: "只有房主可执行该操作",
     NOT_ALL_READY: "还有玩家未准备",
@@ -317,6 +317,7 @@ Page({
       console.error("获取大厅失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
         handlePageTimeout(this, {
+          reasonCode: err.code,
           beforeRedirect: () => this.stopRefreshTimer(),
         });
         return;
@@ -434,6 +435,7 @@ Page({
     }
 
     handlePageTimeout(this, {
+      reasonCode: err.code,
       beforeRedirect: () => this.stopRefreshTimer(),
     });
     return true;

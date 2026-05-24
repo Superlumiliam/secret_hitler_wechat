@@ -1,4 +1,5 @@
 const HOME_TIMEOUT_QUERY = "pageTimedOut=1";
+const HOME_ROOM_EXPIRED_QUERY = "pageTimedOut=roomExpired";
 const PAGE_TIMEOUT_MAX_TIMER_MS = 30 * 1000;
 
 function clearRuntimeRoomState() {
@@ -33,9 +34,10 @@ async function clearActiveRoomOnServer() {
   }
 }
 
-function redirectHomeWithTimeoutNotice() {
+function redirectHomeWithTimeoutNotice(reasonCode) {
+  const query = reasonCode === "ROOM_EXPIRED" ? HOME_ROOM_EXPIRED_QUERY : HOME_TIMEOUT_QUERY;
   wx.reLaunch({
-    url: `/pages/home/index?${HOME_TIMEOUT_QUERY}`,
+    url: `/pages/home/index?${query}`,
   });
 }
 
@@ -51,7 +53,7 @@ async function handlePageTimeout(page, options = {}) {
 
   clearRuntimeRoomState();
   await clearActiveRoomOnServer();
-  redirectHomeWithTimeoutNotice();
+  redirectHomeWithTimeoutNotice(options.reasonCode);
 }
 
 function setupPageTimeout(page, options) {
@@ -109,6 +111,16 @@ function clearPageTimeout(page) {
 
 function showTimeoutModalIfNeeded(options = {}) {
   if (!options.pageTimedOut) {
+    return;
+  }
+
+  if (options.pageTimedOut === "roomExpired") {
+    wx.showModal({
+      title: "房间已过期",
+      content: "请回到首页开始新的对局。",
+      showCancel: false,
+      confirmText: "确认",
+    });
     return;
   }
 
