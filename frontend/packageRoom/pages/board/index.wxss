@@ -224,17 +224,17 @@
 
 .seat-row {
   display: grid;
-  grid-template-columns: repeat(5, 116rpx);
+  grid-template-columns: repeat(5, 138rpx);
   justify-content: center;
-  gap: 14rpx 8rpx;
+  gap: 14rpx 0;
   padding: 2rpx 0 0;
 }
 
 .seat-card {
   position: relative;
-  width: 116rpx;
+  width: 138rpx;
   min-width: 0;
-  height: 238rpx;
+  height: 281rpx;
   padding: 0;
   box-sizing: border-box;
   display: flex;
@@ -254,8 +254,8 @@
   position: absolute;
   left: 50%;
   top: 0;
-  width: 116rpx;
-  height: 236rpx;
+  width: 138rpx;
+  height: 281rpx;
   transform: translateX(-50%);
 }
 
@@ -280,12 +280,12 @@
 .seat-card.is-controlled::after {
   content: "操控";
   position: absolute;
-  right: 2rpx;
-  top: 9rpx;
+  right: 3rpx;
+  top: 11rpx;
   z-index: 4;
-  padding: 1rpx 6rpx;
+  padding: 2rpx 7rpx;
   color: #081719;
-  font-size: 16rpx;
+  font-size: 19rpx;
   font-weight: 800;
   line-height: 1.2;
   background: #f1bd76;
@@ -314,11 +314,11 @@
 
 .seat-no {
   position: absolute;
-  left: 15rpx;
-  top: 15rpx;
+  left: 18rpx;
+  top: 18rpx;
   z-index: 2;
   color: #deb073;
-  font-size: 25rpx;
+  font-size: 30rpx;
   font-weight: 900;
   line-height: 1;
   text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.8);
@@ -327,10 +327,10 @@
 .avatar {
   position: absolute;
   left: 50%;
-  top: 40rpx;
+  top: 48rpx;
   z-index: 2;
-  width: 70rpx;
-  height: 70rpx;
+  width: 83rpx;
+  height: 83rpx;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -353,13 +353,13 @@
 .seat-name {
   position: absolute;
   left: 50%;
-  top: 124rpx;
+  top: 148rpx;
   z-index: 2;
-  width: 88rpx;
+  width: 105rpx;
   transform: translateX(-50%);
   margin-top: 0;
   color: #e9bf83;
-  font-size: 17rpx;
+  font-size: 20rpx;
   line-height: 1.12;
   text-align: center;
   overflow: hidden;
@@ -373,10 +373,10 @@
 .role-badge {
   position: absolute;
   left: 50%;
-  top: 148rpx;
+  top: 176rpx;
   z-index: 5;
-  width: 84rpx;
-  height: 24rpx;
+  width: 100rpx;
+  height: 29rpx;
   transform: translateX(-50%);
 }
 
@@ -390,11 +390,11 @@
 
 .investigation-stamp {
   position: absolute;
-  right: -14rpx;
+  right: -17rpx;
   top: 0;
   z-index: 6;
-  width: 66rpx;
-  height: 66rpx;
+  width: 79rpx;
+  height: 79rpx;
   pointer-events: none;
   filter: drop-shadow(0 4rpx 5rpx rgba(0, 0, 0, 0.5));
 }
@@ -402,10 +402,10 @@
 .identity-mark {
   position: absolute;
   left: 50%;
-  top: 180rpx;
+  top: 214rpx;
   z-index: 7;
-  width: 36rpx;
-  height: 36rpx;
+  width: 43rpx;
+  height: 43rpx;
   box-sizing: border-box;
   transform: translateX(-50%);
   display: flex;
