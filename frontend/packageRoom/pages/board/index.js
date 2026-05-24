@@ -21,6 +21,13 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   investigate: `${CLOUD_ASSET_ROOT}power-badge-investigate.webp`,
   policyPeek: `${CLOUD_ASSET_ROOT}power-badge-policy-peek.webp`,
   specialElection: `${CLOUD_ASSET_ROOT}power-badge-special-election.webp`,
+  playerSeat: `${CLOUD_ASSET_ROOT}player-seat.webp`,
+  playerTablet: `${CLOUD_ASSET_ROOT}player-tablet.webp`,
+  stampFascist: `${CLOUD_ASSET_ROOT}stamp-fascist.webp`,
+  stampLiberal: `${CLOUD_ASSET_ROOT}stamp-liberal.webp`,
+  liberalBadge: `${CLOUD_ASSET_ROOT}icon-liberal-badge.webp`,
+  authoritarianBadge: `${CLOUD_ASSET_ROOT}icon-authoritarian-badge.webp`,
+  defaultAvatar: `${CLOUD_ASSET_ROOT}man-in-black.webp`,
 };
 
 const POWER_BADGE_ASSET_KEY_MAP = {
@@ -109,6 +116,7 @@ Page({
     snapshot: null,
     board: null,
     seats: [],
+    avatarTempUrlByFileId: {},
     policyAssets: {},
     activePowerTipSlot: 0,
     liberalTrack: [],
@@ -127,6 +135,10 @@ Page({
     canNominate: false,
     nominateTargets: [],
     nominateRuleHint: "",
+    selectedNominationTargetId: "",
+    selectedNominationTargetLabel: "",
+    activeIdentityPickerMemberId: "",
+    identityJudgmentByMemberId: {},
     canDiscardPolicy: false,
     canEnactPolicy: false,
     canPickPolicy: false,
@@ -301,7 +313,8 @@ Page({
     }
 
     const board = this.createBoard(snapshot);
-    const seats = this.createSeats(snapshot, avatarUrlByFileId);
+    const identityJudgmentByMemberId = this.readIdentityJudgments(snapshot);
+    const seats = this.createSeats(snapshot, avatarUrlByFileId, identityJudgmentByMemberId, policyAssetUrlByKey);
     const previousBoard = this.data.board || {};
     const shouldAnimateNewPolicy = Boolean(this.data.snapshot);
     const newLiberalPolicySlot =
@@ -317,6 +330,7 @@ Page({
       snapshot,
       board,
       seats,
+      avatarTempUrlByFileId: avatarUrlByFileId,
       policyAssets: policyAssetUrlByKey,
       liberalTrack: this.createLiberalTrack(board.liberalPolicyCount, policyAssetUrlByKey, newLiberalPolicySlot),
       fascistTrack: this.createFascistTrack(
@@ -338,6 +352,9 @@ Page({
       canNominate: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR"),
       nominateTargets: this.createNominateTargets(snapshot),
       nominateRuleHint: this.createNominateRuleHint(snapshot),
+      selectedNominationTargetId: this.resolveSelectedNominationTargetId(snapshot),
+      selectedNominationTargetLabel: this.createSelectedNominationTargetLabel(snapshot),
+      identityJudgmentByMemberId,
       canDiscardPolicy: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "PRESIDENT_DISCARD_POLICY"),
       canEnactPolicy: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "CHANCELLOR_ENACT_POLICY"),
       canPickPolicy: Boolean(
@@ -410,14 +427,19 @@ Page({
     ];
   },
 
-  createSeats(snapshot, avatarUrlByFileId) {
+  createSeats(snapshot, avatarUrlByFileId, identityJudgmentByMemberId = {}, assets = {}) {
     const publicState = (snapshot && snapshot.publicState) || {};
     const presidentCandidateId = publicState.currentPresidentCandidateId;
     const chancellorCandidateId = publicState.currentChancellorCandidateId;
     const currentViewerMemberId = snapshot && snapshot.myMemberId;
     const nominationAllowedIds = this.getNominationAllowedIds(snapshot);
+    const nominateTargetByMemberId = this.createNominateTargetMap(snapshot);
+    const investigationMarkByMemberId = this.createInvestigationMarkMap(snapshot);
+    const privateIdentity = ((snapshot && snapshot.privateState) || {}).identity || {};
+    const activeIdentityPickerMemberId = this.data.activeIdentityPickerMemberId || "";
+    const selectedNominationTargetId = this.resolveSelectedNominationTargetId(snapshot);
 
-    return (publicState.seatOrder || []).map((member) => {
+    return (publicState.seatOrder || []).map((member, index) => {
       const roleLabel =
         member.memberId === presidentCandidateId
           ? "总统候选人"
@@ -425,21 +447,39 @@ Page({
             ? "总理候选人"
             : "";
       const avatarSrc = avatarUrlByFileId[member.avatarUrl] || "";
+      const defaultAvatarSrc = assets.defaultAvatar || POLICY_TRACK_ASSET_FILE_IDS.defaultAvatar;
+      const isSelf = member.memberId === currentViewerMemberId;
+      const targetOption = nominateTargetByMemberId[member.memberId] || null;
+      const canNominateTarget = targetOption ? targetOption.canNominate : nominationAllowedIds.includes(member.memberId);
+      const judgment = isSelf ? privateIdentity.party || "UNKNOWN" : identityJudgmentByMemberId[member.memberId] || "UNKNOWN";
+      const identityMark = this.createIdentityMarkView(judgment, isSelf, assets);
+      const investigationMark = investigationMarkByMemberId[member.memberId] || null;
 
       return {
         memberId: member.memberId,
         seatNo: member.seatIndex,
         name: member.displayName,
-        avatarSrc: isCloudFileId(member.avatarUrl) ? avatarSrc : member.avatarUrl || "",
+        avatarSrc: (isCloudFileId(member.avatarUrl) ? avatarSrc : member.avatarUrl || "") || defaultAvatarSrc,
         roleLabel,
         isAlive: member.isAlive,
         isOffline: member.isOffline,
+        canChangeIdentityMark: !isSelf,
+        identityMark,
+        identityOptions: this.createIdentityPickerOptions(member.memberId, judgment, assets),
+        showIdentityPicker: !isSelf && activeIdentityPickerMemberId === member.memberId,
+        identityPickerClass: `identity-picker ${(index + 1) % 5 === 0 ? "is-left" : "is-right"}`,
+        investigationStampSrc: investigationMark ? this.getInvestigationStampSrc(investigationMark.party, assets) : "",
+        investigationStampLabel: investigationMark ? (investigationMark.party === "LIBERAL" ? "自由派" : "极权派") : "",
         seatClass: `seat-card ${member.memberId === presidentCandidateId ? "is-current" : ""} ${
-          member.memberId === currentViewerMemberId ? "is-controlled" : ""
+          isSelf ? "is-controlled" : ""
         } ${
           member.memberId === chancellorCandidateId ? "is-nominee" : ""
         } ${
           nominationAllowedIds.includes(member.memberId) ? "is-eligible-nominee" : ""
+        } ${
+          targetOption && !canNominateTarget ? "is-ineligible-nominee" : ""
+        } ${
+          selectedNominationTargetId === member.memberId ? "is-selected-nomination" : ""
         } ${
           member.isAlive === false ? "is-dead" : ""
         }`,
@@ -485,6 +525,36 @@ Page({
     });
   },
 
+  createNominateTargetMap(snapshot) {
+    const targets = this.createNominateTargets(snapshot);
+    return targets.reduce((map, target) => {
+      map[target.memberId] = target;
+      return map;
+    }, {});
+  },
+
+  resolveSelectedNominationTargetId(snapshot) {
+    if (!(snapshot && snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR")) {
+      return "";
+    }
+    const selected = this.data.selectedNominationTargetId || "";
+    if (!selected) {
+      return "";
+    }
+    const publicState = snapshot.publicState || {};
+    const exists = (publicState.seatOrder || []).some((member) => member.memberId === selected);
+    return exists ? selected : "";
+  },
+
+  createSelectedNominationTargetLabel(snapshot) {
+    const selected = this.resolveSelectedNominationTargetId(snapshot);
+    if (!selected) {
+      return "";
+    }
+    const target = this.createNominateTargets(snapshot).find((item) => item.memberId === selected);
+    return target ? target.label : "";
+  },
+
   createNominateRuleHint(snapshot) {
     const pendingTask = snapshot && snapshot.pendingTask;
     if (!pendingTask || pendingTask.taskType !== "NOMINATE_CHANCELLOR") {
@@ -499,6 +569,112 @@ Page({
       return [];
     }
     return pendingTask.allowedTargets || [];
+  },
+
+  createInvestigationMarkMap(snapshot) {
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const marks = Array.isArray(privateState.investigationMarks) ? privateState.investigationMarks : [];
+    return marks.reduce((map, mark) => {
+      if (mark && mark.targetMemberId && mark.party) {
+        map[mark.targetMemberId] = mark;
+      }
+      return map;
+    }, {});
+  },
+
+  getInvestigationStampSrc(party, assets = {}) {
+    return party === "LIBERAL" ? assets.stampLiberal || "" : assets.stampFascist || "";
+  },
+
+  createIdentityMarkView(judgment, isSelf, assets = {}) {
+    const normalized = judgment === "LIBERAL" || judgment === "FASCIST" ? judgment : "UNKNOWN";
+    if (normalized === "LIBERAL") {
+      return {
+        state: normalized,
+        label: isSelf ? "你的真实阵营：自由派" : "你标记为自由派",
+        iconSrc: assets.liberalBadge || "",
+        className: "identity-mark is-liberal",
+      };
+    }
+    if (normalized === "FASCIST") {
+      return {
+        state: normalized,
+        label: isSelf ? "你的真实阵营：极权派" : "你标记为极权派",
+        iconSrc: assets.authoritarianBadge || "",
+        className: "identity-mark is-fascist",
+      };
+    }
+    return {
+      state: "UNKNOWN",
+      label: "身份判断未知",
+      iconSrc: "",
+      className: "identity-mark is-unknown",
+    };
+  },
+
+  createIdentityPickerOptions(memberId, currentJudgment, assets = {}) {
+    return [
+      {
+        memberId,
+        value: "UNKNOWN",
+        label: "未知",
+        iconSrc: "",
+        optionClass: `identity-option is-unknown ${currentJudgment === "UNKNOWN" || !currentJudgment ? "is-active" : ""}`,
+      },
+      {
+        memberId,
+        value: "LIBERAL",
+        label: "自由派",
+        iconSrc: assets.liberalBadge || "",
+        optionClass: `identity-option is-liberal ${currentJudgment === "LIBERAL" ? "is-active" : ""}`,
+      },
+      {
+        memberId,
+        value: "FASCIST",
+        label: "极权派",
+        iconSrc: assets.authoritarianBadge || "",
+        optionClass: `identity-option is-fascist ${currentJudgment === "FASCIST" ? "is-active" : ""}`,
+      },
+    ];
+  },
+
+  readIdentityJudgments(snapshot) {
+    const key = this.createIdentityJudgmentStorageKey(snapshot);
+    if (!key) {
+      return {};
+    }
+    try {
+      const stored = wx.getStorageSync(key);
+      return stored && typeof stored === "object" ? stored : {};
+    } catch (err) {
+      console.error("读取身份判断标记失败", err);
+      return {};
+    }
+  },
+
+  writeIdentityJudgments(snapshot, judgments) {
+    const key = this.createIdentityJudgmentStorageKey(snapshot);
+    if (!key) {
+      return;
+    }
+    try {
+      wx.setStorageSync(key, judgments || {});
+    } catch (err) {
+      console.error("保存身份判断标记失败", err);
+      wx.showToast({
+        title: "标记保存失败",
+        icon: "none",
+      });
+    }
+  },
+
+  createIdentityJudgmentStorageKey(snapshot) {
+    const roomId = (snapshot && snapshot.roomId) || this.data.roomId || "";
+    const viewerMemberId = snapshot && snapshot.myMemberId;
+    if (!roomId || !viewerMemberId) {
+      return "";
+    }
+    return `board_identity_judgments:${roomId}:${viewerMemberId}`;
   },
 
   createLiberalTrack(liberalPolicyCount, assets = {}, newPolicySlot = 0) {
@@ -1021,7 +1197,23 @@ Page({
 
   onTapSeat(event) {
     const memberId = event.currentTarget.dataset.memberId;
-    if (!memberId || !this.data.isDevRoom) {
+    if (!memberId) {
+      return;
+    }
+
+    if (this.data.canNominate) {
+      const snapshot = this.data.snapshot || {};
+      const publicState = snapshot.publicState || {};
+      const target = (publicState.seatOrder || []).find((member) => member.memberId === memberId);
+      this.setData({
+        selectedNominationTargetId: memberId,
+        selectedNominationTargetLabel: target ? `${target.seatIndex}号 ${target.displayName}` : "",
+        activeIdentityPickerMemberId: "",
+      });
+      this.refreshSeatViews();
+    }
+
+    if (!this.data.isDevRoom) {
       return;
     }
 
@@ -1046,20 +1238,102 @@ Page({
     this.loadGameSnapshot();
   },
 
-  async onTapNominate(event) {
-    const targetMemberId = event.currentTarget.dataset.memberId;
-    const canNominate = event.currentTarget.dataset.canNominate;
-    const disabledReason = event.currentTarget.dataset.disabledReason;
+  onTapIdentityMark(event) {
+    const memberId = event.currentTarget.dataset.memberId;
+    const canChange = event.currentTarget.dataset.canChange;
+    if (!memberId || canChange === false || canChange === "false") {
+      return;
+    }
+    this.setData({
+      activeIdentityPickerMemberId: this.data.activeIdentityPickerMemberId === memberId ? "" : memberId,
+    });
+    this.refreshSeatViews();
+  },
+
+  onTapIdentityOption(event) {
+    const memberId = event.currentTarget.dataset.memberId;
+    const value = event.currentTarget.dataset.value || "UNKNOWN";
+    if (!memberId) {
+      return;
+    }
+    const snapshot = this.data.snapshot || {};
+    if (memberId === snapshot.myMemberId) {
+      return;
+    }
+    const nextJudgments = { ...(this.data.identityJudgmentByMemberId || {}) };
+    if (value === "LIBERAL" || value === "FASCIST") {
+      nextJudgments[memberId] = value;
+    } else {
+      delete nextJudgments[memberId];
+    }
+    this.writeIdentityJudgments(snapshot, nextJudgments);
+    this.setData({
+      identityJudgmentByMemberId: nextJudgments,
+      activeIdentityPickerMemberId: "",
+    });
+    this.refreshSeatViews(nextJudgments);
+  },
+
+  refreshSeatViews(identityJudgmentByMemberId = this.data.identityJudgmentByMemberId || {}) {
+    const snapshot = this.data.snapshot;
+    if (!snapshot) {
+      return;
+    }
+    this.setData({
+      seats: this.createSeats(
+        snapshot,
+        this.data.avatarTempUrlByFileId || {},
+        identityJudgmentByMemberId,
+        this.data.policyAssets || {},
+      ),
+      selectedNominationTargetId: this.resolveSelectedNominationTargetId(snapshot),
+      selectedNominationTargetLabel: this.createSelectedNominationTargetLabel(snapshot),
+    });
+  },
+
+  onTapNominateSelected() {
+    if (!this.data.selectedNominationTargetId) {
+      wx.showToast({
+        title: "请先点击一个玩家席位",
+        icon: "none",
+      });
+      return;
+    }
+    const target = (this.data.nominateTargets || []).find((item) => item.memberId === this.data.selectedNominationTargetId);
+    if (!target) {
+      wx.showToast({
+        title: "该玩家暂不可提名",
+        icon: "none",
+      });
+      return;
+    }
+    if (!target.canNominate) {
+      wx.showModal({
+        title: "不可提名",
+        content: target.disabledReason || "该玩家暂不可提名",
+        showCancel: false,
+        confirmText: "知道了",
+      });
+      return;
+    }
+
+    wx.showModal({
+      title: "确认提名",
+      content: `确认提名 ${target.label} 为总理候选人？`,
+      confirmText: "确认",
+      cancelText: "取消",
+      success: (res) => {
+        if (res.confirm) {
+          this.submitNomination(target.memberId);
+        }
+      },
+    });
+  },
+
+  async submitNomination(targetMemberId) {
     const snapshot = this.data.snapshot || {};
     const pendingTask = snapshot.pendingTask || {};
     if (!targetMemberId || this.data.isSubmittingCommand) {
-      return;
-    }
-    if (canNominate !== true && canNominate !== "true") {
-      wx.showToast({
-        title: disabledReason || "该玩家暂不可提名",
-        icon: "none",
-      });
       return;
     }
 

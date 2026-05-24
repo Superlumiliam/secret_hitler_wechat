@@ -224,52 +224,65 @@
 
 .seat-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10rpx;
-  padding: 2rpx 8rpx 0;
+  grid-template-columns: repeat(5, 116rpx);
+  justify-content: center;
+  gap: 14rpx 8rpx;
+  padding: 2rpx 0 0;
 }
 
 .seat-card {
   position: relative;
-  width: 100%;
+  width: 116rpx;
   min-width: 0;
-  height: 136rpx;
-  padding: 12rpx 6rpx 7rpx;
+  height: 238rpx;
+  padding: 0;
   box-sizing: border-box;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  border: 1rpx solid rgba(181, 127, 67, 0.62);
-  background: rgba(10, 18, 18, 0.86);
-  box-shadow: inset 0 0 28rpx rgba(223, 164, 87, 0.08);
-  overflow: hidden;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .seat-card::before {
-  content: "";
+  content: none;
+}
+
+.seat-art {
   position: absolute;
-  inset: 6rpx;
-  border: 1rpx solid rgba(181, 127, 67, 0.28);
+  left: 50%;
+  top: 0;
+  width: 116rpx;
+  height: 236rpx;
+  transform: translateX(-50%);
+}
+
+.seat-frame-image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
+  filter: drop-shadow(0 8rpx 10rpx rgba(0, 0, 0, 0.46));
 }
 
 .seat-card.is-current {
-  border-color: #16d5df;
-  box-shadow: inset 0 0 34rpx rgba(22, 213, 223, 0.2), 0 0 18rpx rgba(22, 213, 223, 0.32);
+  filter: drop-shadow(0 0 12rpx rgba(22, 213, 223, 0.55));
 }
 
 .seat-card.is-controlled {
-  border-color: #f1bd76;
-  box-shadow: inset 0 0 36rpx rgba(241, 189, 118, 0.22), 0 0 20rpx rgba(241, 189, 118, 0.34);
+  filter: drop-shadow(0 0 12rpx rgba(241, 189, 118, 0.58));
 }
 
 .seat-card.is-controlled::after {
   content: "操控";
   position: absolute;
-  right: 6rpx;
-  top: 6rpx;
-  z-index: 1;
+  right: 2rpx;
+  top: 9rpx;
+  z-index: 4;
   padding: 1rpx 6rpx;
   color: #081719;
   font-size: 16rpx;
@@ -279,13 +292,19 @@
 }
 
 .seat-card.is-nominee {
-  border-color: #d8a248;
-  box-shadow: inset 0 0 32rpx rgba(216, 162, 72, 0.2), 0 0 14rpx rgba(216, 162, 72, 0.22);
+  filter: drop-shadow(0 0 13rpx rgba(216, 162, 72, 0.56));
 }
 
 .seat-card.is-eligible-nominee {
-  border-color: #20cbd4;
-  box-shadow: inset 0 0 30rpx rgba(32, 203, 212, 0.16), 0 0 12rpx rgba(32, 203, 212, 0.2);
+  filter: drop-shadow(0 0 12rpx rgba(32, 203, 212, 0.5));
+}
+
+.seat-card.is-selected-nomination {
+  filter: drop-shadow(0 0 16rpx rgba(232, 181, 99, 0.72));
+}
+
+.seat-card.is-ineligible-nominee {
+  opacity: 0.72;
 }
 
 .seat-card.is-empty {
@@ -295,18 +314,24 @@
 
 .seat-no {
   position: absolute;
-  left: 8rpx;
-  top: 6rpx;
-  z-index: 1;
+  left: 10rpx;
+  top: 15rpx;
+  z-index: 2;
   color: #deb073;
-  font-size: 22rpx;
+  font-size: 25rpx;
+  font-weight: 900;
   line-height: 1;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.8);
 }
 
 .avatar {
-  width: 58rpx;
-  height: 58rpx;
-  margin-top: 4rpx;
+  position: absolute;
+  left: 50%;
+  top: 58rpx;
+  z-index: 2;
+  width: 56rpx;
+  height: 56rpx;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -326,35 +351,169 @@
 }
 
 .seat-name {
-  width: 100%;
-  margin-top: 6rpx;
+  position: absolute;
+  left: 50%;
+  top: 123rpx;
+  z-index: 2;
+  width: 100rpx;
+  transform: translateX(-50%);
+  margin-top: 0;
   color: #e9bf83;
-  font-size: 20rpx;
-  line-height: 1.05;
+  font-size: 19rpx;
+  line-height: 1.12;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   word-break: break-all;
 }
 
 .role-badge {
-  max-width: 112rpx;
-  min-height: 26rpx;
-  margin-top: 5rpx;
-  padding: 0 6rpx;
+  position: absolute;
+  left: 50%;
+  top: 153rpx;
+  z-index: 5;
+  width: 92rpx;
+  height: 32rpx;
+  transform: translateX(-50%);
+  padding: 0 10rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1rpx solid rgba(22, 213, 223, 0.72);
-  color: #27dbe5;
-  font-size: 17rpx;
-  line-height: 1.1;
-  background: rgba(4, 45, 51, 0.8);
+  border: 0;
+  background: transparent;
+}
+
+.role-badge-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.role-badge-text {
+  position: relative;
+  z-index: 1;
+  max-width: 72rpx;
+  color: #2a1a0d;
+  font-size: 14rpx;
+  font-weight: 900;
+  line-height: 1.05;
   text-align: center;
+  text-shadow: 0 1rpx 0 rgba(255, 224, 159, 0.46);
+}
+
+.investigation-stamp {
+  position: absolute;
+  right: -14rpx;
+  top: 0;
+  z-index: 6;
+  width: 66rpx;
+  height: 66rpx;
+  pointer-events: none;
+  filter: drop-shadow(0 4rpx 5rpx rgba(0, 0, 0, 0.5));
+}
+
+.identity-mark {
+  position: absolute;
+  right: 10rpx;
+  top: 197rpx;
+  z-index: 7;
+  width: 31rpx;
+  height: 31rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid rgba(226, 188, 139, 0.78);
+  border-radius: 50%;
+  background: rgba(61, 65, 63, 0.92);
+  box-shadow: 0 4rpx 8rpx rgba(0, 0, 0, 0.42);
+}
+
+.identity-mark.is-liberal {
+  border-color: rgba(34, 210, 221, 0.84);
+  background: rgba(4, 38, 43, 0.92);
+}
+
+.identity-mark.is-fascist {
+  border-color: rgba(231, 75, 50, 0.82);
+  background: rgba(46, 13, 10, 0.92);
+}
+
+.identity-mark-image {
+  width: 23rpx;
+  height: 23rpx;
+}
+
+.identity-picker {
+  position: absolute;
+  top: 151rpx;
+  z-index: 12;
+  width: 38rpx;
+  padding: 4rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  border: 1rpx solid rgba(203, 149, 79, 0.64);
+  background: rgba(8, 18, 17, 0.96);
+  box-shadow: 0 8rpx 18rpx rgba(0, 0, 0, 0.44);
+  animation: identityPickerIn 150ms ease-out both;
+}
+
+.identity-picker.is-right {
+  right: -34rpx;
+}
+
+.identity-picker.is-left {
+  right: 46rpx;
+}
+
+.identity-option {
+  width: 30rpx;
+  height: 30rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(226, 188, 139, 0.56);
+  border-radius: 50%;
+  background: #4b504e;
+}
+
+.identity-option.is-liberal {
+  border-color: rgba(34, 210, 221, 0.76);
+  background: rgba(6, 47, 52, 0.9);
+}
+
+.identity-option.is-fascist {
+  border-color: rgba(231, 75, 50, 0.76);
+  background: rgba(58, 15, 12, 0.9);
+}
+
+.identity-option.is-active {
+  box-shadow: 0 0 8rpx currentColor;
+}
+
+.identity-option-image {
+  width: 22rpx;
+  height: 22rpx;
+}
+
+@keyframes identityPickerIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .seat-card.is-dead {
@@ -1123,6 +1282,7 @@
 }
 
 .nominate-panel {
+  margin-bottom: 10rpx;
   padding: 10rpx 12rpx 12rpx;
   border: 1rpx solid rgba(185, 128, 66, 0.64);
   background: rgba(7, 24, 24, 0.88);
@@ -1144,52 +1304,31 @@
   text-align: center;
 }
 
-.nominate-actions {
+.nominate-submit {
+  min-height: 58rpx;
   margin-top: 10rpx;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10rpx;
-}
-
-.nominate-action {
-  min-height: 54rpx;
-  padding: 8rpx 10rpx;
-  box-sizing: border-box;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   border: 1rpx solid rgba(31, 204, 215, 0.58);
   color: #082024;
-  font-size: 22rpx;
-  font-weight: 800;
+  font-size: 25rpx;
+  font-weight: 900;
   line-height: 1.16;
   text-align: center;
   background: linear-gradient(180deg, #31d8df 0%, #0f8c95 100%);
+  box-shadow: 0 0 14rpx rgba(31, 204, 215, 0.24);
 }
 
-.nominate-action.is-ineligible {
+.nominate-submit.is-empty {
   border-color: rgba(160, 112, 63, 0.5);
   color: rgba(226, 188, 139, 0.7);
   background: rgba(15, 22, 21, 0.88);
+  box-shadow: none;
 }
 
-.nominate-action.is-disabled {
+.nominate-submit.is-disabled {
   opacity: 0.56;
-}
-
-.nominate-label {
-  max-width: 100%;
-  line-height: 1.16;
-}
-
-.nominate-reason {
-  max-width: 100%;
-  margin-top: 4rpx;
-  color: rgba(226, 188, 139, 0.58);
-  font-size: 17rpx;
-  font-weight: 600;
-  line-height: 1.12;
 }
 
 .action-panel {
@@ -1271,25 +1410,6 @@
 }
 
 @media (max-width: 360px) {
-  .seat-card {
-    height: 130rpx;
-    padding-top: 10rpx;
-  }
-
-  .avatar {
-    width: 52rpx;
-    height: 52rpx;
-  }
-
-  .seat-name {
-    font-size: 18rpx;
-  }
-
-  .role-badge {
-    min-height: 24rpx;
-    font-size: 16rpx;
-  }
-
   .policy-cell {
     font-size: 28rpx;
   }

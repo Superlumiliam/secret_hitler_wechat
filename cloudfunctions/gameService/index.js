@@ -1421,6 +1421,16 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
   const legislativeAction = gameCore.phase === "legislative_chancellor" ? "enact_one" : "discard_one";
   const investigationResultsByMemberId = gameCore.investigationResultsByMemberId || {};
   const investigationResult = investigationResultsByMemberId[memberId] || null;
+  const investigationMarks = investigationResult
+    ? [
+        {
+          targetMemberId: investigationResult.targetMemberId,
+          party: investigationResult.party,
+          round: investigationResult.round || null,
+          revealedAt: investigationResult.revealedAt || null,
+        },
+      ]
+    : [];
   const policyPeekCards =
     gameCore.phase === "executive_action" &&
     memberId === gameCore.currentPresidentId &&
@@ -1469,6 +1479,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
             }
           : null,
       investigationResult,
+      investigationMarks,
       policyPeek: policyPeekCards
         ? {
             cards: policyPeekCards,
@@ -3043,6 +3054,7 @@ async function submitCommand(payload, openid) {
             targetMemberId,
             targetDisplayName: targetMember ? targetMember.displayName : "",
             party: assignment.party,
+            round: gameCore.round || null,
             revealedAt: updatedAt.toISOString(),
           };
           eventType = "EXEC_INVESTIGATED";

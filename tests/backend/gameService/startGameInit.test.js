@@ -572,6 +572,18 @@ function assertExecutivePrivateAndPublicProjection() {
     ["party", "revealedAt", "targetDisplayName", "targetMemberId"].sort(),
     "investigation result should only expose party-level result",
   );
+  assert.deepStrictEqual(
+    resultPrivate.privateState.investigationMarks,
+    [
+      {
+        targetMemberId: "mem_4",
+        party: "FASCIST",
+        round: null,
+        revealedAt: "2026-05-12T00:04:00.000Z",
+      },
+    ],
+    "investigation marks should project private stamp data for the investigator",
+  );
   const otherPrivate = buildPrivateSnapshotPayload(
     withResult,
     investigate.members[1],
