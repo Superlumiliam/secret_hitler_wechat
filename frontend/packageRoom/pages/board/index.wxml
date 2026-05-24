@@ -58,21 +58,7 @@
               role="button"
               aria-label="{{item.identityMark.label}}"
             >
-              <image wx:if="{{item.identityMark.iconSrc}}" class="identity-mark-image" src="{{item.identityMark.iconSrc}}" mode="aspectFit" webp="{{true}}"></image>
-            </view>
-            <view wx:if="{{item.showIdentityPicker}}" class="{{item.identityPickerClass}}">
-              <view
-                wx:for="{{item.identityOptions}}"
-                wx:key="value"
-                class="{{item.optionClass}}"
-                catchtap="onTapIdentityOption"
-                data-member-id="{{item.memberId}}"
-                data-value="{{item.value}}"
-                role="button"
-                aria-label="{{item.label}}"
-              >
-                <image wx:if="{{item.iconSrc}}" class="identity-option-image" src="{{item.iconSrc}}" mode="aspectFit" webp="{{true}}"></image>
-              </view>
+              <image wx:if="{{item.identityMark.iconSrc}}" class="identity-mark-image" src="{{item.identityMark.iconSrc}}" mode="aspectFill" webp="{{true}}"></image>
             </view>
           </view>
         </view>
@@ -271,6 +257,30 @@
           <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="查看身份">查看身份</view>
           <view class="secondary-action" bindtap="onTapHistory" hover-class="secondary-hover" role="button" aria-label="历史记录">历史记录</view>
         </view>
+      </view>
+    </view>
+
+    <view wx:if="{{activeIdentityPickerMemberId}}" class="identity-modal-mask" catchtap="onCancelIdentityPicker">
+      <view class="identity-modal" catchtap="onStopTap">
+        <view class="identity-modal-title">阵营标记</view>
+        <view class="identity-modal-icon-row">
+          <view
+            wx:for="{{activeIdentityPickerOptions}}"
+            wx:key="value"
+            class="{{item.optionClass}}"
+            catchtap="onTapIdentityOption"
+            data-member-id="{{item.memberId}}"
+            data-value="{{item.value}}"
+            role="button"
+            aria-label="{{item.label}}"
+          >
+            <image wx:if="{{item.iconSrc}}" class="identity-option-image" src="{{item.iconSrc}}" mode="aspectFill" webp="{{true}}"></image>
+          </view>
+        </view>
+        <view class="identity-modal-label-row">
+          <view wx:for="{{activeIdentityPickerOptions}}" wx:key="value" class="identity-option-label">{{item.label}}</view>
+        </view>
+        <view class="identity-modal-cancel" catchtap="onCancelIdentityPicker" role="button" aria-label="取消阵营标记">取消</view>
       </view>
     </view>
   </block>
