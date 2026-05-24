@@ -693,9 +693,9 @@
 .power-badge-control {
   position: absolute;
   left: 50%;
-  bottom: -28rpx;
-  width: 44rpx;
-  height: 44rpx;
+  bottom: -24rpx;
+  width: 34rpx;
+  height: 34rpx;
   transform: translateX(-50%);
   z-index: 3;
 }
@@ -713,7 +713,7 @@
 .power-tip {
   position: absolute;
   left: 50%;
-  bottom: 50rpx;
+  bottom: 40rpx;
   min-width: 126rpx;
   padding: 8rpx 10rpx;
   box-sizing: border-box;

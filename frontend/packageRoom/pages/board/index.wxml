@@ -30,40 +30,6 @@
         <view class="dev-hint">双击席位切换操控视角</view>
       </view>
 
-      <view class="seat-row">
-        <view wx:for="{{seats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="双击切换操控席位">
-          <view class="seat-art">
-            <image wx:if="{{policyAssets.playerSeat}}" class="seat-frame-image" src="{{policyAssets.playerSeat}}" mode="aspectFill" webp="{{true}}"></image>
-            <view class="seat-no">{{item.seatNo}}</view>
-            <view class="avatar">
-              <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
-            </view>
-            <view class="seat-name">{{item.name}}</view>
-            <view wx:if="{{item.roleBadgeSrc}}" class="role-badge" aria-label="{{item.roleLabel}}">
-              <image class="role-badge-image" src="{{item.roleBadgeSrc}}" mode="aspectFill" webp="{{true}}"></image>
-            </view>
-            <image
-              wx:if="{{item.investigationStampSrc}}"
-              class="investigation-stamp"
-              src="{{item.investigationStampSrc}}"
-              mode="aspectFit"
-              webp="{{true}}"
-              aria-label="调查结果：{{item.investigationStampLabel}}"
-            ></image>
-            <view
-              class="{{item.identityMark.className}}"
-              catchtap="onTapIdentityMark"
-              data-member-id="{{item.memberId}}"
-              data-can-change="{{item.canChangeIdentityMark}}"
-              role="button"
-              aria-label="{{item.identityMark.label}}"
-            >
-              <image wx:if="{{item.identityMark.iconSrc}}" class="identity-mark-image" src="{{item.identityMark.iconSrc}}" mode="aspectFill" webp="{{true}}"></image>
-            </view>
-          </view>
-        </view>
-      </view>
-
       <view class="center-board">
         <view class="phase-banner">
           <view class="eagle-mark"></view>
@@ -157,6 +123,40 @@
               </view>
             </view>
           </block>
+        </view>
+      </view>
+
+      <view class="seat-row">
+        <view wx:for="{{seats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="双击切换操控席位">
+          <view class="seat-art">
+            <image wx:if="{{policyAssets.playerSeat}}" class="seat-frame-image" src="{{policyAssets.playerSeat}}" mode="aspectFill" webp="{{true}}"></image>
+            <view class="seat-no">{{item.seatNo}}</view>
+            <view class="avatar">
+              <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
+            </view>
+            <view class="seat-name">{{item.name}}</view>
+            <view wx:if="{{item.roleBadgeSrc}}" class="role-badge" aria-label="{{item.roleLabel}}">
+              <image class="role-badge-image" src="{{item.roleBadgeSrc}}" mode="aspectFill" webp="{{true}}"></image>
+            </view>
+            <image
+              wx:if="{{item.investigationStampSrc}}"
+              class="investigation-stamp"
+              src="{{item.investigationStampSrc}}"
+              mode="aspectFit"
+              webp="{{true}}"
+              aria-label="调查结果：{{item.investigationStampLabel}}"
+            ></image>
+            <view
+              class="{{item.identityMark.className}}"
+              catchtap="onTapIdentityMark"
+              data-member-id="{{item.memberId}}"
+              data-can-change="{{item.canChangeIdentityMark}}"
+              role="button"
+              aria-label="{{item.identityMark.label}}"
+            >
+              <image wx:if="{{item.identityMark.iconSrc}}" class="identity-mark-image" src="{{item.identityMark.iconSrc}}" mode="aspectFill" webp="{{true}}"></image>
+            </view>
+          </view>
         </view>
       </view>
 
