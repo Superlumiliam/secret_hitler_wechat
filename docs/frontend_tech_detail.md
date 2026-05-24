@@ -1012,7 +1012,7 @@ interface IdentityPageData {
 ### 页面职责
 
 - 展示公共桌面
-- 展示当前轮次 / 阶段 / 候选人 / 政策轨 / 选举轨 / 政策牌堆张数
+- 展示当前轮次 / 阶段 / 候选人 / 政策轨 / 选举计数器 / 政策牌堆张数
 - 展示个人待办任务
 - 承载投票、提名、选牌、执行权力等私密交互
 - 提供历史记录入口
@@ -1070,7 +1070,7 @@ interface BoardPageData {
 
 - 深色档案 / 复古桌游桌面背景，铜色边框、细线分隔、旧纸纹理和低饱和红蓝对比
 - 顶部为左上回退按钮、居中标题“历史记录”、房间号、人数局、当前轮标签
-- 第一块大看板为总体情况，横向展示已进行轮次、自由派已颁布、极权派已颁布、当前选举轨
+- 第一块大看板为总体情况，横向展示已进行轮次、自由派已颁布、极权派已颁布、当前选举计数器
 - 后续看板按轮次倒序或正序连续展示；MVP 按参考图正序展示，当前轮滚动到可见区域即可
 - 每个轮次看板左侧为圆形轮次章，中部为总统提名总理与投票结果，底部为座位投票条，右侧为本轮结算徽章
 - 页底展示图例：赞成、反对、已出局无法投票
@@ -1256,7 +1256,7 @@ interface RuleSection {
 | `seat-list` | 渲染座位列表与席位级交互 | `players`, `mode`, `allowedTargets`, `selectedMemberId` | `move`, `select`, `markTap`, `markChange` |
 | `phase-banner` | 阶段提示 | `phase`, `title`, `description`, `danger` | 无 |
 | `policy-track` | 渲染政策轨 | `liberalCount`, `fascistCount`, `vetoUnlocked` | 无 |
-| `election-track` | 渲染选举轨 | `count` | 无 |
+| `election-track` | 渲染选举计数器 | `count` | 无 |
 | `deck-piles` | 渲染抽牌堆 / 弃牌堆计数 | `drawCount`, `discardCount` | 无 |
 | `public-log` | 渲染最近公开事件 | `items` | `expand` |
 | `history-summary-board` | 历史页总体情况看板 | `summary` | 无 |

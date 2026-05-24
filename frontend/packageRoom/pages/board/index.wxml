@@ -80,7 +80,7 @@
         </view>
 
         <view class="election-panel">
-          <view class="track-title">选举轨（3格）</view>
+          <view class="track-title">选举计数器（3格）</view>
           <view class="election-row">
             <view wx:for="{{electionTrack}}" wx:key="slot" class="{{item.cellClass}}">{{item.slot}}</view>
           </view>

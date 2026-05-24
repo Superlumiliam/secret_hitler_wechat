@@ -464,7 +464,7 @@ function assertVetoPrivateAndHistoryProjection() {
         phase: "veto_response",
         type: "VETO_RESPONDED",
         title: "总统同意否决",
-        summary: "玩家1 同意否决，本轮不颁布政策，选举轨 1 → 2",
+        summary: "玩家1 同意否决，本轮不颁布政策，选举计数器 1 → 2",
         createdAt: "2026-05-12T00:10:00.000Z",
         presidentId: "mem_1",
         chancellorId: "mem_2",

@@ -2881,7 +2881,7 @@ async function submitCommand(payload, openid) {
 
           eventExtra.winner = winner;
           eventExtra.winReason = winReason;
-          eventSummary = `${president ? president.displayName : "总统"} 同意否决，本轮不颁布政策，选举轨 ${eventExtra.electionTrackerBefore} → ${eventExtra.electionTrackerAfter}`;
+          eventSummary = `${president ? president.displayName : "总统"} 同意否决，本轮不颁布政策，选举计数器 ${eventExtra.electionTrackerBefore} → ${eventExtra.electionTrackerAfter}`;
           if (eventExtra.chaosPolicy) {
             eventSummary = `${eventSummary}，触发混乱政策：${getPolicyLabel(eventExtra.chaosPolicy.policy)}`;
           }

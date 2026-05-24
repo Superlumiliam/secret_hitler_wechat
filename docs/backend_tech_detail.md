@@ -1575,7 +1575,7 @@ type ApplyCommandResult = {
 
 生成目标：
 
-- 总览：`roundsStarted`、`roundsCompleted`、房间人数、政策轨和选举轨由公共快照其他字段共同表达
+- 总览：`roundsStarted`、`roundsCompleted`、房间人数、政策轨和选举计数器由公共快照其他字段共同表达
 - 逐轮：总统候选人、总理候选人、公开后的投票、政府是否通过、公开政策、否决、混乱政策、总统权力公开结果、胜负触发
 - 当前轮：即使未完成也必须生成一张轮次记录，用 `pending_nomination`、`pending_vote`、`pending_legislation`、`executing` 等公开状态表达进度
 

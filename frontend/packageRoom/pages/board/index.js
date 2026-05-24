@@ -926,7 +926,7 @@ Page({
         ? `${detailText}；危险阶段检查通过：该总理不是独裁者`
         : `${detailText}；独裁者当选，极权派获胜`;
     } else {
-      detailText = `${detailText}；选举轨 ${result.electionTrackerBefore || 0} → ${
+      detailText = `${detailText}；选举计数器 ${result.electionTrackerBefore || 0} → ${
         result.electionTrackerAfter || 0
       }`;
     }
@@ -1014,7 +1014,7 @@ Page({
       title: "否决请求",
       presidentName: president ? `${president.seatIndex}号 ${president.displayName}` : "总统",
       chancellorName: chancellor ? `${chancellor.seatIndex}号 ${chancellor.displayName}` : "总理",
-      hint: `${chancellor ? `${chancellor.seatIndex}号 ${chancellor.displayName}` : "总理"} 提出否决。若总统同意，本轮不颁布政策，选举轨 ${trackerBefore} → ${trackerAfter}。`,
+      hint: `${chancellor ? `${chancellor.seatIndex}号 ${chancellor.displayName}` : "总理"} 提出否决。若总统同意，本轮不颁布政策，选举计数器 ${trackerBefore} → ${trackerAfter}。`,
     };
   },
 
@@ -1736,7 +1736,7 @@ Page({
       wx.showModal({
         title: accepted ? "同意否决" : "拒绝否决",
         content: accepted
-          ? "确认同意否决？本轮 2 张政策全部弃掉，不颁布政策，选举轨推进 1 格。"
+          ? "确认同意否决？本轮 2 张政策全部弃掉，不颁布政策，选举计数器推进 1 格。"
           : "确认拒绝否决？总理将必须从 2 张政策中颁布 1 张。",
         confirmText: accepted ? "同意否决" : "拒绝否决",
         cancelText: "取消",

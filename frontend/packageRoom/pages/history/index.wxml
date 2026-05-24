@@ -35,7 +35,7 @@
         <view class="summary-value"><text class="big-number">{{summary.fascistPolicyCount}}</text><text class="limit-text"> / 6</text></view>
       </view>
       <view class="summary-item">
-        <view class="summary-label">当前选举轨</view>
+        <view class="summary-label">当前选举计数器</view>
         <view class="summary-value"><text class="big-number">{{summary.electionTracker}}</text><text class="limit-text"> / 3</text></view>
         <view class="tracker-row">
           <view wx:for="{{summary.electionDots}}" wx:key="slot" class="{{item.dotClass}}">{{item.slot}}</view>
