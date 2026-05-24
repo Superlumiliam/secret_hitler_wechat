@@ -262,25 +262,31 @@
 
     <view wx:if="{{activeIdentityPickerMemberId}}" class="identity-modal-mask" catchtap="onCancelIdentityPicker">
       <view class="identity-modal" catchtap="onStopTap">
-        <view class="identity-modal-title">阵营标记</view>
-        <view class="identity-modal-icon-row">
-          <view
-            wx:for="{{activeIdentityPickerOptions}}"
-            wx:key="value"
-            class="{{item.optionClass}}"
-            catchtap="onTapIdentityOption"
-            data-member-id="{{item.memberId}}"
-            data-value="{{item.value}}"
-            role="button"
-            aria-label="{{item.label}}"
-          >
-            <image wx:if="{{item.iconSrc}}" class="identity-option-image" src="{{item.iconSrc}}" mode="aspectFill" webp="{{true}}"></image>
+        <image wx:if="{{policyAssets.modalFrameMobile}}" class="identity-modal-frame" src="{{policyAssets.modalFrameMobile}}" mode="scaleToFill" webp="{{true}}"></image>
+        <view class="identity-modal-content">
+          <view class="identity-modal-title">阵营标记</view>
+          <view class="identity-modal-icon-row">
+            <view
+              wx:for="{{activeIdentityPickerOptions}}"
+              wx:key="value"
+              class="{{item.optionClass}}"
+              catchtap="onTapIdentityOption"
+              data-member-id="{{item.memberId}}"
+              data-value="{{item.value}}"
+              role="button"
+              aria-label="{{item.label}}"
+            >
+              <image wx:if="{{item.iconSrc}}" class="identity-option-image" src="{{item.iconSrc}}" mode="aspectFill" webp="{{true}}"></image>
+            </view>
+          </view>
+          <view class="identity-modal-label-row">
+            <view wx:for="{{activeIdentityPickerOptions}}" wx:key="value" class="identity-option-label">{{item.label}}</view>
+          </view>
+          <view class="identity-modal-cancel" catchtap="onCancelIdentityPicker" role="button" aria-label="取消阵营标记">
+            <image wx:if="{{policyAssets.modalCancelButtonMobile}}" class="identity-modal-cancel-image" src="{{policyAssets.modalCancelButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
+            <text class="identity-modal-cancel-text">取消</text>
           </view>
         </view>
-        <view class="identity-modal-label-row">
-          <view wx:for="{{activeIdentityPickerOptions}}" wx:key="value" class="identity-option-label">{{item.label}}</view>
-        </view>
-        <view class="identity-modal-cancel" catchtap="onCancelIdentityPicker" role="button" aria-label="取消阵营标记">取消</view>
       </view>
     </view>
   </block>

@@ -28,6 +28,8 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   stampLiberal: `${CLOUD_ASSET_ROOT}stamp-liberal.webp`,
   liberalBadge: `${CLOUD_ASSET_ROOT}icon-liberal-badge.webp`,
   authoritarianBadge: `${CLOUD_ASSET_ROOT}icon-authoritarian-badge.webp`,
+  modalFrameMobile: `${CLOUD_ASSET_ROOT}modal-frame-mobile.webp`,
+  modalCancelButtonMobile: `${CLOUD_ASSET_ROOT}modal-cancel-button-mobile.webp`,
   defaultAvatar: `${CLOUD_ASSET_ROOT}man-in-black.webp`,
 };
 
