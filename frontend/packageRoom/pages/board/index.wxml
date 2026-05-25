@@ -236,7 +236,7 @@
       </view>
     </view>
 
-    <view wx:if="{{canPickPolicy}}" class="policy-modal-mask" catchtap="onStopTap">
+    <view wx:if="{{canPickPolicy && !voteResultModalVisible}}" class="policy-modal-mask" catchtap="onStopTap">
       <view class="policy-modal" catchtap="onStopTap" role="dialog" aria-label="{{policyPickerTitle}}">
         <image wx:if="{{policyAssets.modalFrameMobile}}" class="policy-modal-frame" src="{{policyAssets.modalFrameMobile}}" mode="scaleToFill" webp="{{true}}"></image>
         <view class="policy-modal-content">

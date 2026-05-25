@@ -137,7 +137,9 @@ Page({
     voteResult: null,
     voteResultModalVisible: false,
     currentVoteResultKey: "",
+    currentVoteResultViewerKey: "",
     confirmedVoteResultKey: "",
+    confirmedVoteResultKeyByViewer: {},
     voteWaitingText: "",
     isDevRoom: false,
     controlledMemberId: "",
@@ -346,8 +348,11 @@ Page({
 
     const voteResult = this.createVoteResult(snapshot);
     const currentVoteResultKey = voteResult ? voteResult.resultKey : "";
+    const currentVoteResultViewerKey = this.createVoteResultViewerKey(snapshot);
+    const confirmedVoteResultKey =
+      (this.data.confirmedVoteResultKeyByViewer || {})[currentVoteResultViewerKey] || "";
     const voteResultModalVisible = Boolean(
-      voteResult && currentVoteResultKey && currentVoteResultKey !== this.data.confirmedVoteResultKey,
+      voteResult && currentVoteResultKey && currentVoteResultKey !== confirmedVoteResultKey,
     );
 
     this.setData({
@@ -373,6 +378,8 @@ Page({
       voteProgressText: this.createVoteProgressText(snapshot),
       voteResult,
       currentVoteResultKey,
+      currentVoteResultViewerKey,
+      confirmedVoteResultKey,
       voteResultModalVisible,
       voteWaitingText: this.createVoteWaitingText(snapshot),
       canNominate: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR"),
@@ -966,9 +973,20 @@ Page({
     };
   },
 
+  createVoteResultViewerKey(snapshot) {
+    return this.data.controlledMemberId || (snapshot && (snapshot.myMemberId || snapshot.realMemberId)) || "self";
+  },
+
   onConfirmVoteResult() {
+    const viewerKey = this.data.currentVoteResultViewerKey || this.createVoteResultViewerKey(this.data.snapshot);
+    const resultKey = this.data.currentVoteResultKey || "";
+    const confirmedVoteResultKeyByViewer = {
+      ...(this.data.confirmedVoteResultKeyByViewer || {}),
+      [viewerKey]: resultKey,
+    };
     this.setData({
-      confirmedVoteResultKey: this.data.currentVoteResultKey || "",
+      confirmedVoteResultKey: resultKey,
+      confirmedVoteResultKeyByViewer,
       voteResultModalVisible: false,
     });
   },
