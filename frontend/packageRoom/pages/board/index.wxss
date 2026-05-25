@@ -1202,6 +1202,162 @@
   color: #e9bf83;
 }
 
+.policy-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 86;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx 22rpx calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.66);
+}
+
+.policy-modal {
+  position: relative;
+  width: 100%;
+  max-width: 714rpx;
+  min-height: 430rpx;
+  box-sizing: border-box;
+  color: #e9bf83;
+  background:
+    linear-gradient(180deg, rgba(9, 27, 27, 0.98) 0%, rgba(4, 13, 13, 0.98) 100%);
+  box-shadow: 0 30rpx 76rpx rgba(0, 0, 0, 0.68);
+  animation: identityModalIn 150ms ease-out both;
+}
+
+.policy-modal-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.policy-modal-content {
+  position: relative;
+  z-index: 1;
+  min-height: 430rpx;
+  padding: 34rpx 30rpx 28rpx;
+  box-sizing: border-box;
+}
+
+.policy-modal-title {
+  color: #f0c184;
+  font-size: 34rpx;
+  font-weight: 900;
+  line-height: 1.12;
+  text-align: center;
+  text-shadow: 0 2rpx 5rpx rgba(0, 0, 0, 0.62);
+}
+
+.policy-modal-hint {
+  margin-top: 10rpx;
+  color: rgba(233, 196, 140, 0.88);
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1.22;
+  text-align: center;
+}
+
+.policy-choice-row {
+  margin-top: 20rpx;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+  align-items: start;
+}
+
+.policy-choice-row.is-two-cards {
+  grid-template-columns: repeat(2, 198rpx);
+  justify-content: center;
+  gap: 22rpx;
+}
+
+.policy-choice-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.policy-choice-item.is-disabled {
+  opacity: 0.56;
+}
+
+.policy-choice-hover .policy-choice-card-image,
+.policy-choice-hover .policy-choice-card-fallback {
+  transform: translateY(-4rpx);
+  filter: drop-shadow(0 14rpx 18rpx rgba(0, 0, 0, 0.56)) drop-shadow(0 0 12rpx rgba(233, 190, 116, 0.18));
+}
+
+.policy-choice-card-image,
+.policy-choice-card-fallback {
+  width: 100%;
+  max-width: 188rpx;
+  height: 236rpx;
+  filter: drop-shadow(0 10rpx 16rpx rgba(0, 0, 0, 0.5));
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.policy-choice-card-fallback {
+  box-sizing: border-box;
+  padding: 26rpx 10rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  border: 2rpx solid rgba(185, 128, 66, 0.72);
+  background: rgba(13, 18, 17, 0.9);
+}
+
+.policy-choice-item.is-liberal .policy-choice-card-fallback {
+  border-color: rgba(31, 204, 215, 0.66);
+  box-shadow: inset 0 0 30rpx rgba(31, 204, 215, 0.16);
+}
+
+.policy-choice-item.is-fascist .policy-choice-card-fallback {
+  border-color: rgba(239, 96, 72, 0.66);
+  box-shadow: inset 0 0 30rpx rgba(239, 96, 72, 0.16);
+}
+
+.policy-veto-action {
+  position: relative;
+  width: 100%;
+  max-width: 244rpx;
+  height: 62rpx;
+  margin: 18rpx auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e9bf83;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.58);
+}
+
+.policy-veto-action.is-disabled {
+  opacity: 0.56;
+}
+
+.policy-veto-action-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.policy-veto-action-text {
+  position: relative;
+  z-index: 1;
+  max-width: 88%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .action-dock {
   margin-top: auto;
   padding: 4rpx 10rpx 0;

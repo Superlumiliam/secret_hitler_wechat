@@ -29,6 +29,7 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   liberalBadge: `${CLOUD_ASSET_ROOT}icon-liberal-badge.webp`,
   authoritarianBadge: `${CLOUD_ASSET_ROOT}icon-authoritarian-badge.webp`,
   modalFrameMobile: `${CLOUD_ASSET_ROOT}modal-frame-mobile.webp`,
+  modalFrameButtonMobile: `${CLOUD_ASSET_ROOT}modal-frame-button-mobile.webp`,
   modalCancelButtonMobile: `${CLOUD_ASSET_ROOT}modal-cancel-button-mobile.webp`,
   defaultAvatar: `${CLOUD_ASSET_ROOT}man-in-black.webp`,
   electionTrackBg: `${CLOUD_ASSET_ROOT}election-track-bg.webp`,
@@ -390,7 +391,7 @@ Page({
       canRequestVeto: this.canRequestVeto(snapshot),
       canRespondVeto: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "PRESIDENT_RESPOND_VETO"),
       vetoResponse: this.createVetoResponse(snapshot),
-      policyCards: this.createPolicyCards(snapshot),
+      policyCards: this.createPolicyCards(snapshot, policyAssetUrlByKey),
       policyPickerTitle: this.createPolicyPickerTitle(snapshot),
       policyPickerHint: this.createPolicyPickerHint(snapshot),
       executiveAction: this.createExecutiveAction(snapshot),
@@ -972,7 +973,7 @@ Page({
     });
   },
 
-  createPolicyCards(snapshot) {
+  createPolicyCards(snapshot, assets = this.data.policyAssets || {}) {
     const privateState = (snapshot && snapshot.privateState) || {};
     const legislative = privateState.legislative || {};
     const hand = Array.isArray(legislative.hand) ? legislative.hand : [];
@@ -983,6 +984,7 @@ Page({
         policy,
         title: isLiberal ? "自由派政策" : "极权派政策",
         mark: isLiberal ? "自" : "极",
+        cardSrc: isLiberal ? assets.liberalCard : assets.authoritarianCard,
         cardClass: `policy-pick-card ${isLiberal ? "is-liberal" : "is-fascist"} ${
           this.data.isSubmittingCommand ? "is-disabled" : ""
         }`,

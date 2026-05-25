@@ -201,29 +201,6 @@
           <view wx:else class="executive-waiting">{{executiveAction.waitingText}}</view>
         </view>
 
-        <view wx:if="{{canPickPolicy}}" class="policy-picker-panel">
-          <view class="policy-picker-title">{{policyPickerTitle}}</view>
-          <view wx:if="{{policyPickerHint}}" class="policy-picker-hint">{{policyPickerHint}}</view>
-          <view class="policy-picker-row {{canEnactPolicy ? 'is-two-cards' : ''}}">
-            <view
-              wx:for="{{policyCards}}"
-              wx:key="index"
-              class="{{item.cardClass}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
-              bindtap="onTapPolicyCard"
-              data-index="{{item.index}}"
-              role="button"
-              aria-label="{{canEnactPolicy ? '颁布此政策牌' : '弃掉此政策牌'}}"
-            >
-              <view class="policy-card-mark">{{item.mark}}</view>
-              <view class="policy-card-title">{{item.title}}</view>
-              <view class="policy-card-action">{{canEnactPolicy ? '颁布此牌' : '弃掉此牌'}}</view>
-            </view>
-          </view>
-          <view wx:if="{{canRequestVeto}}" class="veto-request-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapRequestVeto" role="button" aria-label="提出否决">
-            提出否决
-          </view>
-        </view>
-
         <view wx:if="{{vetoResponse}}" class="veto-response-panel">
           <view class="veto-response-title">{{vetoResponse.title}}</view>
           <view class="veto-response-hint">{{vetoResponse.hint}}</view>
@@ -255,6 +232,38 @@
         <view class="secondary-actions">
           <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="查看身份">查看身份</view>
           <view class="secondary-action" bindtap="onTapHistory" hover-class="secondary-hover" role="button" aria-label="历史记录">历史记录</view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{canPickPolicy}}" class="policy-modal-mask" catchtap="onStopTap">
+      <view class="policy-modal" catchtap="onStopTap" role="dialog" aria-label="{{policyPickerTitle}}">
+        <image wx:if="{{policyAssets.modalFrameMobile}}" class="policy-modal-frame" src="{{policyAssets.modalFrameMobile}}" mode="scaleToFill" webp="{{true}}"></image>
+        <view class="policy-modal-content">
+          <view class="policy-modal-title">{{policyPickerTitle}}</view>
+          <view wx:if="{{policyPickerHint}}" class="policy-modal-hint">{{policyPickerHint}}</view>
+          <view class="policy-choice-row {{canEnactPolicy ? 'is-two-cards' : 'is-three-cards'}}">
+            <view
+              wx:for="{{policyCards}}"
+              wx:key="index"
+              class="policy-choice-item {{item.policy === 'LIBERAL' ? 'is-liberal' : 'is-fascist'}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
+              catchtap="onTapPolicyCard"
+              hover-class="policy-choice-hover"
+              data-index="{{item.index}}"
+              role="button"
+              aria-label="{{canEnactPolicy ? '颁布此政策牌' : '弃掉此政策牌'}}"
+            >
+              <image wx:if="{{item.cardSrc}}" class="policy-choice-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
+              <view wx:else class="policy-choice-card-fallback">
+                <view class="policy-card-mark">{{item.mark}}</view>
+                <view class="policy-card-title">{{item.title}}</view>
+              </view>
+            </view>
+          </view>
+          <view wx:if="{{canRequestVeto}}" class="policy-veto-action {{isSubmittingCommand ? 'is-disabled' : ''}}" catchtap="onTapRequestVeto" role="button" aria-label="提出否决">
+            <image wx:if="{{policyAssets.modalFrameButtonMobile}}" class="policy-veto-action-image" src="{{policyAssets.modalFrameButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
+            <text class="policy-veto-action-text">提出否决</text>
+          </view>
         </view>
       </view>
     </view>
