@@ -116,9 +116,6 @@
           </view>
         </view>
 
-        <view wx:if="{{voteProgressText && !voteResult}}" class="vote-panel">
-          <view class="vote-progress-text">{{voteProgressText}}</view>
-        </view>
       </view>
 
       <view class="seat-row">
