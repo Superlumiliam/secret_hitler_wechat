@@ -80,9 +80,14 @@
         </view>
 
         <view class="election-panel">
-          <view class="track-title">选举计数器（3格）</view>
-          <view class="election-row">
-            <view wx:for="{{electionTrack}}" wx:key="slot" class="{{item.cellClass}}">{{item.slot}}</view>
+          <view class="election-track-shell">
+            <image wx:if="{{policyAssets.electionTrackBg}}" class="election-track-bg" src="{{policyAssets.electionTrackBg}}" mode="aspectFill" webp="{{true}}"></image>
+            <view class="election-row">
+              <view wx:for="{{electionTrack}}" wx:key="slot" class="{{item.cellClass}}">
+                <image wx:if="{{item.slotSrc}}" class="election-slot-image" src="{{item.slotSrc}}" mode="aspectFit" webp="{{true}}"></image>
+                <text class="election-slot-label">{{item.slot}}</text>
+              </view>
+            </view>
           </view>
           <view class="election-progress">当前进度 {{board.electionTracker}} / 3</view>
         </view>

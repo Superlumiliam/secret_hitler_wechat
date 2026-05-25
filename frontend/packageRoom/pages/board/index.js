@@ -31,6 +31,9 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   modalFrameMobile: `${CLOUD_ASSET_ROOT}modal-frame-mobile.webp`,
   modalCancelButtonMobile: `${CLOUD_ASSET_ROOT}modal-cancel-button-mobile.webp`,
   defaultAvatar: `${CLOUD_ASSET_ROOT}man-in-black.webp`,
+  electionTrackBg: `${CLOUD_ASSET_ROOT}election-track-bg.webp`,
+  electionSlotEmpty: `${CLOUD_ASSET_ROOT}election-slot-empty.webp`,
+  electionSlotActive: `${CLOUD_ASSET_ROOT}election-slot-active.webp`,
 };
 
 const POWER_BADGE_ASSET_KEY_MAP = {
@@ -350,7 +353,7 @@ Page({
         policyAssetUrlByKey,
         newFascistPolicySlot,
       ),
-      electionTrack: this.createElectionTrack(board.electionTracker),
+      electionTrack: this.createElectionTrack(board.electionTracker, policyAssetUrlByKey),
       statusText: this.createStatusText(snapshot, board),
       phaseHintText: this.createPhaseHintText(snapshot, board),
       isDevRoom: snapshot.roomMode === "dev",
@@ -764,12 +767,14 @@ Page({
     });
   },
 
-  createElectionTrack(electionTracker) {
+  createElectionTrack(electionTracker, assets = {}) {
     return Array.from({ length: 3 }, (_, index) => {
       const slot = index + 1;
+      const isActive = slot <= electionTracker;
       return {
         slot,
-        cellClass: `election-dot ${slot <= electionTracker ? "is-active" : ""}`,
+        slotSrc: isActive ? assets.electionSlotActive : assets.electionSlotEmpty,
+        cellClass: `election-slot ${isActive ? "is-active" : "is-empty"}`,
       };
     });
   },
