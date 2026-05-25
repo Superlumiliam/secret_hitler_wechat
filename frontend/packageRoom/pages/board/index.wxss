@@ -1064,11 +1064,13 @@
   text-align: center;
 }
 
-.vote-panel.is-passed .vote-result-title {
+.vote-panel.is-passed .vote-result-title,
+.vote-result-modal.is-passed .vote-result-title {
   color: #1bd5df;
 }
 
-.vote-panel.is-failed .vote-result-title {
+.vote-panel.is-failed .vote-result-title,
+.vote-result-modal.is-failed .vote-result-title {
   color: #ef6048;
 }
 
@@ -1122,6 +1124,97 @@
 
 .vote-reveal-item.is-nein .vote-reveal-mark {
   color: #ef6048;
+}
+
+.vote-result-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 84;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 42rpx 26rpx;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.64);
+}
+
+.vote-result-modal {
+  position: relative;
+  width: 100%;
+  max-width: 704rpx;
+  box-sizing: border-box;
+  color: #e9bf83;
+  background:
+    linear-gradient(180deg, rgba(31, 18, 14, 0.98) 0%, rgba(13, 8, 7, 0.98) 100%);
+  box-shadow:
+    0 28rpx 72rpx rgba(0, 0, 0, 0.66);
+  animation: identityModalIn 150ms ease-out both;
+}
+
+.vote-result-modal-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.vote-result-modal-content {
+  position: relative;
+  z-index: 1;
+  padding: 38rpx 34rpx 36rpx;
+  box-sizing: border-box;
+}
+
+.vote-result-modal .vote-result-title {
+  font-size: 34rpx;
+}
+
+.vote-result-modal .vote-result-detail {
+  margin-top: 12rpx;
+  font-size: 23rpx;
+}
+
+.vote-result-modal .vote-reveal-row {
+  margin-top: 16rpx;
+}
+
+.vote-result-modal .vote-reveal-item {
+  min-height: 54rpx;
+  padding: 8rpx 12rpx;
+}
+
+.vote-result-modal .vote-reveal-name,
+.vote-result-modal .vote-reveal-mark {
+  font-size: 24rpx;
+}
+
+.vote-result-confirm {
+  position: relative;
+  width: 238rpx;
+  height: 66rpx;
+  margin: 22rpx auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e9bf83;
+  font-size: 26rpx;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.48);
+}
+
+.vote-result-confirm-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.vote-result-confirm-text {
+  position: relative;
+  z-index: 1;
+  color: #e9bf83;
 }
 
 .action-dock {

@@ -116,18 +116,8 @@
           </view>
         </view>
 
-        <view wx:if="{{voteProgressText || voteResult}}" class="vote-panel {{voteResult ? voteResult.resultClass : ''}}">
-          <view wx:if="{{voteProgressText && !voteResult}}" class="vote-progress-text">{{voteProgressText}}</view>
-          <block wx:if="{{voteResult}}">
-            <view class="vote-result-title">{{voteResult.title}}</view>
-            <view class="vote-result-detail">{{voteResult.detailText}}</view>
-            <view class="vote-reveal-row">
-              <view wx:for="{{voteResult.voteRows}}" wx:key="memberId" class="vote-reveal-item {{item.voteClass}}">
-                <text class="vote-reveal-name">{{item.name}}</text>
-                <text class="vote-reveal-mark">{{item.voteText}}</text>
-              </view>
-            </view>
-          </block>
+        <view wx:if="{{voteProgressText && !voteResult}}" class="vote-panel">
+          <view class="vote-progress-text">{{voteProgressText}}</view>
         </view>
       </view>
 
@@ -297,6 +287,26 @@
           <view class="identity-modal-cancel" catchtap="onCancelIdentityPicker" role="button" aria-label="取消阵营标记">
             <image wx:if="{{policyAssets.modalCancelButtonMobile}}" class="identity-modal-cancel-image" src="{{policyAssets.modalCancelButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
             <text class="identity-modal-cancel-text">取消</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{voteResultModalVisible && voteResult}}" class="vote-result-modal-mask" catchtap="onStopTap">
+      <view class="vote-result-modal {{voteResult.resultClass}}" catchtap="onStopTap" role="dialog" aria-label="投票结果">
+        <image wx:if="{{policyAssets.modalFrameMobile}}" class="vote-result-modal-frame" src="{{policyAssets.modalFrameMobile}}" mode="scaleToFill" webp="{{true}}"></image>
+        <view class="vote-result-modal-content">
+          <view class="vote-result-title">{{voteResult.title}}</view>
+          <view class="vote-result-detail">{{voteResult.detailText}}</view>
+          <view class="vote-reveal-row">
+            <view wx:for="{{voteResult.voteRows}}" wx:key="memberId" class="vote-reveal-item {{item.voteClass}}">
+              <text class="vote-reveal-name">{{item.name}}</text>
+              <text class="vote-reveal-mark">{{item.voteText}}</text>
+            </view>
+          </view>
+          <view class="vote-result-confirm" catchtap="onConfirmVoteResult" hover-class="action-hover" role="button" aria-label="确认投票结果">
+            <image wx:if="{{policyAssets.modalCancelButtonMobile}}" class="vote-result-confirm-image" src="{{policyAssets.modalCancelButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
+            <text class="vote-result-confirm-text">确认</text>
           </view>
         </view>
       </view>

@@ -134,6 +134,9 @@ Page({
     votingSubmitted: false,
     voteProgressText: "",
     voteResult: null,
+    voteResultModalVisible: false,
+    currentVoteResultKey: "",
+    confirmedVoteResultKey: "",
     voteWaitingText: "",
     isDevRoom: false,
     controlledMemberId: "",
@@ -340,6 +343,12 @@ Page({
         ? board.fascistPolicyCount
         : 0;
 
+    const voteResult = this.createVoteResult(snapshot);
+    const currentVoteResultKey = voteResult ? voteResult.resultKey : "";
+    const voteResultModalVisible = Boolean(
+      voteResult && currentVoteResultKey && currentVoteResultKey !== this.data.confirmedVoteResultKey,
+    );
+
     this.setData({
       snapshot,
       board,
@@ -361,7 +370,9 @@ Page({
       canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
       votingSubmitted: this.hasSubmittedVote(snapshot),
       voteProgressText: this.createVoteProgressText(snapshot),
-      voteResult: this.createVoteResult(snapshot),
+      voteResult,
+      currentVoteResultKey,
+      voteResultModalVisible,
       voteWaitingText: this.createVoteWaitingText(snapshot),
       canNominate: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR"),
       nominateTargets: this.createNominateTargets(snapshot),
@@ -937,11 +948,28 @@ Page({
     }
 
     return {
+      resultKey: [
+        snapshot.round || 1,
+        publicState.currentPresidentCandidateId || "",
+        publicState.currentChancellorCandidateId || "",
+        result.jaCount || 0,
+        result.neinCount || 0,
+        result.electionTrackerBefore || 0,
+        result.electionTrackerAfter || 0,
+        result.passed ? "passed" : "failed",
+      ].join(":"),
       title: result.passed ? "投票通过" : "投票未通过",
       resultClass: result.passed ? "is-passed" : "is-failed",
       detailText,
       voteRows,
     };
+  },
+
+  onConfirmVoteResult() {
+    this.setData({
+      confirmedVoteResultKey: this.data.currentVoteResultKey || "",
+      voteResultModalVisible: false,
+    });
   },
 
   createPolicyCards(snapshot) {
