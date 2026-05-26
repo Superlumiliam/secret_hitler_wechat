@@ -94,12 +94,9 @@
 
         <view class="deck-piles-panel">
           <view wx:for="{{board.deckPiles}}" wx:key="key" class="{{item.pileClass}}">
+            <image wx:if="{{item.bgSrc}}" class="deck-pile-bg" src="{{item.bgSrc}}" mode="scaleToFill" webp="{{true}}"></image>
             <view class="deck-card-stack" aria-hidden="true">
-              <view class="deck-card-shadow"></view>
-              <view class="deck-card-back">
-                <view class="deck-card-frame"></view>
-                <view class="deck-card-seal"></view>
-              </view>
+              <image wx:if="{{item.cardSrc}}" class="deck-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
             </view>
             <view class="deck-pile-copy">
               <view class="deck-pile-label">{{item.label}}</view>

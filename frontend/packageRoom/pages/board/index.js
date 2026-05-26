@@ -35,6 +35,10 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   electionTrackBg: `${CLOUD_ASSET_ROOT}election-track-bg.webp`,
   electionSlotEmpty: `${CLOUD_ASSET_ROOT}election-slot-empty.webp`,
   electionSlotActive: `${CLOUD_ASSET_ROOT}election-slot-active.webp`,
+  drawPileBg: `${CLOUD_ASSET_ROOT}card-bg.webp`,
+  discardPileBg: `${CLOUD_ASSET_ROOT}discard-bg.webp`,
+  drawPileCard: `${CLOUD_ASSET_ROOT}card.webp`,
+  discardPileCard: `${CLOUD_ASSET_ROOT}discard.webp`,
 };
 
 const POWER_BADGE_ASSET_KEY_MAP = {
@@ -326,7 +330,7 @@ Page({
       }
     }
 
-    const board = this.createBoard(snapshot);
+    const board = this.createBoard(snapshot, policyAssetUrlByKey);
     const identityJudgmentByMemberId = this.readIdentityJudgments(snapshot);
     const seats = this.createSeats(snapshot, avatarUrlByFileId, identityJudgmentByMemberId, policyAssetUrlByKey);
     const activeIdentityPickerOptions = this.createActiveIdentityPickerOptions(
@@ -414,7 +418,7 @@ Page({
     });
   },
 
-  createBoard(snapshot) {
+  createBoard(snapshot, assets = {}) {
     const publicState = (snapshot && snapshot.publicState) || {};
     const seatOrder = publicState.seatOrder || [];
     const president = seatOrder.find((member) => member.memberId === publicState.currentPresidentCandidateId);
@@ -431,7 +435,7 @@ Page({
       chancellorName: chancellor ? chancellor.displayName : "待提名",
       liberalPolicyCount: publicState.liberalPolicyCount || 0,
       fascistPolicyCount: publicState.fascistPolicyCount || 0,
-      deckPiles: this.createDeckPiles(publicState.policyDeck),
+      deckPiles: this.createDeckPiles(publicState.policyDeck, assets),
       electionTracker: publicState.electionTracker || 0,
       vetoUnlocked: Boolean(publicState.vetoUnlocked),
       executiveActionType: publicState.executiveActionType || "",
@@ -439,7 +443,7 @@ Page({
     };
   },
 
-  createDeckPiles(policyDeck) {
+  createDeckPiles(policyDeck, assets = {}) {
     const drawCount = Math.max(0, Number(policyDeck && policyDeck.drawCount) || 0);
     const discardCount = Math.max(0, Number(policyDeck && policyDeck.discardCount) || 0);
 
@@ -450,6 +454,8 @@ Page({
         count: drawCount,
         pileClass: `deck-pile is-draw ${drawCount > 0 ? "has-cards" : "is-empty"}`,
         countText: `${drawCount} 张`,
+        bgSrc: assets.drawPileBg || POLICY_TRACK_ASSET_FILE_IDS.drawPileBg,
+        cardSrc: assets.drawPileCard || POLICY_TRACK_ASSET_FILE_IDS.drawPileCard,
       },
       {
         key: "discard",
@@ -457,6 +463,8 @@ Page({
         count: discardCount,
         pileClass: `deck-pile is-discard ${discardCount > 0 ? "has-cards" : "is-empty"}`,
         countText: `${discardCount} 张`,
+        bgSrc: assets.discardPileBg || POLICY_TRACK_ASSET_FILE_IDS.discardPileBg,
+        cardSrc: assets.discardPileCard || POLICY_TRACK_ASSET_FILE_IDS.discardPileCard,
       },
     ];
   },
