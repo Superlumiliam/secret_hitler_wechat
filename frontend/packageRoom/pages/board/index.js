@@ -28,6 +28,7 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   stampLiberal: `${CLOUD_ASSET_ROOT}stamp-liberal.webp`,
   liberalBadge: `${CLOUD_ASSET_ROOT}icon-liberal-badge.webp`,
   authoritarianBadge: `${CLOUD_ASSET_ROOT}icon-authoritarian-badge.webp`,
+  frameNarrow: `${CLOUD_ASSET_ROOT}frame-narrow.webp`,
   modalFrameMobile: `${CLOUD_ASSET_ROOT}modal-frame-mobile.webp`,
   modalFrameButtonMobile: `${CLOUD_ASSET_ROOT}modal-frame-button-mobile.webp`,
   modalCancelButtonMobile: `${CLOUD_ASSET_ROOT}modal-cancel-button-mobile.webp`,
@@ -39,6 +40,7 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   discardPileBg: `${CLOUD_ASSET_ROOT}discard-bg.webp`,
   drawPileCard: `${CLOUD_ASSET_ROOT}card.webp`,
   discardPileCard: `${CLOUD_ASSET_ROOT}discard.webp`,
+  logoSeal: `${CLOUD_ASSET_ROOT}logo-seal.webp`,
 };
 
 const POWER_BADGE_ASSET_KEY_MAP = {

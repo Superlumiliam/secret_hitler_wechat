@@ -106,7 +106,8 @@
         </view>
 
         <view class="status-strip">
-          <view class="status-icon">♟</view>
+          <image wx:if="{{policyAssets.frameNarrow}}" class="status-frame-image" src="{{policyAssets.frameNarrow}}" mode="scaleToFill" webp="{{true}}"></image>
+          <image wx:if="{{policyAssets.logoSeal}}" class="status-seal-icon" src="{{policyAssets.logoSeal}}" mode="aspectFit" webp="{{true}}"></image>
           <view class="status-copy">
             <view class="status-text">{{statusText}}</view>
             <view wx:if="{{phaseHintText}}" class="phase-hint-text">{{phaseHintText}}</view>
