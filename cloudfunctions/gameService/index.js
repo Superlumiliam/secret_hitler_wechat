@@ -1128,10 +1128,38 @@ function buildInitialPublicHistory(gameCore, members, createdAt) {
   ];
 }
 
+function shouldExposeLastVoteResult(gameCore) {
+  const voteResult = gameCore && gameCore.lastVoteResult;
+  if (!voteResult) {
+    return false;
+  }
+
+  const phase = gameCore.phase;
+  if (phase === "legislative_president" || phase === "legislative_chancellor" || phase === "veto_response") {
+    return (
+      voteResult.passed === true &&
+      voteResult.round === gameCore.round &&
+      voteResult.presidentCandidateId === gameCore.currentPresidentId &&
+      voteResult.chancellorCandidateId === gameCore.currentChancellorId
+    );
+  }
+
+  if (phase === "nomination") {
+    return voteResult.passed === false;
+  }
+
+  if (phase === "game_ended") {
+    return Boolean(voteResult.hitlerCheck && voteResult.hitlerCheck.checked);
+  }
+
+  return false;
+}
+
 function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, updatedAt) {
   const roomId = room.roomId || room._id;
   const votesByMemberId = (gameCore.phaseData && gameCore.phaseData.votesByMemberId) || {};
   const aliveMemberIds = gameCore.aliveMemberIds || [];
+  const exposedVoteResult = shouldExposeLastVoteResult(gameCore) ? gameCore.lastVoteResult : null;
   const voteProgress =
     gameCore.phase === "voting"
       ? {
@@ -1139,23 +1167,26 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
           requiredCount: aliveMemberIds.length,
           totalCount: aliveMemberIds.length,
         }
-      : gameCore.lastVoteResult
+      : exposedVoteResult
         ? {
             submittedCount: aliveMemberIds.length,
             requiredCount: aliveMemberIds.length,
             totalCount: aliveMemberIds.length,
           }
         : null;
-  const revealedVotes = gameCore.lastVoteResult ? gameCore.lastVoteResult.revealedVotes || [] : null;
-  const voteResult = gameCore.lastVoteResult
+  const revealedVotes = exposedVoteResult ? exposedVoteResult.revealedVotes || [] : null;
+  const voteResult = exposedVoteResult
     ? {
-        jaCount: gameCore.lastVoteResult.jaCount || 0,
-        neinCount: gameCore.lastVoteResult.neinCount || 0,
-        passed: Boolean(gameCore.lastVoteResult.passed),
-        electionTrackerBefore: gameCore.lastVoteResult.electionTrackerBefore || 0,
-        electionTrackerAfter: gameCore.lastVoteResult.electionTrackerAfter || 0,
-        chaosPolicy: gameCore.lastVoteResult.chaosPolicy || null,
-        hitlerCheck: gameCore.lastVoteResult.hitlerCheck || null,
+        round: exposedVoteResult.round || gameCore.round,
+        presidentCandidateId: exposedVoteResult.presidentCandidateId || null,
+        chancellorCandidateId: exposedVoteResult.chancellorCandidateId || null,
+        jaCount: exposedVoteResult.jaCount || 0,
+        neinCount: exposedVoteResult.neinCount || 0,
+        passed: Boolean(exposedVoteResult.passed),
+        electionTrackerBefore: exposedVoteResult.electionTrackerBefore || 0,
+        electionTrackerAfter: exposedVoteResult.electionTrackerAfter || 0,
+        chaosPolicy: exposedVoteResult.chaosPolicy || null,
+        hitlerCheck: exposedVoteResult.hitlerCheck || null,
       }
     : null;
 

@@ -742,6 +742,39 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     "history projection should not expose legislative hand",
   );
 
+  const passedVoteResult = {
+    round: 1,
+    presidentCandidateId: "mem_1",
+    chancellorCandidateId: "mem_3",
+    revealedVotes: members.map((member) => ({
+      memberId: member._id,
+      displayName: member.displayName,
+      vote: "JA",
+    })),
+    jaCount: members.length,
+    neinCount: 0,
+    passed: true,
+    electionTrackerBefore: 0,
+    electionTrackerAfter: 0,
+    chaosPolicy: null,
+    hitlerCheck: null,
+  };
+  const legislativeVotePayload = buildPublicSnapshotPayload(
+    room,
+    {
+      ...legislativeCore,
+      lastVoteResult: passedVoteResult,
+    },
+    members,
+    baseHistory,
+    new Date("2026-05-12T00:02:30.000Z"),
+  );
+  assert.strictEqual(
+    legislativeVotePayload.publicState.voteResult.presidentCandidateId,
+    "mem_1",
+    "active legislative snapshot should expose the just-revealed vote result",
+  );
+
   const executionCore = {
     ...projection.gameCore,
     version: 6,
@@ -768,6 +801,26 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     executionHistory.rounds[0].executiveResult,
     null,
     "pending executive action should not create executive result",
+  );
+  const executionVotePayload = buildPublicSnapshotPayload(
+    room,
+    {
+      ...executionCore,
+      lastVoteResult: passedVoteResult,
+    },
+    members,
+    baseHistory,
+    new Date("2026-05-12T00:03:30.000Z"),
+  );
+  assert.strictEqual(
+    executionVotePayload.publicState.voteResult,
+    null,
+    "policy-enacted snapshot should not keep exposing the previous vote result",
+  );
+  assert.strictEqual(
+    executionVotePayload.publicState.revealedVotes,
+    null,
+    "policy-enacted snapshot should not keep exposing the previous revealed votes",
   );
 
   const enactedExecutionCore = {

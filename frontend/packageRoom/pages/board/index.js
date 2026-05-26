@@ -957,9 +957,9 @@ Page({
 
     return {
       resultKey: [
-        snapshot.round || 1,
-        publicState.currentPresidentCandidateId || "",
-        publicState.currentChancellorCandidateId || "",
+        result.round || snapshot.round || 1,
+        result.presidentCandidateId || publicState.currentPresidentCandidateId || "",
+        result.chancellorCandidateId || publicState.currentChancellorCandidateId || "",
         result.jaCount || 0,
         result.neinCount || 0,
         result.electionTrackerBefore || 0,
