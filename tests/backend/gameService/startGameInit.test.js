@@ -689,6 +689,11 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     new Date("2026-05-12T00:02:00.000Z"),
   );
   const currentRound = votingPayload.publicState.history.rounds[0];
+  assert.deepStrictEqual(
+    votingPayload.publicState.submittedVoteMemberIds,
+    ["mem_1", "mem_2"],
+    "public voting snapshot should expose submitted voter ids without vote choices",
+  );
   assert.strictEqual(currentRound.status, "voting", "current voting round should be marked voting");
   assert.strictEqual(currentRound.voteSummary.revealed, false, "unrevealed vote summary should remain hidden");
   assert.strictEqual(currentRound.voteSummary.ja, 0, "unrevealed vote summary should not count JA");

@@ -303,6 +303,10 @@
   filter: drop-shadow(0 0 16rpx rgba(232, 181, 99, 0.72));
 }
 
+.seat-card.is-vote-submitted {
+  filter: drop-shadow(0 0 15rpx rgba(82, 224, 135, 0.74)) drop-shadow(0 0 27rpx rgba(30, 153, 84, 0.38));
+}
+
 .seat-card.is-ineligible-nominee {
   opacity: 0.72;
 }

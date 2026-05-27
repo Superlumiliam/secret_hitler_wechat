@@ -476,6 +476,9 @@ Page({
     const publicState = (snapshot && snapshot.publicState) || {};
     const presidentCandidateId = publicState.currentPresidentCandidateId;
     const chancellorCandidateId = publicState.currentChancellorCandidateId;
+    const submittedVoteMemberIds = Array.isArray(publicState.submittedVoteMemberIds)
+      ? publicState.submittedVoteMemberIds
+      : [];
     const currentViewerMemberId = snapshot && snapshot.myMemberId;
     const nominationAllowedIds = this.getNominationAllowedIds(snapshot);
     const nominateTargetByMemberId = this.createNominateTargetMap(snapshot);
@@ -529,6 +532,10 @@ Page({
           targetOption && !canNominateTarget ? "is-ineligible-nominee" : ""
         } ${
           selectedNominationTargetId === member.memberId ? "is-selected-nomination" : ""
+        } ${
+          snapshot.currentPhase === "voting" && submittedVoteMemberIds.includes(member.memberId)
+            ? "is-vote-submitted"
+            : ""
         } ${
           member.isAlive === false ? "is-dead" : ""
         }`,

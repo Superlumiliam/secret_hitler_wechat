@@ -6,6 +6,13 @@ const IDENTITY_CARD_FILE_ID_BY_ROLE = {
   FASCIST: `${CLOUD_ASSET_ROOT}identity-fascist.webp`,
   HITLER: `${CLOUD_ASSET_ROOT}identity-hitler.webp`,
 };
+const IDENTITY_PANEL_FRAME_FILE_ID = `${CLOUD_ASSET_ROOT}identity-frame.webp`;
+const IDENTITY_PANEL_FRAME_WIDE_FILE_ID = `${CLOUD_ASSET_ROOT}identity-frame-wide.webp`;
+const IDENTITY_BUTTON_FILE_IDS = {
+  primary: `${CLOUD_ASSET_ROOT}button-blue.webp`,
+  secondary: `${CLOUD_ASSET_ROOT}button-normal.webp`,
+};
+const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const {
   GAME_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -37,9 +44,9 @@ const ROLE_META = {
 };
 
 const ACTION_TIPS = {
-  LIBERAL: ["关注政府组合与投票记录", "重点留意关键回合的政策变化", "复盘页可帮助你回顾可疑行为"],
-  FASCIST: ["协助独裁者隐藏身份", "必要时制造投票分歧", "推动极权派政策进入政策轨"],
-  HITLER: ["谨慎接受总理提名", "隐藏真实身份，避免过早暴露", "三张极权派政策后争取当选总理"],
+  LIBERAL: ["记录每轮提名、投票和政策结果。", "保护可信玩家，逼迫可疑组合解释矛盾。", "当处决权出现时，集中信息找出独裁者。"],
+  FASCIST: ["保护独裁者的身份，不要让线索过早汇聚。", "用投票和发言制造合理分歧。", "在关键回合推动极权派政策上轨。"],
+  HITLER: ["前期隐藏立场，避免成为公开焦点。", "三张极权派政策后，争取以可信身份当选总理。", "让队友替你制造空间，但不要暴露配合痕迹。"],
 };
 
 const ERROR_MESSAGE_MAP = {
@@ -67,6 +74,9 @@ Page({
     errorText: "",
     backgroundSrc: "",
     backgroundVisible: true,
+    panelFrameSrc: "",
+    infoPanelFrameSrc: "",
+    actionButtonAssets: {},
     identity: null,
     knownMembers: [],
     infoLines: [],
@@ -173,9 +183,8 @@ Page({
       partyLabel: roleMeta.partyLabel,
       cardClass: roleMeta.cardClass,
       sealText: roleMeta.sealText,
-      roleSymbol: rawIdentity.role === "LIBERAL" ? "鸽" : "印",
       cardSrc: tempUrlByFileId[cardFileId] || "",
-      missionLine: this.createMissionLine(rawIdentity.role),
+      missionLines: this.createMissionLines(rawIdentity.role),
     };
 
     this.setData({
@@ -196,7 +205,12 @@ Page({
 
     const fileList = [
       IDENTITY_BACKGROUND_FILE_ID,
+      IDENTITY_PANEL_FRAME_FILE_ID,
+      IDENTITY_PANEL_FRAME_WIDE_FILE_ID,
       cardFileId,
+      IDENTITY_BUTTON_FILE_IDS.primary,
+      IDENTITY_BUTTON_FILE_IDS.secondary,
+      DEFAULT_AVATAR_FILE_ID,
     ].filter(Boolean);
     (knownMembers || []).forEach((member) => {
       if (isCloudFileId(member.avatarUrl)) {
@@ -221,6 +235,15 @@ Page({
         this.setData({
           backgroundSrc: urlByFileId[IDENTITY_BACKGROUND_FILE_ID] || "",
           backgroundVisible: Boolean(urlByFileId[IDENTITY_BACKGROUND_FILE_ID]),
+          panelFrameSrc: urlByFileId[IDENTITY_PANEL_FRAME_FILE_ID] || "",
+          infoPanelFrameSrc:
+            (knownMembers || []).length > 1
+              ? urlByFileId[IDENTITY_PANEL_FRAME_WIDE_FILE_ID] || urlByFileId[IDENTITY_PANEL_FRAME_FILE_ID] || ""
+              : urlByFileId[IDENTITY_PANEL_FRAME_FILE_ID] || "",
+          actionButtonAssets: {
+            primary: urlByFileId[IDENTITY_BUTTON_FILE_IDS.primary] || "",
+            secondary: urlByFileId[IDENTITY_BUTTON_FILE_IDS.secondary] || "",
+          },
         });
 
         return urlByFileId;
@@ -234,44 +257,49 @@ Page({
       });
   },
 
-  createMissionLine(role) {
+  createMissionLines(role) {
     if (role === "LIBERAL") {
-      return "推动 5 项自由派政策，或找出处决独裁者";
+      return ["推动 5 项自由派政策完成胜利。", "或在处决阶段找出并处决独裁者。"];
     }
     if (role === "HITLER") {
-      return "隐藏身份，并在关键时刻成为总理";
+      return ["协助极权派推动 6 项极权派政策。", "或在 3 项极权派政策后当选总理。"];
     }
-    return "保护独裁者，并推动 6 项极权派政策";
+    return ["保护独裁者，并推动 6 项极权派政策。", "或在 3 项极权派政策后让独裁者当选总理。"];
   },
 
   createKnownMembers(knownMembers, tempUrlByFileId) {
+    const defaultAvatarSrc = tempUrlByFileId[DEFAULT_AVATAR_FILE_ID] || "";
     return (knownMembers || []).map((member) => {
       const meta = getRoleMeta(member.role);
+      const avatarSrc = isCloudFileId(member.avatarUrl)
+        ? tempUrlByFileId[member.avatarUrl] || defaultAvatarSrc
+        : member.avatarUrl || defaultAvatarSrc;
       return {
         memberId: member.memberId,
         displayName: member.displayName || "未知玩家",
         initial: String(member.displayName || "？").slice(0, 1),
         roleLabel: meta.roleLabel,
-        partyLabel: meta.partyLabel,
-        avatarSrc: isCloudFileId(member.avatarUrl) ? tempUrlByFileId[member.avatarUrl] || "" : member.avatarUrl || "",
+        knownLabel: member.role === "HITLER" ? "独裁者" : "极权派队友",
+        avatarSrc,
       };
     });
   },
 
   createInfoLines(identity) {
     const knownCount = (identity.knownMembers || []).length;
-    if (identity.role === "LIBERAL") {
-      return ["没有公开队友信息", "请根据投票、发言和政策结果判断身份", "隐藏身份，谨慎表达立场"];
+    if (knownCount > 0) {
+      return ["你当前可确认的队友如下："];
     }
 
     if (identity.role === "HITLER") {
-      if (knownCount > 0) {
-        return ["5-6 人局中你知道普通极权派是谁", "普通极权派也知道你的身份", "你的阵营是极权派阵营"];
-      }
-      return ["7-10 人局中你不知道普通极权派是谁", "普通极权派知道你的身份", "你的阵营是极权派阵营"];
+      return ["本局你无法获知普通极权派队友。"];
     }
 
-    return ["你知道其他极权派成员", "你知道谁是独裁者", "你的阵营是极权派阵营"];
+    if (identity.role === "LIBERAL") {
+      return ["自由派没有开局可见队友信息。"];
+    }
+
+    return ["当前没有可见队友信息。"];
   },
 
   createServiceError(result, fallbackMessage) {

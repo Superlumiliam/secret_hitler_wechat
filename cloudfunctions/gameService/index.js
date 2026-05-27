@@ -1169,11 +1169,15 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
         }
       : exposedVoteResult
         ? {
-            submittedCount: aliveMemberIds.length,
-            requiredCount: aliveMemberIds.length,
-            totalCount: aliveMemberIds.length,
+          submittedCount: aliveMemberIds.length,
+          requiredCount: aliveMemberIds.length,
+          totalCount: aliveMemberIds.length,
           }
         : null;
+  const submittedVoteMemberIds =
+    gameCore.phase === "voting"
+      ? aliveMemberIds.filter((memberId) => Boolean(votesByMemberId[memberId]))
+      : [];
   const revealedVotes = exposedVoteResult ? exposedVoteResult.revealedVotes || [] : null;
   const voteResult = exposedVoteResult
     ? {
@@ -1223,6 +1227,7 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
         gameCore.phase === "executive_action" && gameCore.phaseData ? gameCore.phaseData.actionType || null : null,
       nextSpecialPresidentCandidateId: gameCore.forcedNextPresidentId || null,
       voteProgress,
+      submittedVoteMemberIds,
       revealedVotes,
       voteResult,
       history: buildPublicHistoryProjection(gameCore, members, publicHistory),

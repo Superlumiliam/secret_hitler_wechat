@@ -40,20 +40,18 @@
     </view>
 
     <view class="panel mission-panel">
-      <view class="panel-icon role-panel-icon">{{identity.roleSymbol}}</view>
+      <image wx:if="{{panelFrameSrc}}" class="panel-frame-image" src="{{panelFrameSrc}}" mode="scaleToFill" webp="{{true}}" binderror="onIdentityAssetError" />
       <view class="panel-content">
-        <view class="section-title">你的阵营</view>
-        <view class="mission-line">你属于{{identity.partyLabel}}</view>
-        <view class="mission-line">你的身份是{{identity.roleLabel}}</view>
-        <view class="mission-line">{{identity.missionLine}}</view>
+        <view class="section-title">任务目标</view>
+        <view wx:for="{{identity.missionLines}}" wx:key="*this" class="mission-line">{{item}}</view>
       </view>
     </view>
 
     <view class="panel info-panel">
-      <view class="panel-icon dossier-icon">档</view>
+      <image wx:if="{{infoPanelFrameSrc}}" class="panel-frame-image" src="{{infoPanelFrameSrc}}" mode="scaleToFill" webp="{{true}}" binderror="onIdentityAssetError" />
       <view class="panel-content">
-        <view class="section-title">当前掌握的信息</view>
-        <view wx:for="{{infoLines}}" wx:key="*this" class="info-line">· {{item}}</view>
+        <view class="section-title">当前信息</view>
+        <view wx:for="{{infoLines}}" wx:key="*this" class="info-line">{{item}}</view>
         <view wx:if="{{knownMembers.length}}" class="known-list">
           <view wx:for="{{knownMembers}}" wx:key="memberId" class="known-member">
             <view class="known-avatar">
@@ -62,7 +60,7 @@
             </view>
             <view class="known-main">
               <view class="known-name">{{item.displayName}}</view>
-              <view class="known-role">{{item.roleLabel}} · {{item.partyLabel}}</view>
+              <view class="known-role">{{item.knownLabel}}</view>
             </view>
           </view>
         </view>
@@ -70,16 +68,24 @@
     </view>
 
     <view class="panel tips-panel">
-      <view class="section-title tips-title">行动提示</view>
-      <view wx:for="{{actionTips}}" wx:key="*this" class="tip-row">
-        <view class="tip-icon">{{index + 1}}</view>
-        <view class="tip-text">{{item}}</view>
+      <image wx:if="{{panelFrameSrc}}" class="panel-frame-image" src="{{panelFrameSrc}}" mode="scaleToFill" webp="{{true}}" binderror="onIdentityAssetError" />
+      <view class="panel-content">
+        <view class="section-title">行动策略</view>
+        <view wx:for="{{actionTips}}" wx:key="*this" class="tip-row">
+          <view class="tip-text">{{item}}</view>
+        </view>
       </view>
     </view>
 
     <view class="bottom-actions">
-      <view class="primary-action" bindtap="onBackBoard" hover-class="action-hover" role="button" aria-label="我知道了">我知道了</view>
-      <view class="secondary-action" bindtap="onTapRules" hover-class="action-hover" role="button" aria-label="查看规则">查看规则</view>
+      <view class="primary-action" bindtap="onBackBoard" hover-class="action-hover" role="button" aria-label="我知道了">
+        <image wx:if="{{actionButtonAssets.primary}}" class="action-button-image" src="{{actionButtonAssets.primary}}" mode="scaleToFill" webp="{{true}}" binderror="onIdentityAssetError" />
+        <text class="action-button-text">我知道了</text>
+      </view>
+      <view class="secondary-action" bindtap="onTapRules" hover-class="action-hover" role="button" aria-label="查看规则">
+        <image wx:if="{{actionButtonAssets.secondary}}" class="action-button-image" src="{{actionButtonAssets.secondary}}" mode="scaleToFill" webp="{{true}}" binderror="onIdentityAssetError" />
+        <text class="action-button-text">查看规则</text>
+      </view>
     </view>
   </block>
 
