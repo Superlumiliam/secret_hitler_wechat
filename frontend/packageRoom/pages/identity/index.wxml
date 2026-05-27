@@ -13,16 +13,6 @@
     <view class="top-bar">
       <view class="back-control" bindtap="onBackBoard" hover-class="icon-hover" role="button" aria-label="返回">‹</view>
       <view class="page-title">身份确认</view>
-      <view class="top-actions">
-        <view class="tool-control" bindtap="onTapRules" role="button" aria-label="规则说明">
-          <view class="tool-icon rules-icon"></view>
-          <view class="tool-text">规则</view>
-        </view>
-        <view class="tool-control" bindtap="onTapPrivacy" role="button" aria-label="保密说明">
-          <view class="tool-icon lock-icon"></view>
-          <view class="tool-text">保密说明</view>
-        </view>
-      </view>
     </view>
 
     <view class="card-stage">

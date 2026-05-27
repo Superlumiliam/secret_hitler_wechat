@@ -346,10 +346,4 @@ Page({
     });
   },
 
-  onTapPrivacy() {
-    wx.showToast({
-      title: "身份信息请勿外泄",
-      icon: "none",
-    });
-  },
 });
