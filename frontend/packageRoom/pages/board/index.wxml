@@ -176,7 +176,8 @@
           </view>
 
           <view wx:if="{{canExecuteAction && executiveAction.taskType === 'EXEC_POLICY_PEEK_ACK'}}" class="executive-confirm {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapPolicyPeekAck" role="button" aria-label="确认政策预览">
-            {{executiveAction.confirmText || '确认已查看'}}
+            <image wx:if="{{policyAssets.buttonBlue}}" class="dock-button-frame" src="{{policyAssets.buttonBlue}}" mode="scaleToFill" webp="{{true}}"></image>
+            <view class="dock-button-text">{{executiveAction.confirmText || '确认已查看'}}</view>
           </view>
 
           <view wx:elif="{{canExecuteAction}}" class="executive-targets">
@@ -191,8 +192,11 @@
               role="button"
               aria-label="选择总统权力目标"
             >
-              <view class="executive-target-label">{{item.label}}</view>
-              <view wx:if="{{!item.canTarget}}" class="executive-target-reason">{{item.disabledReason}}</view>
+              <image wx:if="{{item.canTarget ? policyAssets.buttonBlue : policyAssets.buttonNormal}}" class="dock-button-frame" src="{{item.canTarget ? policyAssets.buttonBlue : policyAssets.buttonNormal}}" mode="scaleToFill" webp="{{true}}"></image>
+              <view class="dock-button-text">
+                <view class="executive-target-label">{{item.label}}</view>
+                <view wx:if="{{!item.canTarget}}" class="executive-target-reason">{{item.disabledReason}}</view>
+              </view>
             </view>
           </view>
 
@@ -203,8 +207,14 @@
           <view class="veto-response-title">{{vetoResponse.title}}</view>
           <view class="veto-response-hint">{{vetoResponse.hint}}</view>
           <view wx:if="{{canRespondVeto}}" class="veto-response-actions">
-            <view class="veto-response-action accept-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapAcceptVeto" role="button" aria-label="同意否决">同意否决</view>
-            <view class="veto-response-action reject-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapRejectVeto" role="button" aria-label="拒绝否决">拒绝否决</view>
+            <view class="veto-response-action accept-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapAcceptVeto" role="button" aria-label="同意否决">
+              <image wx:if="{{policyAssets.buttonBlue}}" class="dock-button-frame" src="{{policyAssets.buttonBlue}}" mode="scaleToFill" webp="{{true}}"></image>
+              <view class="dock-button-text">同意否决</view>
+            </view>
+            <view class="veto-response-action reject-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapRejectVeto" role="button" aria-label="拒绝否决">
+              <image wx:if="{{policyAssets.buttonRed}}" class="dock-button-frame" src="{{policyAssets.buttonRed}}" mode="scaleToFill" webp="{{true}}"></image>
+              <view class="dock-button-text">拒绝否决</view>
+            </view>
           </view>
           <view wx:else class="veto-response-waiting">等待 {{vetoResponse.presidentName}} 回应</view>
         </view>
@@ -214,22 +224,31 @@
           <view wx:else class="nominate-title">点击玩家席位选择总理候选人</view>
           <view wx:if="{{nominateRuleHint}}" class="nominate-hint">{{nominateRuleHint}}</view>
           <view class="nominate-submit {{selectedNominationTargetId ? '' : 'is-empty'}} {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapNominateSelected" role="button" aria-label="提名总理候选人">
-            提名
+            <image wx:if="{{selectedNominationTargetId ? policyAssets.nominationButtonFrameBlue : policyAssets.nominationButtonFrame}}" class="dock-button-frame" src="{{selectedNominationTargetId ? policyAssets.nominationButtonFrameBlue : policyAssets.nominationButtonFrame}}" mode="scaleToFill" webp="{{true}}"></image>
+            <view class="dock-button-text">提名</view>
           </view>
         </view>
 
         <view wx:if="{{canVote}}" class="action-panel">
-          <view class="vote-action ja-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">赞成 JA</view>
-          <view class="vote-action nein-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">反对 NEIN</view>
-        </view>
-
-        <view wx:elif="{{votingSubmitted}}" class="vote-waiting-panel">
-          <view class="vote-waiting-text">{{voteWaitingText}}</view>
+          <view class="vote-action ja-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">
+            <image wx:if="{{policyAssets.buttonBlue}}" class="dock-button-frame" src="{{policyAssets.buttonBlue}}" mode="scaleToFill" webp="{{true}}"></image>
+            <view class="dock-button-text">赞成 JA</view>
+          </view>
+          <view class="vote-action nein-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">
+            <image wx:if="{{policyAssets.buttonRed}}" class="dock-button-frame" src="{{policyAssets.buttonRed}}" mode="scaleToFill" webp="{{true}}"></image>
+            <view class="dock-button-text">反对 NEIN</view>
+          </view>
         </view>
 
         <view class="secondary-actions">
-          <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="查看身份">查看身份</view>
-          <view class="secondary-action" bindtap="onTapHistory" hover-class="secondary-hover" role="button" aria-label="历史记录">历史记录</view>
+          <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="查看身份">
+            <image wx:if="{{policyAssets.buttonNormal}}" class="dock-button-frame" src="{{policyAssets.buttonNormal}}" mode="scaleToFill" webp="{{true}}"></image>
+            <view class="dock-button-text">查看身份</view>
+          </view>
+          <view class="secondary-action" bindtap="onTapHistory" hover-class="secondary-hover" role="button" aria-label="历史记录">
+            <image wx:if="{{policyAssets.buttonNormal}}" class="dock-button-frame" src="{{policyAssets.buttonNormal}}" mode="scaleToFill" webp="{{true}}"></image>
+            <view class="dock-button-text">历史记录</view>
+          </view>
         </view>
       </view>
     </view>

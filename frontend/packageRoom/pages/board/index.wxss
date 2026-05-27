@@ -1405,6 +1405,7 @@
 
 .executive-target,
 .executive-confirm {
+  position: relative;
   min-height: 54rpx;
   padding: 8rpx 10rpx;
   box-sizing: border-box;
@@ -1412,10 +1413,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1rpx solid rgba(31, 204, 215, 0.62);
+  border: 0;
   color: #092326;
-  background: #1bd5df;
+  background: rgba(27, 213, 223, 0.18);
   box-shadow: 0 0 14rpx rgba(27, 213, 223, 0.28);
+  overflow: visible;
 }
 
 .executive-confirm {
@@ -1426,7 +1428,6 @@
 }
 
 .executive-target.is-ineligible {
-  border-color: rgba(185, 128, 66, 0.46);
   color: rgba(221, 190, 143, 0.58);
   background: rgba(12, 18, 17, 0.82);
   box-shadow: none;
@@ -1593,6 +1594,7 @@
 }
 
 .veto-response-action {
+  position: relative;
   min-height: 58rpx;
   display: flex;
   align-items: center;
@@ -1600,18 +1602,19 @@
   color: #071719;
   font-size: 22rpx;
   font-weight: 900;
+  overflow: visible;
 }
 
 .veto-response-action.accept-action {
-  border: 1rpx solid rgba(31, 204, 215, 0.7);
-  background: #1bd5df;
+  border: 0;
+  background: rgba(27, 213, 223, 0.18);
   box-shadow: 0 0 14rpx rgba(27, 213, 223, 0.22);
 }
 
 .veto-response-action.reject-action {
-  border: 1rpx solid rgba(239, 96, 72, 0.72);
+  border: 0;
   color: #f0c28a;
-  background: rgba(103, 25, 21, 0.82);
+  background: rgba(103, 25, 21, 0.42);
 }
 
 .veto-request-action.is-disabled,
@@ -1643,23 +1646,24 @@
 }
 
 .nominate-submit {
+  position: relative;
   min-height: 58rpx;
   margin-top: 10rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1rpx solid rgba(31, 204, 215, 0.58);
+  border: 0;
   color: #082024;
   font-size: 25rpx;
   font-weight: 900;
   line-height: 1.16;
   text-align: center;
-  background: linear-gradient(180deg, #31d8df 0%, #0f8c95 100%);
+  background: rgba(27, 213, 223, 0.16);
   box-shadow: 0 0 14rpx rgba(31, 204, 215, 0.24);
+  overflow: visible;
 }
 
 .nominate-submit.is-empty {
-  border-color: rgba(160, 112, 63, 0.5);
   color: rgba(226, 188, 139, 0.7);
   background: rgba(15, 22, 21, 0.88);
   box-shadow: none;
@@ -1676,17 +1680,20 @@
 }
 
 .vote-action {
+  position: relative;
   height: 74rpx;
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2rpx solid currentColor;
-  border-radius: 36rpx;
+  border: 0;
   color: #041014;
-  font-size: 31rpx;
+  font-size: 25rpx;
   font-weight: 900;
   letter-spacing: 0;
   box-shadow: inset 0 0 22rpx rgba(255, 255, 255, 0.14), 0 0 22rpx rgba(0, 0, 0, 0.34);
+  overflow: visible;
 }
 
 .vote-action.is-disabled {
@@ -1694,30 +1701,12 @@
 }
 
 .ja-action {
-  background: linear-gradient(180deg, #28dbe8 0%, #0a8f9b 100%);
+  background: rgba(27, 213, 223, 0.16);
 }
 
 .nein-action {
-  background: linear-gradient(180deg, #f06b4f 0%, #96231a 100%);
-}
-
-.vote-waiting-panel {
-  min-height: 62rpx;
-  padding: 10rpx 12rpx;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1rpx solid rgba(185, 128, 66, 0.64);
-  background: rgba(7, 24, 24, 0.88);
-}
-
-.vote-waiting-text {
-  color: #e8bf83;
-  font-size: 23rpx;
-  font-weight: 800;
-  line-height: 1.25;
-  text-align: center;
+  color: #f2c088;
+  background: rgba(103, 25, 21, 0.36);
 }
 
 .secondary-actions {
@@ -1728,14 +1717,49 @@
 }
 
 .secondary-action {
-  height: 54rpx;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 74rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1rpx solid rgba(185, 128, 66, 0.72);
+  border: 0;
   color: #e0b373;
   font-size: 25rpx;
-  background: rgba(7, 24, 24, 0.86);
+  font-weight: 800;
+  background: rgba(7, 24, 24, 0.72);
+  overflow: visible;
+}
+
+.dock-button-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  filter: drop-shadow(0 6rpx 8rpx rgba(0, 0, 0, 0.36));
+}
+
+.dock-button-text {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 88%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  line-height: 1.12;
+  text-align: center;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .board-loading {

@@ -29,6 +29,11 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   liberalBadge: `${CLOUD_ASSET_ROOT}icon-liberal-badge.webp`,
   authoritarianBadge: `${CLOUD_ASSET_ROOT}icon-authoritarian-badge.webp`,
   frameNarrow: `${CLOUD_ASSET_ROOT}frame-narrow.webp`,
+  buttonNormal: `${CLOUD_ASSET_ROOT}button-normal.webp`,
+  buttonBlue: `${CLOUD_ASSET_ROOT}button-blue.webp`,
+  buttonRed: `${CLOUD_ASSET_ROOT}button-red.webp`,
+  nominationButtonFrame: `${CLOUD_ASSET_ROOT}nomination-button-frame.webp`,
+  nominationButtonFrameBlue: `${CLOUD_ASSET_ROOT}nomination-button-frame-blue.webp`,
   modalFrameMobile: `${CLOUD_ASSET_ROOT}modal-frame-mobile.webp`,
   modalFrameButtonMobile: `${CLOUD_ASSET_ROOT}modal-frame-button-mobile.webp`,
   modalCancelButtonMobile: `${CLOUD_ASSET_ROOT}modal-cancel-button-mobile.webp`,
@@ -138,7 +143,6 @@ Page({
     statusText: "",
     phaseHintText: "",
     canVote: false,
-    votingSubmitted: false,
     voteProgressText: "",
     voteResult: null,
     voteResultModalVisible: false,
@@ -146,7 +150,6 @@ Page({
     currentVoteResultViewerKey: "",
     confirmedVoteResultKey: "",
     confirmedVoteResultKeyByViewer: {},
-    voteWaitingText: "",
     isDevRoom: false,
     controlledMemberId: "",
     controlledSeatText: "",
@@ -380,14 +383,12 @@ Page({
       isDevRoom: snapshot.roomMode === "dev",
       controlledSeatText: this.createControlledSeatText(snapshot),
       canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
-      votingSubmitted: this.hasSubmittedVote(snapshot),
       voteProgressText: this.createVoteProgressText(snapshot),
       voteResult,
       currentVoteResultKey,
       currentVoteResultViewerKey,
       confirmedVoteResultKey,
       voteResultModalVisible,
-      voteWaitingText: this.createVoteWaitingText(snapshot),
       canNominate: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "NOMINATE_CHANCELLOR"),
       nominateTargets: this.createNominateTargets(snapshot),
       nominateRuleHint: this.createNominateRuleHint(snapshot),
@@ -913,12 +914,6 @@ Page({
     return "当前无需主动操作；按桌面公开信息讨论，隐藏信息仍由玩家自行陈述。";
   },
 
-  hasSubmittedVote(snapshot) {
-    const privateState = (snapshot && snapshot.privateState) || {};
-    const voting = privateState.voting || {};
-    return Boolean(voting.submitted);
-  },
-
   createVoteProgressText(snapshot) {
     const publicState = (snapshot && snapshot.publicState) || {};
     const progress = publicState.voteProgress || null;
@@ -926,16 +921,6 @@ Page({
       return "";
     }
     return `已投票 ${progress.submittedCount || 0}/${progress.requiredCount || progress.totalCount || 0}`;
-  },
-
-  createVoteWaitingText(snapshot) {
-    if (snapshot.currentPhase !== "voting" || !this.hasSubmittedVote(snapshot)) {
-      return "";
-    }
-    const privateState = (snapshot && snapshot.privateState) || {};
-    const voting = privateState.voting || {};
-    const voteText = voting.myVote === "JA" ? "赞成 JA" : voting.myVote === "NEIN" ? "反对 NEIN" : "已提交";
-    return `${voteText}，等待其他玩家`;
   },
 
   createVoteResult(snapshot) {
