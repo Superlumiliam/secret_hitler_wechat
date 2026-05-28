@@ -44,6 +44,14 @@
         <view wx:for="{{infoLines}}" wx:key="*this" class="info-line">{{item}}</view>
         <view wx:if="{{knownMembers.length}}" class="known-list">
           <view wx:for="{{knownMembers}}" wx:key="memberId" class="known-member">
+            <image
+              wx:if="{{teammatePanelSrc}}"
+              class="known-member-bg"
+              src="{{teammatePanelSrc}}"
+              mode="scaleToFill"
+              webp="{{true}}"
+              binderror="onIdentityAssetError"
+            />
             <view class="known-avatar">
               <image wx:if="{{item.avatarSrc}}" class="known-avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}" />
               <text wx:else>{{item.initial}}</text>

@@ -8,6 +8,7 @@ const IDENTITY_CARD_FILE_ID_BY_ROLE = {
 };
 const IDENTITY_PANEL_FRAME_FILE_ID = `${CLOUD_ASSET_ROOT}identity-frame.webp`;
 const IDENTITY_PANEL_FRAME_WIDE_FILE_ID = `${CLOUD_ASSET_ROOT}identity-frame-wide.webp`;
+const IDENTITY_TEAMMATE_PANEL_FILE_ID = `${CLOUD_ASSET_ROOT}identity-teammate.webp`;
 const IDENTITY_BUTTON_FILE_IDS = {
   primary: `${CLOUD_ASSET_ROOT}button-blue.webp`,
   secondary: `${CLOUD_ASSET_ROOT}button-normal.webp`,
@@ -76,6 +77,7 @@ Page({
     backgroundVisible: true,
     panelFrameSrc: "",
     infoPanelFrameSrc: "",
+    teammatePanelSrc: "",
     actionButtonAssets: {},
     identity: null,
     knownMembers: [],
@@ -207,6 +209,7 @@ Page({
       IDENTITY_BACKGROUND_FILE_ID,
       IDENTITY_PANEL_FRAME_FILE_ID,
       IDENTITY_PANEL_FRAME_WIDE_FILE_ID,
+      IDENTITY_TEAMMATE_PANEL_FILE_ID,
       cardFileId,
       IDENTITY_BUTTON_FILE_IDS.primary,
       IDENTITY_BUTTON_FILE_IDS.secondary,
@@ -240,6 +243,7 @@ Page({
             (knownMembers || []).length > 1
               ? urlByFileId[IDENTITY_PANEL_FRAME_WIDE_FILE_ID] || urlByFileId[IDENTITY_PANEL_FRAME_FILE_ID] || ""
               : urlByFileId[IDENTITY_PANEL_FRAME_FILE_ID] || "",
+          teammatePanelSrc: urlByFileId[IDENTITY_TEAMMATE_PANEL_FILE_ID] || "",
           actionButtonAssets: {
             primary: urlByFileId[IDENTITY_BUTTON_FILE_IDS.primary] || "",
             secondary: urlByFileId[IDENTITY_BUTTON_FILE_IDS.secondary] || "",
