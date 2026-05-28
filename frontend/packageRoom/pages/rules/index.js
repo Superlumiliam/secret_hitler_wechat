@@ -11,6 +11,15 @@ function normalizeTimeoutMs(value) {
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : GAME_PAGE_TIMEOUT_MS;
 }
 
+function getActiveSection(sectionId) {
+  return rulesContent.find((section) => section.id === sectionId) || rulesContent[0] || null;
+}
+
+function getActiveSectionIndex(sectionId) {
+  const sectionIndex = rulesContent.findIndex((section) => section.id === sectionId);
+  return sectionIndex >= 0 ? sectionIndex : 0;
+}
+
 Page({
   pageTimeoutMs: GAME_PAGE_TIMEOUT_MS,
 
@@ -19,6 +28,8 @@ Page({
     controlledMemberId: "",
     sections: rulesContent,
     activeSectionId: rulesContent[0] ? rulesContent[0].id : "",
+    activeSection: rulesContent[0] || null,
+    activeSectionIndex: 0,
   },
 
   onLoad(options = {}) {
@@ -77,6 +88,8 @@ Page({
     }
     this.setData({
       activeSectionId: sectionId,
+      activeSection: getActiveSection(sectionId),
+      activeSectionIndex: getActiveSectionIndex(sectionId),
     });
   },
 });

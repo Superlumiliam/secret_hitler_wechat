@@ -29,17 +29,32 @@
   </scroll-view>
 
   <view class="rules-list">
-    <view wx:for="{{sections}}" wx:key="id" id="{{item.id}}" class="rule-section {{activeSectionId === item.id ? 'is-active' : ''}}">
+    <view wx:if="{{activeSection}}" id="{{activeSection.id}}" class="rule-section is-active">
       <view class="section-heading">
-        <view class="section-index">{{index + 1}}</view>
-        <view class="section-title">{{item.title}}</view>
+        <view class="section-index">{{activeSectionIndex + 1}}</view>
+        <view class="section-title">{{activeSection.title}}</view>
       </view>
-      <view class="rule-items">
-        <view wx:for="{{item.items}}" wx:for-item="rule" wx:key="*this" class="rule-item">
+
+      <view wx:if="{{activeSection.groups && activeSection.groups.length}}" class="rule-groups">
+        <view wx:for="{{activeSection.groups}}" wx:key="title" class="rule-group">
+          <view class="rule-group-title">{{item.title}}</view>
+          <view class="rule-items">
+            <view wx:for="{{item.items}}" wx:for-item="rule" wx:key="*this" class="rule-item">
+              <view class="rule-bullet"></view>
+              <view class="rule-text">{{rule}}</view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view wx:elif="{{activeSection.items && activeSection.items.length}}" class="rule-items">
+        <view wx:for="{{activeSection.items}}" wx:for-item="rule" wx:key="*this" class="rule-item">
           <view class="rule-bullet"></view>
           <view class="rule-text">{{rule}}</view>
         </view>
       </view>
+
+      <view wx:else class="rule-empty">{{activeSection.emptyText || "暂无内容"}}</view>
     </view>
   </view>
 </view>

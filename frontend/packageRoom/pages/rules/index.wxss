@@ -186,6 +186,29 @@ page {
   margin-top: 18rpx;
 }
 
+.rule-groups {
+  margin-top: 22rpx;
+}
+
+.rule-group {
+  margin-top: 24rpx;
+  padding-top: 22rpx;
+  border-top: 1rpx solid rgba(174, 118, 61, 0.28);
+}
+
+.rule-group:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.rule-group-title {
+  color: #27d1da;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
 .rule-item {
   display: flex;
   gap: 14rpx;
@@ -207,4 +230,15 @@ page {
   color: rgba(244, 226, 197, 0.86);
   font-size: 27rpx;
   line-height: 1.58;
+}
+
+.rule-empty {
+  margin-top: 28rpx;
+  padding: 30rpx 24rpx;
+  border: 1rpx dashed rgba(174, 118, 61, 0.44);
+  color: rgba(244, 226, 197, 0.68);
+  background: rgba(4, 12, 13, 0.48);
+  font-size: 26rpx;
+  line-height: 1.5;
+  text-align: center;
 }
