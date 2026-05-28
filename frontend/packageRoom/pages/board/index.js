@@ -1591,10 +1591,6 @@ Page({
     }
   },
 
-  async onTapDiscardPolicy(event) {
-    return this.submitPolicyChoice(event);
-  },
-
   async onTapPolicyCard(event) {
     return this.submitPolicyChoice(event);
   },
