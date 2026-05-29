@@ -163,9 +163,8 @@ page {
 }
 
 .fascist-grid {
-  grid-template-columns: repeat(2, 220rpx);
+  grid-template-columns: repeat(3, 220rpx);
   justify-content: center;
-  gap: 18rpx 8rpx;
 }
 
 .role-card {
