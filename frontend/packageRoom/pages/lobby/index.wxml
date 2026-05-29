@@ -34,20 +34,20 @@
 
     <view class="room-meta">目标 {{lobby.targetPlayerCount}} 人 · 当前 {{lobby.playerCount}} 人</view>
 
-    <view wx:if="{{lobby.isDevRoom}}" class="dev-panel">
-      <view class="dev-label">开发者房间</view>
-      <view class="dev-actions">
+    <view wx:if="{{lobby.isSoloRoom}}" class="solo-panel">
+      <view class="solo-label">单人模式</view>
+      <view class="solo-actions">
         <view
-          class="dev-action {{isDevActionSubmitting ? 'is-disabled' : ''}}"
-          bindtap="onDevFillVirtualPlayers"
+          class="solo-action {{isSoloActionSubmitting ? 'is-disabled' : ''}}"
+          bindtap="onSoloFillVirtualPlayers"
           role="button"
           aria-label="补齐虚拟玩家"
         >
           一键补齐
         </view>
         <view
-          class="dev-action {{isDevActionSubmitting ? 'is-disabled' : ''}}"
-          bindtap="onDevReadyAllVirtualPlayers"
+          class="solo-action {{isSoloActionSubmitting ? 'is-disabled' : ''}}"
+          bindtap="onSoloReadyAllVirtualPlayers"
           role="button"
           aria-label="虚拟玩家全员准备"
         >
@@ -62,9 +62,15 @@
         <block wx:if="{{item.isEmpty}}">
           <view class="seat-body">
             <image class="seat-avatar" src="{{item.avatarSrc}}" mode="aspectFit" webp="{{true}}"></image>
-            <view class="seat-name">邀请好友</view>
+            <view class="seat-name">{{lobby.isSoloRoom ? '待补齐' : '邀请好友'}}</view>
           </view>
-          <button class="seat-share-hitarea" open-type="share" hover-class="seat-hover" aria-label="邀请好友"></button>
+          <button
+            wx:if="{{!lobby.isSoloRoom}}"
+            class="seat-share-hitarea"
+            open-type="share"
+            hover-class="seat-hover"
+            aria-label="邀请好友"
+          ></button>
         </block>
         <block wx:else>
           <view class="seat-body">

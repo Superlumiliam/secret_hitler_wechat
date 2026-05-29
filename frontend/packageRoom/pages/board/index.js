@@ -150,7 +150,7 @@ Page({
     currentVoteResultViewerKey: "",
     confirmedVoteResultKey: "",
     confirmedVoteResultKeyByViewer: {},
-    isDevRoom: false,
+    isSoloRoom: false,
     controlledMemberId: "",
     controlledSeatText: "",
     canNominate: false,
@@ -380,7 +380,7 @@ Page({
       electionTrack: this.createElectionTrack(board.electionTracker, policyAssetUrlByKey),
       statusText: this.createStatusText(snapshot, board),
       phaseHintText: this.createPhaseHintText(snapshot, board),
-      isDevRoom: snapshot.roomMode === "dev",
+      isSoloRoom: snapshot.roomMode === "solo",
       controlledSeatText: this.createControlledSeatText(snapshot),
       canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
       voteProgressText: this.createVoteProgressText(snapshot),
@@ -1299,7 +1299,7 @@ Page({
       this.refreshSeatViews();
     }
 
-    if (!this.data.isDevRoom) {
+    if (!this.data.isSoloRoom) {
       return;
     }
 

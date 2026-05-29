@@ -99,7 +99,7 @@ Page({
     lobby: null,
     isLoading: true,
     isSubmitting: false,
-    isDevActionSubmitting: false,
+    isSoloActionSubmitting: false,
     isLeaving: false,
     defaultAvatarSrc: "",
     backgroundSrc: "",
@@ -486,18 +486,18 @@ Page({
     }
   },
 
-  async onDevFillVirtualPlayers() {
-    if (this.data.isDevActionSubmitting || !this.data.lobby || !this.data.lobby.isDevRoom) {
+  async onSoloFillVirtualPlayers() {
+    if (this.data.isSoloActionSubmitting || !this.data.lobby || !this.data.lobby.isSoloRoom) {
       return;
     }
 
     this.setData({
-      isDevActionSubmitting: true,
+      isSoloActionSubmitting: true,
     });
 
     try {
-      const snapshot = await this.callRoomService("devFillVirtualPlayers", {
-        commandId: createCommandId("dev_fill_virtual_players"),
+      const snapshot = await this.callRoomService("soloFillVirtualPlayers", {
+        commandId: createCommandId("solo_fill_virtual_players"),
         roomId: this.data.roomId,
       });
       await this.hydrateLobby(snapshot);
@@ -516,23 +516,23 @@ Page({
       }
     } finally {
       this.setData({
-        isDevActionSubmitting: false,
+        isSoloActionSubmitting: false,
       });
     }
   },
 
-  async onDevReadyAllVirtualPlayers() {
-    if (this.data.isDevActionSubmitting || !this.data.lobby || !this.data.lobby.isDevRoom) {
+  async onSoloReadyAllVirtualPlayers() {
+    if (this.data.isSoloActionSubmitting || !this.data.lobby || !this.data.lobby.isSoloRoom) {
       return;
     }
 
     this.setData({
-      isDevActionSubmitting: true,
+      isSoloActionSubmitting: true,
     });
 
     try {
-      const snapshot = await this.callRoomService("devReadyAllVirtualPlayers", {
-        commandId: createCommandId("dev_ready_virtual_players"),
+      const snapshot = await this.callRoomService("soloReadyAllVirtualPlayers", {
+        commandId: createCommandId("solo_ready_virtual_players"),
         roomId: this.data.roomId,
       });
       await this.hydrateLobby(snapshot);
@@ -551,7 +551,7 @@ Page({
       }
     } finally {
       this.setData({
-        isDevActionSubmitting: false,
+        isSoloActionSubmitting: false,
       });
     }
   },

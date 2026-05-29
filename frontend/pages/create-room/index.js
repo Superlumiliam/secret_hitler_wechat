@@ -102,8 +102,8 @@ const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const INITIAL_LOBBY_SNAPSHOT_TTL_MS = 30 * 1000;
 
-function createCommandId() {
-  return `cmd_create_room_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+function createCommandId(prefix = "create_room") {
+  return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function isCloudFileId(fileId) {
@@ -172,12 +172,13 @@ Page({
   data: {
     playerCounts,
     selectedCount: 6,
+    mode: "normal",
     isSubmitting: false,
     preloadedAvatars: [],
     ...buildRoleData(6),
   },
 
-  onLoad() {
+  onLoad(options = {}) {
     if (!getCachedUserProfile()) {
       wx.redirectTo({
         url: "/pages/user-profile/index",
@@ -185,6 +186,10 @@ Page({
       return;
     }
 
+    const mode = options.mode === "solo" ? "solo" : "normal";
+    this.setData({
+      mode,
+    });
     this.loadAllRoleAvatars();
   },
 
@@ -294,13 +299,14 @@ Page({
         return;
       }
 
-      const commandId = createCommandId();
+      const isSoloMode = this.data.mode === "solo";
+      const commandId = createCommandId(isSoloMode ? "solo_create_room" : "create_room");
       uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
 
       const res = await wx.cloud.callFunction({
         name: "roomService",
         data: {
-          action: "createRoom",
+          action: isSoloMode ? "soloCreateRoom" : "createRoom",
           payload: {
             commandId,
             targetPlayerCount: this.data.selectedCount,

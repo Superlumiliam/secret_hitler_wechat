@@ -117,56 +117,17 @@ function getJoinErrorMessage(err) {
   return messages[code] || (err && err.message) || "加入房间失败";
 }
 
-const DEV_PLAYER_COUNTS = [5, 6, 7, 8, 9, 10].map((value) => ({
-  value,
-}));
-
-function isDeveloperModeEnabled() {
-  const app = getApp();
-  const envId = app.globalData && app.globalData.env;
-  const developerMode = (app.globalData && app.globalData.developerMode) || {};
-  const enabledEnvIds = developerMode.enabledEnvIds || [];
-  const storageKey = developerMode.storageKey || "secret_hitler_developer_mode_enabled";
-  let localEnabled = false;
-  try {
-    localEnabled = wx.getStorageSync(storageKey) === true;
-  } catch (err) {
-    localEnabled = false;
-  }
-  return Boolean(localEnabled && envId && enabledEnvIds.includes(envId));
-}
-
-function enableDeveloperModeFromOptions(options = {}) {
-  if (String(options.devMode || "") !== "1") {
-    return;
-  }
-
-  const app = getApp();
-  const developerMode = (app.globalData && app.globalData.developerMode) || {};
-  const storageKey = developerMode.storageKey || "secret_hitler_developer_mode_enabled";
-  try {
-    wx.setStorageSync(storageKey, true);
-  } catch (err) {
-    console.error("启用开发者模式缓存失败", err);
-  }
-}
-
 Page({
   data: {
     homeBackgroundSrc: "",
     homeBackgroundVisible: true,
     profileAvatarSrc: "",
-    developerModeEnabled: false,
-    devPlayerCounts: DEV_PLAYER_COUNTS,
-    selectedDevPlayerCount: 6,
     joinCode: "",
     joinDialogVisible: false,
     isJoining: false,
-    isCreatingDevRoom: false,
   },
 
   onLoad(options = {}) {
-    enableDeveloperModeFromOptions(options);
     showTimeoutModalIfNeeded(options);
 
     const sharedRoomCode = parseJoinTarget(options.roomCode);
@@ -176,9 +137,6 @@ Page({
       });
     }
 
-    this.setData({
-      developerModeEnabled: isDeveloperModeEnabled(),
-    });
     this.loadHomeBackground();
   },
 
@@ -300,88 +258,17 @@ Page({
     });
   },
 
-  onSelectDevPlayerCount(event) {
-    const count = Number(event.currentTarget.dataset.count);
-    if (count < 5 || count > 10) {
-      return;
-    }
-
-    this.setData({
-      selectedDevPlayerCount: count,
-    });
-  },
-
-  async onCreateDevRoom() {
-    if (this.data.isCreatingDevRoom) {
-      return;
-    }
-
-    const profile = getCachedUserProfile();
-    if (!profile) {
+  onCreateSoloRoom() {
+    if (!getCachedUserProfile()) {
       wx.navigateTo({
         url: "/pages/user-profile/index",
       });
       return;
     }
 
-    if (!wx.cloud) {
-      wx.showToast({
-        title: "当前基础库不支持云能力",
-        icon: "none",
-      });
-      return;
-    }
-
-    const app = getApp();
-    const developerMode = (app.globalData && app.globalData.developerMode) || {};
-    if (!isDeveloperModeEnabled()) {
-      return;
-    }
-
-    this.setData({
-      isCreatingDevRoom: true,
+    wx.navigateTo({
+      url: "/pages/create-room/index?mode=solo",
     });
-
-    let uploadedAvatarFileId = "";
-    try {
-      const commandId = createCommandId("dev_create_room");
-      uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
-
-      const res = await wx.cloud.callFunction({
-        name: "roomService",
-        data: {
-          action: "devCreateRoom",
-          payload: {
-            commandId,
-            targetPlayerCount: this.data.selectedDevPlayerCount || developerMode.targetPlayerCount || 6,
-            displayName: profile.displayName,
-            avatarUrl: uploadedAvatarFileId,
-          },
-        },
-      });
-      const result = res.result || {};
-
-      if (!result.success) {
-        await this.deleteUploadedAvatar(uploadedAvatarFileId);
-        uploadedAvatarFileId = "";
-        throw createServiceError(result, "创建开发者房间失败");
-      }
-
-      const room = result.data || {};
-      cacheInitialLobbySnapshot(room);
-      wx.redirectTo({
-        url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}`,
-      });
-    } catch (err) {
-      console.error("创建开发者房间失败", err);
-      wx.showToast({
-        title: err.message || "创建开发者房间失败",
-        icon: "none",
-      });
-      this.setData({
-        isCreatingDevRoom: false,
-      });
-    }
   },
 
   onOpenJoinDialog() {

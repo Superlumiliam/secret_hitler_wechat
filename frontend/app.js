@@ -40,11 +40,6 @@ function getRoutePathForHint(routeHint) {
 App({
   globalData: {
     env: "cloud1-9gcbbsjv4ce11da4",
-    developerMode: {
-      enabledEnvIds: ["cloud1-9gcbbsjv4ce11da4"],
-      storageKey: "secret_hitler_developer_mode_enabled",
-      targetPlayerCount: 6,
-    },
     userProfileStorageKey: "secret_hitler_user_profile",
     activeRoom: null,
     isRecoveringActiveRoom: false,

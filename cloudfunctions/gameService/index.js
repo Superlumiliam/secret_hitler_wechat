@@ -14,7 +14,7 @@ const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
 const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const ROOM_MODE_NORMAL = "normal";
-const ROOM_MODE_DEV = "dev";
+const ROOM_MODE_SOLO = "solo";
 const GAME_INITIAL_VERSION = 1;
 const ROLE_PRESET_BY_PLAYER_COUNT = {
   5: ["LIBERAL", "LIBERAL", "LIBERAL", "FASCIST", "HITLER"],
@@ -324,7 +324,7 @@ async function resolveActingMember(room, openid, controlledMemberId) {
     };
   }
 
-  if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_DEV) {
+  if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_SOLO) {
     return {
       error: fail("ACTION_NOT_ALLOWED", "当前房间不允许切换操控席位"),
     };
@@ -347,7 +347,7 @@ async function resolveActingMember(room, openid, controlledMemberId) {
     !controlledMember.isVirtual
   ) {
     return {
-      error: fail("INVALID_TARGET", "只能操控当前开发者房间中的虚拟席位"),
+      error: fail("INVALID_TARGET", "只能操控当前单人模式房间中的虚拟席位"),
     };
   }
 
@@ -1902,7 +1902,7 @@ async function submitCommand(payload, openid) {
 
       let actorMember = realMember;
       if (controlledMemberId) {
-        if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_DEV) {
+        if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_SOLO) {
           return fail("ACTION_NOT_ALLOWED", "当前房间不允许切换操控席位");
         }
         let controlledMember = null;
@@ -1920,7 +1920,7 @@ async function submitCommand(payload, openid) {
           !isActiveMember(controlledMember) ||
           !controlledMember.isVirtual
         ) {
-          return fail("INVALID_TARGET", "只能操控当前开发者房间中的虚拟席位");
+          return fail("INVALID_TARGET", "只能操控当前单人模式房间中的虚拟席位");
         }
         if (controlledMember.controlledByOpenId !== openid) {
           return fail("ACTION_NOT_ALLOWED", "没有该虚拟席位的操控权限");

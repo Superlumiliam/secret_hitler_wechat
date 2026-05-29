@@ -24,10 +24,10 @@
     </view>
 
     <view class="board-layout">
-      <view wx:if="{{isDevRoom}}" class="dev-control-strip">
-        <view class="dev-mark">开发者房间</view>
-        <view class="dev-seat">{{controlledSeatText}}</view>
-        <view class="dev-hint">双击席位切换操控视角</view>
+      <view wx:if="{{isSoloRoom}}" class="solo-control-strip">
+        <view class="solo-mark">单人模式</view>
+        <view class="solo-seat">{{controlledSeatText}}</view>
+        <view class="solo-hint">双击席位切换操控视角</view>
       </view>
 
       <view class="center-board">

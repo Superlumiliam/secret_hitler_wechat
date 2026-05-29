@@ -17,7 +17,7 @@ const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const MIN_DISPLAY_NAME_LENGTH = 2;
 const MAX_DISPLAY_NAME_LENGTH = 12;
 const ROOM_MODE_NORMAL = "normal";
-const ROOM_MODE_DEV = "dev";
+const ROOM_MODE_SOLO = "solo";
 
 function nowIso() {
   return new Date().toISOString();
@@ -82,43 +82,6 @@ function isRoomExpired(room, now = new Date()) {
   }
   const expireAt = toDate(room.expireAt || room.expiresAt);
   return Boolean(expireAt && expireAt.getTime() <= now.getTime());
-}
-
-function splitEnvList(value) {
-  return String(value || "")
-    .split(/[\s,;]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function getAllowedDevEnvIds() {
-  return Array.from(
-    new Set([
-      ...splitEnvList(process.env.DEV_CLOUD_ENV_IDS),
-      ...splitEnvList(process.env.DEV_CLOUD_ENV_ID),
-      ...splitEnvList(process.env.CURRENT_DEV_CLOUD_ENV_ID),
-    ]),
-  );
-}
-
-function getCurrentCloudEnvId(wxContext) {
-  return (
-    (wxContext && (wxContext.ENV || wxContext.TCB_ENV || wxContext.SCF_NAMESPACE)) ||
-    process.env.TCB_ENV ||
-    process.env.SCF_NAMESPACE ||
-    process.env.WX_CLOUD_ENV ||
-    process.env.CURRENT_CLOUD_ENV_ID ||
-    ""
-  );
-}
-
-function assertDevModeAvailable(wxContext) {
-  const currentEnvId = getCurrentCloudEnvId(wxContext);
-  const allowedEnvIds = getAllowedDevEnvIds();
-  if (!currentEnvId || !allowedEnvIds.includes(currentEnvId)) {
-    return fail("ACTION_NOT_ALLOWED", "开发者模式未启用");
-  }
-  return null;
 }
 
 function getMemberId(member) {
@@ -406,15 +369,15 @@ async function expireLobbyRoom(room, updatedAt) {
   });
 }
 
-async function expireDevRoomWithVirtualMembers(room, members, openid, updatedAt) {
+async function expireSoloRoomWithVirtualMembers(room, members, openid, updatedAt) {
   const roomId = room.roomId || room._id;
-  const canExpireDevRoom =
-    (room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_DEV &&
+  const canExpireSoloRoom =
+    (room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_SOLO &&
     room.createdByOpenId === openid &&
     members.length > 0 &&
     members.every((member) => getMemberOpenId(member) === openid || member.isVirtual);
 
-  if (!canExpireDevRoom) {
+  if (!canExpireSoloRoom) {
     return false;
   }
 
@@ -468,11 +431,11 @@ async function assertNoActiveRoom(profile, openid) {
       return null;
     }
 
-    if ((room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_DEV) {
+    if ((room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_SOLO) {
       const members = await getActiveRoomMembers(profile.activeRoomId);
       const updatedAt = new Date();
-      const expiredDevRoom = await expireDevRoomWithVirtualMembers(room, members, openid, updatedAt);
-      if (expiredDevRoom) {
+      const expiredSoloRoom = await expireSoloRoomWithVirtualMembers(room, members, openid, updatedAt);
+      if (expiredSoloRoom) {
         await clearActiveRoomForProfile(openid, updatedAt);
         return null;
       }
@@ -536,7 +499,7 @@ function buildLobbySnapshotFromData(room, members, openid) {
     roomCode: room.roomCode,
     roomStatus: room.status,
     roomMode,
-    isDevRoom: roomMode === ROOM_MODE_DEV,
+    isSoloRoom: roomMode === ROOM_MODE_SOLO,
     hostMemberId: room.hostMemberId,
     playerCount: activeMembers.length,
     targetPlayerCount: room.targetPlayerCount,
@@ -582,7 +545,7 @@ async function buildLobbySnapshot(roomId, openid) {
 }
 
 async function createRoom(payload, openid, options = {}) {
-  const roomMode = options.mode === ROOM_MODE_DEV ? ROOM_MODE_DEV : ROOM_MODE_NORMAL;
+  const roomMode = options.mode === ROOM_MODE_SOLO ? ROOM_MODE_SOLO : ROOM_MODE_NORMAL;
   const targetPlayerCount = Number(payload.targetPlayerCount);
   if (
     !Number.isInteger(targetPlayerCount) ||
@@ -739,6 +702,10 @@ async function joinRoom(payload, openid) {
         memberId: getMemberId(existingMember),
         lobbySnapshot,
       });
+    }
+
+    if ((room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_SOLO) {
+      return fail("ROOM_NOT_JOINABLE", "单人模式房间不可加入");
     }
 
     const profile = await getProfile(openid);
@@ -913,21 +880,21 @@ async function leaveRoom(payload, openid) {
     const updatedAt = new Date();
 
     if (room.status === "in_game") {
-      const isDevRoom = (room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_DEV;
-      const leavingDevHost = isDevRoom && (memberId === room.hostMemberId || room.createdByOpenId === openid);
+      const isSoloRoom = (room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_SOLO;
+      const leavingSoloHost = isSoloRoom && (memberId === room.hostMemberId || room.createdByOpenId === openid);
 
-      if (leavingDevHost) {
+      if (leavingSoloHost) {
         const activeMembers = await getActiveRoomMembers(roomId);
-        const expiredDevRoom = await expireDevRoomWithVirtualMembers(room, activeMembers, openid, updatedAt);
+        const expiredSoloRoom = await expireSoloRoomWithVirtualMembers(room, activeMembers, openid, updatedAt);
 
-        if (expiredDevRoom) {
+        if (expiredSoloRoom) {
           await clearActiveRoomForProfile(openid, updatedAt);
 
           return ok({
             roomId,
             roomStatus: "expired",
             memberId,
-            leaveMode: "expired_dev_room",
+            leaveMode: "expired_solo_room",
             newHostMemberId: null,
             roomExpired: true,
             routeHint: "home",
@@ -1084,7 +1051,7 @@ async function setReady(payload, openid) {
   });
 }
 
-async function assertDevRoomHost(roomId, openid) {
+async function assertSoloRoomHost(roomId, openid) {
   if (!roomId || typeof roomId !== "string") {
     return {
       error: fail("INVALID_PAYLOAD", "缺少 roomId"),
@@ -1099,9 +1066,9 @@ async function assertDevRoomHost(roomId, openid) {
     };
   }
 
-  if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_DEV) {
+  if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_SOLO) {
     return {
-      error: fail("ACTION_NOT_ALLOWED", "当前房间不是开发者房间"),
+      error: fail("ACTION_NOT_ALLOWED", "当前房间不是单人模式房间"),
     };
   }
 
@@ -1125,7 +1092,7 @@ async function assertDevRoomHost(roomId, openid) {
 
   if (getMemberId(member) !== room.hostMemberId) {
     return {
-      error: fail("ACTION_NOT_ALLOWED", "只有房主可以使用开发者操作"),
+      error: fail("ACTION_NOT_ALLOWED", "只有房主可以使用单人模式操作"),
     };
   }
 
@@ -1135,26 +1102,16 @@ async function assertDevRoomHost(roomId, openid) {
   };
 }
 
-async function devCreateRoom(payload, openid, wxContext) {
-  const disabled = assertDevModeAvailable(wxContext);
-  if (disabled) {
-    return disabled;
-  }
-
+async function soloCreateRoom(payload, openid) {
   return await createRoom(payload, openid, {
-    mode: ROOM_MODE_DEV,
+    mode: ROOM_MODE_SOLO,
   });
 }
 
-async function devFillVirtualPlayers(payload, openid, wxContext) {
-  const disabled = assertDevModeAvailable(wxContext);
-  if (disabled) {
-    return disabled;
-  }
-
+async function soloFillVirtualPlayers(payload, openid) {
   const roomId = payload && payload.roomId;
   return withCommandIdempotency(openid, payload, async () => {
-    const resolved = await assertDevRoomHost(roomId, openid);
+    const resolved = await assertSoloRoomHost(roomId, openid);
     if (resolved.error) {
       return resolved.error;
     }
@@ -1217,15 +1174,64 @@ async function devFillVirtualPlayers(payload, openid, wxContext) {
   });
 }
 
-async function devReadyAllVirtualPlayers(payload, openid, wxContext) {
-  const disabled = assertDevModeAvailable(wxContext);
-  if (disabled) {
-    return disabled;
+async function soloSetVirtualReady(payload, openid) {
+  const roomId = payload && payload.roomId;
+  const memberId = payload && payload.memberId;
+  if (!memberId || typeof memberId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 memberId");
   }
 
+  return withCommandIdempotency(openid, payload, async () => {
+    const resolved = await assertSoloRoomHost(roomId, openid);
+    if (resolved.error) {
+      return resolved.error;
+    }
+
+    let member = null;
+    try {
+      const memberRes = await db.collection("room_members").doc(memberId).get();
+      member = memberRes.data;
+    } catch (err) {
+      if (!isDocumentNotFoundError(err)) {
+        throw err;
+      }
+    }
+
+    if (
+      !member ||
+      member.roomId !== roomId ||
+      !isActiveMember(member) ||
+      !member.isVirtual ||
+      member.controlledByOpenId !== openid
+    ) {
+      return fail("INVALID_TARGET", "只能设置当前单人模式房间中的虚拟玩家");
+    }
+
+    const updatedAt = new Date();
+    await db.collection("room_members").doc(getMemberId(member)).update({
+      data: {
+        isReady: Boolean(payload.isReady),
+        updatedAt,
+        lastSeenAt: updatedAt,
+      },
+    });
+
+    await db.collection("rooms").doc(roomId).update({
+      data: {
+        version: _.inc(1),
+        updatedAt,
+      },
+    });
+
+    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+    return ok(lobbySnapshot);
+  });
+}
+
+async function soloReadyAllVirtualPlayers(payload, openid) {
   const roomId = payload && payload.roomId;
   return withCommandIdempotency(openid, payload, async () => {
-    const resolved = await assertDevRoomHost(roomId, openid);
+    const resolved = await assertSoloRoomHost(roomId, openid);
     if (resolved.error) {
       return resolved.error;
     }
@@ -1265,7 +1271,7 @@ async function devReadyAllVirtualPlayers(payload, openid, wxContext) {
   });
 }
 
-async function dispatchAction(action, payload, openid, wxContext) {
+async function dispatchAction(action, payload, openid) {
   switch (action) {
     case "createRoom":
       return await createRoom(payload, openid);
@@ -1277,12 +1283,14 @@ async function dispatchAction(action, payload, openid, wxContext) {
       return await getLobbySnapshot(payload, openid);
     case "setReady":
       return await setReady(payload, openid);
-    case "devCreateRoom":
-      return await devCreateRoom(payload, openid, wxContext);
-    case "devFillVirtualPlayers":
-      return await devFillVirtualPlayers(payload, openid, wxContext);
-    case "devReadyAllVirtualPlayers":
-      return await devReadyAllVirtualPlayers(payload, openid, wxContext);
+    case "soloCreateRoom":
+      return await soloCreateRoom(payload, openid);
+    case "soloFillVirtualPlayers":
+      return await soloFillVirtualPlayers(payload, openid);
+    case "soloSetVirtualReady":
+      return await soloSetVirtualReady(payload, openid);
+    case "soloReadyAllVirtualPlayers":
+      return await soloReadyAllVirtualPlayers(payload, openid);
     default:
       return fail("INVALID_PAYLOAD", "未知 action");
   }
@@ -1299,7 +1307,7 @@ exports.main = async (event) => {
       return fail("INTERNAL_ERROR", "无法获取用户身份", true);
     }
 
-    const response = await dispatchAction(action, payload, openid, wxContext);
+    const response = await dispatchAction(action, payload, openid);
     const touchedRoomId = (payload && payload.roomId) || (response && response.data && response.data.roomId);
     if (response && response.success && touchedRoomId && action !== "leaveRoom") {
       await touchRoomMemberLastSeen(openid, touchedRoomId);

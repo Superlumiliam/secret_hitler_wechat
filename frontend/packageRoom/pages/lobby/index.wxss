@@ -171,7 +171,7 @@ page {
   font-size: 26rpx;
 }
 
-.dev-panel {
+.solo-panel {
   margin-top: 22rpx;
   padding: 18rpx 20rpx;
   display: flex;
@@ -182,7 +182,7 @@ page {
   background: rgba(4, 24, 29, 0.68);
 }
 
-.dev-label {
+.solo-label {
   flex: 1;
   min-width: 0;
   color: #13cbd0;
@@ -190,12 +190,12 @@ page {
   font-weight: 700;
 }
 
-.dev-actions {
+.solo-actions {
   display: flex;
   gap: 12rpx;
 }
 
-.dev-action {
+.solo-action {
   min-width: 132rpx;
   height: 52rpx;
   padding: 0 14rpx;
@@ -210,7 +210,7 @@ page {
   background: #13cbd0;
 }
 
-.dev-action.is-disabled {
+.solo-action.is-disabled {
   opacity: 0.62;
 }
 

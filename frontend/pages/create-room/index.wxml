@@ -2,7 +2,7 @@
   <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回">‹</view>
 
   <view class="content">
-    <view class="title">选择人数</view>
+    <view class="title">{{mode === 'solo' ? '单人模式' : '选择人数'}}</view>
 
     <view class="count-list">
       <view

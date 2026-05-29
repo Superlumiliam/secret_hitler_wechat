@@ -180,7 +180,7 @@
   gap: 12rpx;
 }
 
-.dev-control-strip {
+.solo-control-strip {
   min-height: 58rpx;
   padding: 8rpx 12rpx;
   box-sizing: border-box;
@@ -193,7 +193,7 @@
   background: rgba(3, 43, 47, 0.74);
 }
 
-.dev-mark {
+.solo-mark {
   height: 34rpx;
   padding: 0 10rpx;
   display: flex;
@@ -207,7 +207,7 @@
   white-space: nowrap;
 }
 
-.dev-seat {
+.solo-seat {
   min-width: 0;
   color: #e8c48a;
   font-size: 22rpx;
@@ -216,7 +216,7 @@
   white-space: nowrap;
 }
 
-.dev-hint {
+.solo-hint {
   color: rgba(189, 239, 240, 0.76);
   font-size: 19rpx;
   white-space: nowrap;
