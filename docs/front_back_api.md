@@ -228,6 +228,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 {
   "roomId": "room_xxx",
   "roomCode": "482615",
+  "roomMode": "normal",
   "roomStatus": "lobby",
   "hostMemberId": "mem_host",
   "playerCount": 6,
@@ -259,6 +260,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 字段约束：
 
 - `targetPlayerCount` 来自创建房间页选择，用于大厅展示目标人数
+- `roomMode` 当前只暴露 `normal` 或 `solo`；对外文案中 `solo` 房间展示为“单人模式”
 - `seatOrder` 只包含当前有效大厅成员，MVP 顺序由加入顺序初始化
 - `viewerState` 由后端根据当前 openid 与房间成员即时派生，只存在于 API 响应，不写入数据库
 - `viewerState.canStart` 仅表示“从当前查看者视角是否满足开始条件”，不额外授予权限
@@ -770,6 +772,8 @@ interface PublicHistoryProjection {
 
 ## 6.1 `createRoom`
 
+`createRoom` 只创建普通房间。首页“单人模式”同样进入创建房间页选择人数，但确认后应调用 `soloCreateRoom` 创建 `mode: 'solo'` 房间；该 action 的成功响应应复用本节返回结构与 `LobbyView`。
+
 请求：
 
 ```json
@@ -814,6 +818,21 @@ interface PublicHistoryProjection {
 - `INVALID_PAYLOAD`
 - `ACTION_NOT_ALLOWED`
 - `INTERNAL_ERROR`
+
+### 6.1.1 单人模式专用 action 概览
+
+单人模式 action 只允许作用于 `mode: 'solo'` 的房间；普通 `mode: 'normal'` 房间必须拒绝虚拟玩家、席位切换和单人模式控制条能力。
+
+第一阶段需要以下专用 action：
+
+| action | 阶段 | 说明 |
+| --- | --- | --- |
+| `soloCreateRoom` | 大厅前 | 创建 `mode: 'solo'` 房间，成功响应复用 `createRoom` 返回结构 |
+| `soloFillVirtualPlayers` | 大厅 | 按目标人数补齐虚拟玩家，只写入 `room_members` |
+| `soloSetVirtualReady` | 大厅 | 设置指定虚拟玩家准备状态 |
+| `soloReadyAllVirtualPlayers` | 大厅 | 一次性设置全部虚拟玩家准备 |
+
+单人模式不提供持久化的 `soloSwitchControlledSeat`。前端只在本地保存 `controlledMemberId`，并在单人模式快照读取和游戏命令提交时显式携带该字段；后端通过 `resolveActingMember(openId, roomId, controlledMemberId)` 校验真实操作者与虚拟席位控制权。
 
 ## 6.2 `joinRoom`
 

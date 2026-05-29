@@ -1856,7 +1856,7 @@ MVP 不做自动托管或自动跳过。
 
 ## 16.1 房间过期规则
 
-- `lobby`：房间创建后 30 分钟过期，不因加入、准备、退出或开发者填充虚拟玩家而延长。
+- `lobby`：房间创建后 30 分钟过期，不因加入、准备、退出或单人模式补齐虚拟玩家而延长。
 - `in_game`：开局后 2 小时过期，不因投票、立法、总统权力等游戏命令而延长。
 - `ended`：游戏结束后保留 30 分钟，再转 `expired`。结果页复盘通常是短时查看，30 分钟足够用户截图、回看关键结果。
 
@@ -1933,22 +1933,21 @@ export interface RandomProvider {
 
 生产环境使用真实随机，测试环境使用固定 seed。
 
-## 17.4 开发者调试模式
+## 17.4 单人模式
 
-个人开发阶段需要支持手动验收完整对局流程。具体方案以 `/docs/develop_mode.md` 为准。
+单人模式需要支持一个用户通过虚拟席位和席位视角切换手动完成完整对局流程。具体方案以 `/docs/develop_mode.md` 为准。
 
 后端实现时必须遵守：
 
-- 开发者调试能力只允许在明确 allowlist 的开发云环境启用，例如通过 `DEV_CLOUD_ENV_IDS` 配置。
-- 未配置 allowlist、当前云环境不在 allowlist、或无法识别当前环境时，所有 `dev*` action 必须返回 `DEV_MODE_DISABLED`。
-- 调试 action 必须校验房间 `mode === 'dev'`。
-- 普通房间不得接受虚拟玩家、本地席位代操作、调试控制条等能力。
+- 单人模式是普通编译下的正式能力，不再使用开发者模式环境 allowlist 或 `DEV_MODE_DISABLED` 语义。
+- 单人模式 action 必须校验房间 `mode === 'solo'`；技术枚举和接口名应收敛到 `solo` / `solo*`。
+- 普通房间不得接受虚拟玩家、本地席位代操作、单人模式控制条等能力。
 - 虚拟玩家控制权必须由后端基于云函数上下文校验，不能只信任前端传入的 `memberId` 或 `playerId`。
-- 开发者快照读取和 `submitCommand` 应通过 `resolveActingMember(openId, roomId, controlledMemberId)` 统一解析真实成员或虚拟行动成员。
+- 单人模式快照读取和 `submitCommand` 应通过 `resolveActingMember(openId, roomId, controlledMemberId)` 统一解析真实成员或虚拟行动成员。
 - 虚拟玩家只写入 `room_members`，不得写入或覆盖真实用户的 `user_profiles.activeRoomId / activeMemberId`。
-- 虚拟玩家准备应使用 `devSetVirtualReady` 或 `devReadyAllVirtualPlayers`，不要复用普通 `setReady` 加额外参数。
+- 虚拟玩家准备应使用 `soloSetVirtualReady` 或 `soloReadyAllVirtualPlayers`，不要复用普通 `setReady` 加额外参数。
 - 游戏内玩家行为仍走正常状态机、幂等和 `expectedVersion` 校验。
-- 生产环境必须拒绝所有调试 action，不能只依赖前端编译宏隔离。
+- 单人模式能力隔离必须由后端按房间模式和虚拟玩家控制权校验，不能只依赖前端入口隔离。
 
 ## 18. 开发顺序建议
 

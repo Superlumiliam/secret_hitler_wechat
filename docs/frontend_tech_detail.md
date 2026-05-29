@@ -231,13 +231,13 @@ frontend/
 
 ### 5.1 页面划分
 
-建议页面保留 9 个页面，其中 7 个主流程页面 + 2 个辅助查看页。创建游戏前端流程拆为“首页（创建房间入口）”、“创建用户”、“创建房间”、“房间大厅”四个页面；创建用户页也是首页头像入口的资料编辑页。页面参考 `reference/01-首页入口.png`、`reference/02-创建房间.png`、`reference/03-房间大厅.png`：
+建议页面保留 9 个页面，其中 7 个主流程页面 + 2 个辅助查看页。创建游戏前端流程拆为“首页（创建房间入口 / 单人模式入口）”、“创建用户”、“创建房间”、“房间大厅”四个页面；创建用户页也是首页头像入口的资料编辑页。页面参考 `reference/01-首页入口.png`、`reference/02-创建房间.png`、`reference/03-房间大厅.png`：
 
 | 页面 | 路径 | 作用 |
 | --- | --- | --- |
-| 首页 | `pages/home/index` | 展示左上角圆形头像入口、创建房间入口、加入房间入口、恢复活跃房间 |
+| 首页 | `pages/home/index` | 展示左上角圆形头像入口、创建房间入口、加入房间入口、单人模式入口、恢复活跃房间 |
 | 创建用户 | `pages/user-profile/index` | 首次创建或后续修改用户头像与用户名 |
-| 创建房间 | `pages/create-room/index` | 选择对局人数、确认创建房间 |
+| 创建房间 | `pages/create-room/index` | 选择对局人数、确认创建普通房间或单人模式房间 |
 | 房间大厅 | `packageRoom/pages/lobby/index` | 展示房间、座位、准备、开始、分享 |
 | 身份页 | `packageRoom/pages/identity/index` | 查看自己的身份并返回桌面 |
 | 对局桌面页 | `packageRoom/pages/board/index` | 公共桌面 + 当前私密任务 |
@@ -837,6 +837,7 @@ ${memberId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}
 - 展示左上角圆形头像按钮
 - 展示创建房间入口
 - 展示加入房间入口，并在弹框中输入房号加入
+- 展示单人模式入口
 - 恢复活跃房间
 
 ### `data` 字段
@@ -851,6 +852,7 @@ interface HomePageData {
   recovering: boolean
   canRecover: boolean
   activeRoomCode: string
+  createMode: 'normal' | 'solo'
   errorText: string
 }
 ```
@@ -859,6 +861,7 @@ interface HomePageData {
 
 - `handleOpenUserProfile`
 - `handleGoCreateRoom`
+- `handleGoSoloMode`
 - `handleOpenJoinDialog`
 - `handleCloseJoinDialog`
 - `onJoinRoomCodeInput`
@@ -868,7 +871,7 @@ interface HomePageData {
 
 ### 实现细节
 
-1. 首页常驻内容只保留左上角圆形头像按钮、“创建房间”和“加入房间”两个入口按钮，参考 `reference/01-首页入口.png`，不在首页首屏直接展示房号输入框。
+1. 首页常驻内容保留左上角圆形头像按钮、“创建房间”、“加入房间”和“单人模式”三个入口按钮，参考 `reference/01-首页入口.png`，不在首页首屏直接展示房号输入框。
 2. 点击“加入房间”后打开输入弹框；弹框内只包含房号输入、取消和确定，不提供“粘贴”按钮。用户可通过系统输入能力手动填写或复制后粘贴到输入框。
 3. 房号输入在提交前统一去空格和连字符，只接受 6 位房号字符串；不在首页 UI 中暴露 `roomId` 加入入口。
 4. 点击弹框“确定”后执行 `handleJoinRoom`：先校验房号，再检查本地用户资料，再上传房间临时头像并调用 `roomService.joinRoom(roomCode, localUserProfile)`。
@@ -876,7 +879,8 @@ interface HomePageData {
 6. 加入提交期间弹框确定按钮进入 loading / disabled 状态；失败时保留弹框并展示 toast 或就地错误，成功后关闭弹框并 `wx.redirectTo` 到大厅页。
 7. 恢复房间只依赖后端 `recoverActiveRoom()` 结果，不信任本地缓存单独跳转。
 8. 左上角头像使用圆形按钮：已有用户头像时展示头像，没有时展示默认头像；点击进入 `pages/user-profile/index`。
-9. `handleGoCreateRoom` 与 `handleJoinRoom` 都必须先执行 `ensureUserProfileReady()`：本地缺少 `profileCompleted` 时，跳转创建用户页；创建用户页保存成功后只回首页，不自动继续创建或加入。若当前来自带 `roomCode` 的分享入口，返回首页时应保留该房号，用户再次点击“加入房间”后可继续确认加入。
+9. `handleGoCreateRoom`、`handleGoSoloMode` 与 `handleJoinRoom` 都必须先执行 `ensureUserProfileReady()`：本地缺少 `profileCompleted` 时，跳转创建用户页；创建用户页保存成功后只回首页，不自动继续创建、加入或进入单人模式。若当前来自带 `roomCode` 的分享入口，返回首页时应保留该房号，用户再次点击“加入房间”后可继续确认加入。
+10. `handleGoSoloMode` 不在首页选择人数，而是带入口来源进入 `pages/create-room/index?mode=solo`，由创建房间页选择 `5-10` 人数后创建单人模式房间。
 
 ## 12.2 创建用户页 `user-profile`
 
@@ -917,13 +921,14 @@ interface UserProfilePageData {
 ### 页面职责
 
 - 选择对局人数
-- 创建房间
+- 创建普通房间或单人模式房间
 
 ### `data` 字段
 
 ```ts
 interface CreateRoomPageData {
   playerCount: number
+  mode: 'normal' | 'solo'
   creating: boolean
   errorText: string
 }
@@ -937,8 +942,9 @@ interface CreateRoomPageData {
 ### 实现细节
 
 1. 页面参考 `reference/02-创建房间.png`，人数范围固定为 `5-10`。
-2. 创建成功后跳转房间大厅。
-3. 选择人数用于创建时的目标人数与大厅展示；实际开局仍以后端校验的当前有效人数为准。
+2. 从首页“创建房间”进入时创建普通房间；从首页“单人模式”进入时创建单人模式房间。单人模式使用 `mode: 'solo'` 与 `solo*` action；旧开发者模式实现只可作为迁移参考，不作为长期接口契约。
+3. 创建成功后跳转房间大厅。
+4. 选择人数用于创建时的目标人数与大厅展示；实际开局仍以后端校验的当前有效人数为准。
 
 ## 12.4 大厅页 `lobby`
 
@@ -1815,19 +1821,23 @@ MVP 尽量少图化：
 4. 页面在旧 version 上发命令
 5. 房间失效后从分享卡片回流
 
-## 21.4 开发者调试模式
+## 21.4 单人模式
 
-个人开发阶段需要支持一人手动验收完整对局流程。具体方案以 `/docs/develop_mode.md` 为准。
+单人模式需要支持一个用户手动完成完整对局流程。具体方案以 `/docs/develop_mode.md` 为准。
 
 前端实现时必须遵守：
 
-- 调试入口、调试面板、开发者房间创建入口必须受编译宏或环境配置控制。
-- 生产包不注册可访问的调试入口页面，不展示调试面板。
-- 第一阶段只做最短闭环：创建开发者房间、一键补齐虚拟玩家、设置虚拟玩家准备、本地切换操控席位、查看身份、提交合法游戏命令并跑完整局。
-- 席位视角切换只保存在前端本地 `controlledMemberId`，不做持久化的 `devSwitchControlledSeat`。
+- 首页提供“单人模式”按钮；点击后进入创建房间页选择人数，不在首页直接选择人数。
+- 创建房间页根据入口来源创建普通房间或单人模式房间。
+- 单人模式入口在普通编译中展示，不再用开发者模式编译宏隐藏入口。
+- 单人模式创建失败时，前端按后端错误码提示创建失败，不用本地状态伪造房间，也不提示“当前环境不可用”这类旧开发者模式文案。
+- 第一阶段只做最短闭环：创建单人模式房间、一键补齐虚拟玩家、设置虚拟玩家准备、本地切换操控席位、查看身份、提交合法游戏命令并跑完整局。
+- 大厅页和游戏对局页均按照当前代码实现逻辑复用，不复制一套单人模式页面。
+- 席位视角切换只保存在前端本地 `controlledMemberId`，不做持久化的 `soloSwitchControlledSeat`。
 - 席位视角切换后必须带 `controlledMemberId` 重新拉取该席位对应的公共快照和私密快照。
-- 调试模式下的游戏内操作仍通过正式服务层提交命令，并携带 `commandId`、`expectedVersion` 和当前 `controlledMemberId`，不用本地状态伪造流程推进。
-- 场景种子、身份总览、包含牌序或构成的牌堆摘要、复杂事件日志暂不进入第一阶段；正式桌面的抽牌堆 / 弃牌堆张数属于公共信息展示，应随对局桌面实现。
+- 单人模式下的游戏内操作仍通过正式服务层提交命令，并携带 `commandId`、`expectedVersion` 和当前 `controlledMemberId`，不用本地状态伪造流程推进。
+- 技术枚举和接口名应收敛到 `solo` / `solo*`，对外页面文案统一展示“单人模式”。
+- 场景种子、身份总览、包含牌序或构成的牌堆摘要、复杂事件日志不进入面向用户的单人模式；正式桌面的抽牌堆 / 弃牌堆张数属于公共信息展示，应随对局桌面实现。
 
 ## 22. 开发顺序建议
 
