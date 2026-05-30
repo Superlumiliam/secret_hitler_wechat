@@ -11,6 +11,7 @@ const GAME_POLL_INTERVAL_MS = 1500;
 const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
 const GAME_POLL_AFTER_COMMAND_INTERVAL_MS = 800;
 const COMMAND_REFRESH_WINDOW_MS = 5000;
+const GAME_POLL_FAILURE_BACKOFF_MS = [3000, 5000, 10000, 15000, 30000];
 function isRoomUnavailableError(err) {
   return Boolean(err && ["ROOM_EXPIRED", "ROOM_NOT_FOUND", "NOT_ROOM_MEMBER"].includes(err.code));
 }
@@ -32,6 +33,7 @@ Page({
   refreshTimer: null,
   lastSeatTap: null,
   lastCommandSettledAt: 0,
+  consecutiveSnapshotFailures: 0,
 
   data: {
     roomId: "",
@@ -166,6 +168,7 @@ Page({
         return;
       }
 
+      this.consecutiveSnapshotFailures = 0;
       syncPageTimeoutDeadline(this, result.data && result.data.expireAt, {
         beforeRedirect: () => this.stopRefreshTimer(),
       });
@@ -186,6 +189,10 @@ Page({
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
         return;
+      }
+      this.consecutiveSnapshotFailures += 1;
+      if (this.refreshTimer) {
+        this.startRefreshTimer();
       }
       if (!options.silent) {
         this.setData({
@@ -524,6 +531,10 @@ Page({
   },
 
   getPollIntervalMs() {
+    if (this.consecutiveSnapshotFailures > 0) {
+      const backoffIndex = Math.min(this.consecutiveSnapshotFailures, GAME_POLL_FAILURE_BACKOFF_MS.length) - 1;
+      return GAME_POLL_FAILURE_BACKOFF_MS[backoffIndex];
+    }
     if (Date.now() - this.lastCommandSettledAt <= COMMAND_REFRESH_WINDOW_MS) {
       return GAME_POLL_AFTER_COMMAND_INTERVAL_MS;
     }
