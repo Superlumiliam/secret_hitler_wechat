@@ -10,6 +10,10 @@ function createCommandId(prefix) {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function buildProfileRedirectUrl(targetUrl) {
+  return `/pages/user-profile/index?redirect=${encodeURIComponent(targetUrl)}`;
+}
+
 function getCachedUserProfile() {
   try {
     const profile = wx.getStorageSync(PROFILE_STORAGE_KEY);
@@ -248,7 +252,7 @@ Page({
   onCreateRoom() {
     if (!getCachedUserProfile()) {
       wx.navigateTo({
-        url: "/pages/user-profile/index",
+        url: buildProfileRedirectUrl("/pages/create-room/index"),
       });
       return;
     }
@@ -261,7 +265,7 @@ Page({
   onCreateSoloRoom() {
     if (!getCachedUserProfile()) {
       wx.navigateTo({
-        url: "/pages/user-profile/index",
+        url: buildProfileRedirectUrl("/pages/create-room/index?mode=solo"),
       });
       return;
     }
@@ -341,7 +345,7 @@ Page({
           ? `/pages/home/index?roomCode=${encodeURIComponent(joinTarget.roomCode)}`
           : "/pages/home/index";
       wx.navigateTo({
-        url: `/pages/user-profile/index?redirect=${encodeURIComponent(homeUrl)}`,
+        url: buildProfileRedirectUrl(homeUrl),
       });
       return;
     }
