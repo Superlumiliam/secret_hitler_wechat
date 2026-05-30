@@ -4,6 +4,9 @@ const CLOUD_ASSET_ROOT =
 const RULE_ASSET_FILE_IDS_BY_KEY = {
   story: [`${CLOUD_ASSET_ROOT}rule-story.webp`],
   oneFlow: [`${CLOUD_ASSET_ROOT}rule-one-flow.webp`, `${CLOUD_ASSET_ROOT}rule-one-flow.webp`],
+  identityLiberal: [`${CLOUD_ASSET_ROOT}identity-liberal.webp`],
+  identityAuthoritarian: [`${CLOUD_ASSET_ROOT}identity-fascist.webp`],
+  identityDictator: [`${CLOUD_ASSET_ROOT}identity-hitler.webp`],
 };
 const {
   GAME_PAGE_TIMEOUT_MS,
@@ -31,6 +34,19 @@ function getSectionImageSrc(section, urlByAssetKey) {
     return "";
   }
   return urlByAssetKey[section.imageAssetKey] || "";
+}
+
+function hydrateSectionAssets(section, urlByAssetKey) {
+  if (!section) {
+    return null;
+  }
+  return {
+    ...section,
+    groups: (section.groups || []).map((group) => ({
+      ...group,
+      imageSrc: group.imageAssetKey ? urlByAssetKey[group.imageAssetKey] || "" : "",
+    })),
+  };
 }
 
 Page({
@@ -106,7 +122,7 @@ Page({
     const activeSection = getActiveSection(sectionId);
     this.setData({
       activeSectionId: sectionId,
-      activeSection,
+      activeSection: hydrateSectionAssets(activeSection, this.data.ruleAssetSrcByKey || {}),
       activeSectionIndex: getActiveSectionIndex(sectionId),
       activeSectionImageSrc: getSectionImageSrc(activeSection, this.data.ruleAssetSrcByKey || {}),
     });
@@ -152,6 +168,7 @@ Page({
         this.setData({
           ruleStorySrc: srcByKey.story || "",
           ruleAssetSrcByKey: srcByKey,
+          activeSection: hydrateSectionAssets(this.data.activeSection, srcByKey),
           activeSectionImageSrc: getSectionImageSrc(this.data.activeSection, srcByKey),
         });
       })

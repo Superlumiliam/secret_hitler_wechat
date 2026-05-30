@@ -177,6 +177,10 @@ page {
   margin-top: 22rpx;
 }
 
+.rule-section > .rule-groups:first-child {
+  margin-top: 0;
+}
+
 .rule-group {
   margin-top: 24rpx;
   padding-top: 22rpx;
@@ -194,6 +198,57 @@ page {
   font-size: 28rpx;
   font-weight: 900;
   line-height: 1.25;
+}
+
+.identity-rule-groups {
+  margin-top: 0;
+}
+
+.identity-rule-group {
+  display: grid;
+  grid-template-columns: 178rpx minmax(0, 1fr);
+  gap: 22rpx;
+  align-items: center;
+  min-height: 244rpx;
+  padding: 22rpx 0 24rpx;
+}
+
+.identity-rule-group:first-child {
+  padding-top: 0;
+}
+
+.identity-rule-card {
+  width: 178rpx;
+  height: 226rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.identity-rule-card-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.identity-rule-card-missing {
+  color: rgba(234, 195, 138, 0.82);
+  font-size: 26rpx;
+  font-weight: 900;
+  text-align: center;
+}
+
+.rule-group-main {
+  min-width: 0;
+}
+
+.identity-rule-group .rule-item {
+  gap: 0;
+}
+
+.identity-rule-group .rule-bullet {
+  display: none;
 }
 
 .rule-item {

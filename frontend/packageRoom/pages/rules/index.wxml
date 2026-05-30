@@ -46,18 +46,32 @@
         binderror="onRuleAssetError"
       ></image>
 
-      <view wx:elif="{{!activeSection.imageOnly}}" class="section-heading">
+      <view wx:elif="{{!activeSection.imageOnly && !activeSection.hideHeading}}" class="section-heading">
         <view class="section-index">{{activeSectionIndex + 1}}</view>
         <view class="section-title">{{activeSection.title}}</view>
       </view>
 
-      <view wx:if="{{!activeSection.imageOnly && activeSection.groups && activeSection.groups.length}}" class="rule-groups">
-        <view wx:for="{{activeSection.groups}}" wx:key="title" class="rule-group">
-          <view class="rule-group-title">{{item.title}}</view>
-          <view class="rule-items">
-            <view wx:for="{{item.items}}" wx:for-item="rule" wx:key="*this" class="rule-item">
-              <view class="rule-bullet"></view>
-              <view class="rule-text">{{rule}}</view>
+      <view wx:if="{{!activeSection.imageOnly && activeSection.groups && activeSection.groups.length}}" class="rule-groups {{activeSection.layout === 'identity-cards' ? 'identity-rule-groups' : ''}}">
+        <view wx:for="{{activeSection.groups}}" wx:key="title" class="rule-group {{activeSection.layout === 'identity-cards' ? 'identity-rule-group' : ''}}">
+          <view wx:if="{{activeSection.layout === 'identity-cards'}}" class="identity-rule-card">
+            <image
+              wx:if="{{item.imageSrc}}"
+              class="identity-rule-card-image"
+              src="{{item.imageSrc}}"
+              mode="aspectFit"
+              webp="{{true}}"
+              data-asset-key="{{item.imageAssetKey}}"
+              binderror="onRuleAssetError"
+            ></image>
+            <view wx:else class="identity-rule-card-missing">{{item.title}}</view>
+          </view>
+          <view class="rule-group-main">
+            <view class="rule-group-title">{{item.title}}</view>
+            <view class="rule-items">
+              <view wx:for="{{item.items}}" wx:for-item="rule" wx:key="*this" class="rule-item">
+                <view class="rule-bullet"></view>
+                <view class="rule-text">{{rule}}</view>
+              </view>
             </view>
           </view>
         </view>
