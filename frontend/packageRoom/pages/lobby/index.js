@@ -2,6 +2,12 @@ const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const LOBBY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-room-prepare.webp`;
+const LOBBY_ASSET_FILE_IDS = {
+  roomPlayerFrame: `${CLOUD_ASSET_ROOT}room-player-frame.webp`,
+  roomIdentity: `${CLOUD_ASSET_ROOT}room-identity.webp`,
+  logoRoomAdjust: `${CLOUD_ASSET_ROOT}logo-room-adjust.webp`,
+  logoRule: `${CLOUD_ASSET_ROOT}logo-rule.webp`,
+};
 const LOBBY_POLL_INTERVAL_MS = 2000;
 const {
   LOBBY_PAGE_TIMEOUT_MS,
@@ -104,6 +110,8 @@ Page({
     defaultAvatarSrc: "",
     backgroundSrc: "",
     backgroundVisible: false,
+    lobbyAssets: {},
+    readyPlayerCount: 0,
     seats: [],
   },
 
@@ -198,6 +206,7 @@ Page({
           isEmpty: true,
           displayName: "邀请好友",
           avatarSrc: this.data.defaultAvatarSrc,
+          roleLabel: "",
         };
       }
 
@@ -205,8 +214,13 @@ Page({
         ...member,
         isEmpty: false,
         avatarSrc: avatarUrlByFileId[member.avatarUrl] || member.avatarUrl || this.data.defaultAvatarSrc,
+        roleLabel: member.isHost ? "房主" : member.isVirtual ? "虚拟" : "",
       };
     });
+  },
+
+  countReadyPlayers(lobby) {
+    return ((lobby && lobby.seatOrder) || []).filter((member) => member && member.isReady).length;
   },
 
   loadPageAssets() {
@@ -214,8 +228,9 @@ Page({
       return;
     }
 
+    const lobbyAssetFileIds = Object.keys(LOBBY_ASSET_FILE_IDS).map((key) => LOBBY_ASSET_FILE_IDS[key]);
     wx.cloud.getTempFileURL({
-      fileList: [DEFAULT_AVATAR_FILE_ID, LOBBY_BACKGROUND_FILE_ID],
+      fileList: [DEFAULT_AVATAR_FILE_ID, LOBBY_BACKGROUND_FILE_ID].concat(lobbyAssetFileIds),
       success: (res) => {
         const urlByFileId = {};
         (res.fileList || []).forEach((file) => {
@@ -230,11 +245,18 @@ Page({
           defaultAvatarSrc: urlByFileId[DEFAULT_AVATAR_FILE_ID] || "",
           backgroundSrc: urlByFileId[LOBBY_BACKGROUND_FILE_ID] || "",
           backgroundVisible: Boolean(urlByFileId[LOBBY_BACKGROUND_FILE_ID]),
+          lobbyAssets: {
+            roomPlayerFrame: urlByFileId[LOBBY_ASSET_FILE_IDS.roomPlayerFrame] || "",
+            roomIdentity: urlByFileId[LOBBY_ASSET_FILE_IDS.roomIdentity] || "",
+            logoRoomAdjust: urlByFileId[LOBBY_ASSET_FILE_IDS.logoRoomAdjust] || "",
+            logoRule: urlByFileId[LOBBY_ASSET_FILE_IDS.logoRule] || "",
+          },
         });
 
         if (this.data.lobby) {
           this.setData({
             seats: this.buildSeats(this.data.lobby),
+            readyPlayerCount: this.countReadyPlayers(this.data.lobby),
           });
         }
       },
@@ -254,6 +276,7 @@ Page({
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView),
+        readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
       return;
     }
@@ -272,12 +295,14 @@ Page({
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView, avatarUrlByFileId),
+        readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
     } catch (err) {
       console.error("大厅头像临时链接获取失败", err);
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView),
+        readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
     }
   },

@@ -22,17 +22,17 @@
       </view>
       <view class="room-actions">
         <view class="tool-control" bindtap="onTapRoomSettings" role="button" aria-label="房间设置">
-          <view class="tool-icon gear-icon"></view>
+          <image wx:if="{{lobbyAssets.logoRoomAdjust}}" class="tool-icon-image" src="{{lobbyAssets.logoRoomAdjust}}" mode="aspectFit" webp="{{true}}"></image>
           <view class="tool-text">房间设置</view>
         </view>
         <view class="tool-control" bindtap="onTapRules" role="button" aria-label="规则说明">
-          <view class="tool-icon rules-icon"></view>
+          <image wx:if="{{lobbyAssets.logoRule}}" class="tool-icon-image" src="{{lobbyAssets.logoRule}}" mode="aspectFit" webp="{{true}}"></image>
           <view class="tool-text">规则说明</view>
         </view>
       </view>
     </view>
 
-    <view class="room-meta">目标 {{lobby.targetPlayerCount}} 人 · 当前 {{lobby.playerCount}} 人</view>
+    <view class="room-meta">目标 {{lobby.targetPlayerCount}} 人 · 当前 {{lobby.playerCount}} 人 · 准备 {{readyPlayerCount}} 人</view>
 
     <view wx:if="{{lobby.isSoloRoom}}" class="solo-panel">
       <view class="solo-label">单人模式</view>
@@ -58,6 +58,7 @@
 
     <view class="seat-grid">
       <view wx:for="{{seats}}" wx:key="seatIndex" class="seat-card {{item.isReady ? 'is-ready' : ''}}">
+        <image wx:if="{{lobbyAssets.roomPlayerFrame}}" class="seat-frame-image" src="{{lobbyAssets.roomPlayerFrame}}" mode="scaleToFill" webp="{{true}}"></image>
         <view class="seat-index">{{item.seatIndex}}</view>
         <block wx:if="{{item.isEmpty}}">
           <view class="seat-body">
@@ -76,10 +77,11 @@
           <view class="seat-body">
             <image class="seat-avatar" src="{{item.avatarSrc}}" mode="aspectFit" webp="{{true}}"></image>
             <view class="seat-name">{{item.displayName}}</view>
-            <view class="seat-tags">
-              <view wx:if="{{item.isHost}}" class="host-tag">房主</view>
-              <view wx:if="{{item.isVirtual}}" class="virtual-tag">虚拟</view>
-              <view wx:if="{{item.isReady}}" class="ready-tag">已准备</view>
+            <view wx:if="{{item.roleLabel}}" class="seat-badges">
+              <view wx:if="{{item.roleLabel}}" class="seat-identity">
+                <image wx:if="{{lobbyAssets.roomIdentity}}" class="seat-identity-image" src="{{lobbyAssets.roomIdentity}}" mode="scaleToFill" webp="{{true}}"></image>
+                <text class="seat-identity-text">{{item.roleLabel}}</text>
+              </view>
             </view>
           </view>
         </block>
