@@ -7,7 +7,7 @@ page {
   position: relative;
   min-height: 100vh;
   box-sizing: border-box;
-  padding: calc(72rpx + env(safe-area-inset-top)) 26rpx calc(42rpx + env(safe-area-inset-bottom));
+  padding: calc(96rpx + env(safe-area-inset-top)) 26rpx calc(42rpx + env(safe-area-inset-bottom));
   color: #e8c48a;
   font-family: "Songti SC", STSong, SimSun, serif;
   background:
@@ -47,7 +47,8 @@ page {
 .back-control {
   position: absolute;
   left: 0;
-  top: 0;
+  top: 50%;
+  transform: translateY(-62%);
   width: 68rpx;
   height: 72rpx;
   display: flex;
