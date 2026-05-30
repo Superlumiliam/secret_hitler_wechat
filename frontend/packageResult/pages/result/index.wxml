@@ -1,8 +1,8 @@
 <view class="result-page">
-  <view class="topbar">
-    <view class="icon-button" role="button" aria-label="返回首页" bindtap="onBackHome">⌂</view>
-    <view class="room-code">房间 {{displayRoomCode}}</view>
-    <view class="icon-button" role="button" aria-label="查看规则" bindtap="onTapRules">?</view>
+  <view class="top-bar">
+    <view class="back-control" role="button" aria-label="返回首页" bindtap="onBackHome" hover-class="icon-hover">‹</view>
+    <view class="page-title">对局结果</view>
+    <view class="rules-control" role="button" aria-label="查看规则" bindtap="onTapRules" hover-class="icon-hover">?</view>
   </view>
 
   <view wx:if="{{loading}}" class="state-panel">正在打开复盘档案...</view>

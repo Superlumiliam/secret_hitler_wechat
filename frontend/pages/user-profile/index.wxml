@@ -19,7 +19,7 @@
     <view class="hero-title">建立你的机密档案</view>
     <view class="hero-subtitle">
       <view class="subtitle-line"></view>
-      <text>设置用户名与头像后即可进入房间</text>
+      <text>点击人像创建头像</text>
       <view class="subtitle-line"></view>
     </view>
   </view>

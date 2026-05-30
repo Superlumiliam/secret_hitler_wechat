@@ -10,6 +10,7 @@
 
   <view class="top-bar">
     <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回首页">‹</view>
+    <view class="page-title">房间大厅</view>
   </view>
 
   <view wx:if="{{isLoading}}" class="state-text">正在进入房间...</view>

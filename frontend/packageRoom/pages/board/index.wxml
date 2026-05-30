@@ -4,6 +4,7 @@
   <block wx:if="{{board}}">
     <view class="top-bar">
       <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回首页">‹</view>
+      <view class="page-title">对局桌面</view>
     </view>
 
     <view class="room-meta-row">
