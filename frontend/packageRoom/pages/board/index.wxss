@@ -100,6 +100,7 @@
   display: flex;
   align-items: baseline;
   gap: 10rpx;
+  flex-wrap: nowrap;
 }
 
 .room-label {
@@ -110,9 +111,9 @@
 }
 
 .room-code {
-  max-width: 176rpx;
+  max-width: 170rpx;
   color: #f0b160;
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: 800;
   letter-spacing: 0;
   overflow: hidden;
@@ -120,59 +121,40 @@
   white-space: nowrap;
 }
 
-.round-pill {
+.room-separator,
+.room-meta-text {
   flex: 0 0 auto;
-  min-width: 84rpx;
-  height: 44rpx;
-  padding: 0 12rpx;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1rpx solid rgba(190, 129, 65, 0.66);
-  border-radius: 28rpx;
   color: #e6bd83;
-  font-size: 22rpx;
-  background: rgba(9, 21, 23, 0.78);
+  font-size: 26rpx;
+  font-weight: 700;
   white-space: nowrap;
 }
 
+.room-separator {
+  color: rgba(230, 189, 131, 0.72);
+}
+
 .top-actions {
-  flex: 0 0 auto;
+  flex: 0 0 108rpx;
   display: flex;
   align-items: flex-start;
+  justify-content: flex-start;
 }
 
 .tool-control {
-  width: 64rpx;
+  width: 96rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   color: #d9ad73;
 }
 
-.tool-icon {
-  position: relative;
-  width: 38rpx;
-  height: 38rpx;
+.tool-icon-image {
+  display: block;
+  width: 58rpx;
+  height: 58rpx;
   margin-bottom: 4rpx;
-}
-
-.rules-icon {
-  display: flex;
-  border-left: 6rpx solid #d9ad73;
-  border-right: 6rpx solid #d9ad73;
-  border-radius: 5rpx;
-  box-sizing: border-box;
-}
-
-.rules-icon::before,
-.rules-icon::after {
-  content: "";
-  flex: 1;
-  border: 2rpx solid #d9ad73;
-  border-top-width: 5rpx;
-  box-sizing: border-box;
+  filter: drop-shadow(0 5rpx 10rpx rgba(0, 0, 0, 0.52));
 }
 
 .tool-text {

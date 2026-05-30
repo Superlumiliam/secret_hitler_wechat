@@ -49,6 +49,7 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   drawPileCard: `${CLOUD_ASSET_ROOT}card.webp`,
   discardPileCard: `${CLOUD_ASSET_ROOT}discard.webp`,
   logoSeal: `${CLOUD_ASSET_ROOT}logo-seal.webp`,
+  logoRule: `${CLOUD_ASSET_ROOT}logo-rule.webp`,
 };
 
 const POWER_BADGE_ASSET_KEY_MAP = {

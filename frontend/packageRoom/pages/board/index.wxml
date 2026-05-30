@@ -12,13 +12,15 @@
         <view class="room-title">
           <text class="room-label">房间号</text>
           <text class="room-code">{{board.roomCode}}</text>
+          <text class="room-separator">·</text>
+          <text class="room-meta-text">{{board.targetPlayerCount}}人局</text>
+          <text class="room-separator">·</text>
+          <text class="room-meta-text">第{{board.roundNo}}轮</text>
         </view>
-        <view class="round-pill">{{board.targetPlayerCount}}人局</view>
-        <view class="round-pill">第{{board.roundNo}}轮</view>
       </view>
       <view class="top-actions">
         <view class="tool-control" bindtap="onTapRules" role="button" aria-label="规则说明">
-          <view class="tool-icon rules-icon"></view>
+          <image wx:if="{{policyAssets.logoRule}}" class="tool-icon-image" src="{{policyAssets.logoRule}}" mode="aspectFit" webp="{{true}}"></image>
           <view class="tool-text">规则说明</view>
         </view>
       </view>

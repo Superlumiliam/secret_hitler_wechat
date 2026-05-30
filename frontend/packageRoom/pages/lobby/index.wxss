@@ -100,7 +100,7 @@ page {
 .room-code {
   margin-left: 20rpx;
   color: #f2b15d;
-  font-size: 44rpx;
+  font-size: 36rpx;
   font-weight: 800;
   letter-spacing: 0;
   text-shadow: 0 0 18rpx rgba(4, 8, 8, 0.76);
@@ -109,11 +109,11 @@ page {
 .room-actions {
   display: flex;
   align-items: flex-start;
-  gap: 22rpx;
+  gap: 16rpx;
 }
 
 .tool-control {
-  width: 124rpx;
+  width: 104rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -122,15 +122,15 @@ page {
 
 .tool-icon-image {
   display: block;
-  width: 74rpx;
-  height: 74rpx;
-  margin-bottom: 6rpx;
+  width: 60rpx;
+  height: 60rpx;
+  margin-bottom: 4rpx;
   filter: drop-shadow(0 5rpx 10rpx rgba(0, 0, 0, 0.52));
 }
 
 .tool-text {
   color: #d7a35e;
-  font-size: 24rpx;
+  font-size: 21rpx;
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
