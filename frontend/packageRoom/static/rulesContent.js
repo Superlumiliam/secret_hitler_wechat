@@ -1,5 +1,11 @@
 const rulesContent = [
   {
+    id: "quick",
+    title: "快速了解",
+    imageAssetKey: "oneFlow",
+    imageOnly: true,
+  },
+  {
     id: "camp",
     title: "阵营介绍",
     groups: [
@@ -24,7 +30,7 @@ const rulesContent = [
   },
   {
     id: "flow",
-    title: "规则说明",
+    title: "详细规则",
     groups: [
       {
         title: "1. 提名",

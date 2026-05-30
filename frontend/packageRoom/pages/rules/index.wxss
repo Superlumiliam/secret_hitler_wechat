@@ -70,13 +70,10 @@ page {
 }
 
 .rules-hero {
-  min-height: 220rpx;
   margin-top: 24rpx;
-  padding: 34rpx 30rpx;
+  min-height: 220rpx;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  overflow: hidden;
   border: 1rpx solid rgba(197, 139, 72, 0.54);
   background:
     linear-gradient(135deg, rgba(33, 24, 16, 0.9), rgba(5, 31, 34, 0.82)),
@@ -84,45 +81,29 @@ page {
   box-shadow: 0 18rpx 58rpx rgba(0, 0, 0, 0.35);
 }
 
-.eyebrow {
-  color: rgba(232, 196, 138, 0.68);
-  font-size: 23rpx;
-  line-height: 1.2;
-}
-
-.hero-title {
-  margin-top: 14rpx;
-  color: #f2d19a;
-  font-size: 52rpx;
-  font-weight: 900;
-  line-height: 1.05;
-}
-
-.hero-copy {
-  margin-top: 14rpx;
-  color: rgba(238, 217, 186, 0.78);
-  font-size: 25rpx;
-  line-height: 1.4;
+.rule-story-image {
+  display: block;
+  width: 100%;
 }
 
 .section-tabs {
-  margin: 22rpx -26rpx 0;
-  padding: 0 26rpx;
+  margin-top: 22rpx;
   box-sizing: border-box;
-  white-space: nowrap;
+  width: 100%;
 }
 
 .section-tab-row {
-  display: flex;
-  gap: 12rpx;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10rpx;
+  width: 100%;
   padding-bottom: 6rpx;
 }
 
 .section-tab {
-  flex: 0 0 auto;
-  min-width: 118rpx;
+  min-width: 0;
   min-height: 56rpx;
-  padding: 0 20rpx;
+  padding: 0 8rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -132,6 +113,7 @@ page {
   background: rgba(13, 18, 17, 0.86);
   font-size: 24rpx;
   font-weight: 700;
+  text-align: center;
 }
 
 .section-tab.is-active {
@@ -152,8 +134,13 @@ page {
 }
 
 .rule-section.is-active {
-  border-color: rgba(38, 210, 218, 0.62);
-  box-shadow: 0 0 22rpx rgba(35, 197, 204, 0.12);
+  border-color: rgba(197, 139, 72, 0.54);
+  box-shadow: 0 0 22rpx rgba(197, 139, 72, 0.12);
+}
+
+.rule-one-flow-image {
+  display: block;
+  width: 100%;
 }
 
 .section-heading {

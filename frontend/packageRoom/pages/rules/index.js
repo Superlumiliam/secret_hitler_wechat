@@ -1,4 +1,10 @@
 const { rulesContent } = require("../../static/rulesContent");
+const CLOUD_ASSET_ROOT =
+  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
+const RULE_ASSET_FILE_IDS_BY_KEY = {
+  story: [`${CLOUD_ASSET_ROOT}rule-story.webp`],
+  oneFlow: [`${CLOUD_ASSET_ROOT}rule-one-flow.webp`, `${CLOUD_ASSET_ROOT}rule-one-flow.webp`],
+};
 const {
   GAME_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -20,6 +26,13 @@ function getActiveSectionIndex(sectionId) {
   return sectionIndex >= 0 ? sectionIndex : 0;
 }
 
+function getSectionImageSrc(section, urlByAssetKey) {
+  if (!section || !section.imageAssetKey) {
+    return "";
+  }
+  return urlByAssetKey[section.imageAssetKey] || "";
+}
+
 Page({
   pageTimeoutMs: GAME_PAGE_TIMEOUT_MS,
 
@@ -30,6 +43,9 @@ Page({
     activeSectionId: rulesContent[0] ? rulesContent[0].id : "",
     activeSection: rulesContent[0] || null,
     activeSectionIndex: 0,
+    ruleStorySrc: "",
+    ruleAssetSrcByKey: {},
+    activeSectionImageSrc: "",
   },
 
   onLoad(options = {}) {
@@ -42,6 +58,7 @@ Page({
       timeoutMs: this.pageTimeoutMs,
       deadlineAt: options.timeoutDeadlineAt,
     });
+    this.loadRuleAssets();
   },
 
   onShow() {
@@ -86,10 +103,71 @@ Page({
     if (!sectionId) {
       return;
     }
+    const activeSection = getActiveSection(sectionId);
     this.setData({
       activeSectionId: sectionId,
-      activeSection: getActiveSection(sectionId),
+      activeSection,
       activeSectionIndex: getActiveSectionIndex(sectionId),
+      activeSectionImageSrc: getSectionImageSrc(activeSection, this.data.ruleAssetSrcByKey || {}),
+    });
+  },
+
+  loadRuleAssets() {
+    if (!wx.cloud || !wx.cloud.getTempFileURL) {
+      return;
+    }
+
+    wx.cloud
+      .getTempFileURL({
+        fileList: Object.keys(RULE_ASSET_FILE_IDS_BY_KEY).reduce(
+          (fileList, key) => fileList.concat(RULE_ASSET_FILE_IDS_BY_KEY[key]),
+          [],
+        ),
+      })
+      .then((res) => {
+        const srcByKey = {};
+        (res.fileList || []).forEach((file) => {
+          const assetKey = Object.keys(RULE_ASSET_FILE_IDS_BY_KEY).find((key) =>
+            RULE_ASSET_FILE_IDS_BY_KEY[key].includes(file.fileID),
+          );
+          if (!assetKey) {
+            return;
+          }
+          if (file.status !== 0 || !file.tempFileURL) {
+            return;
+          }
+          if (!srcByKey[assetKey]) {
+            srcByKey[assetKey] = file.tempFileURL;
+          }
+        });
+        Object.keys(RULE_ASSET_FILE_IDS_BY_KEY).forEach((key) => {
+          if (!srcByKey[key]) {
+            console.error("规则页云存储临时链接获取失败", {
+              assetKey: key,
+              fileList: RULE_ASSET_FILE_IDS_BY_KEY[key],
+            });
+          }
+        });
+
+        this.setData({
+          ruleStorySrc: srcByKey.story || "",
+          ruleAssetSrcByKey: srcByKey,
+          activeSectionImageSrc: getSectionImageSrc(this.data.activeSection, srcByKey),
+        });
+      })
+      .catch((err) => {
+        console.error("规则页云存储临时链接获取失败", err);
+      });
+  },
+
+  onRuleAssetError(event) {
+    console.error("规则页素材加载失败", event && event.detail);
+    const assetKey = event.currentTarget.dataset.assetKey || "";
+    if (assetKey !== "story") {
+      return;
+    }
+    this.setData({
+      ruleStorySrc: "",
     });
   },
 });

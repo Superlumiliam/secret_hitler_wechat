@@ -7,9 +7,15 @@
   </view>
 
   <view class="rules-hero">
-    <view class="eyebrow">《secret dictator》 · 《揭秘独裁者》</view>
-    <view class="hero-title">规则档案</view>
-    <view class="hero-copy">只查阅，不记录行动，不改变当前局势。</view>
+    <image
+      wx:if="{{ruleStorySrc}}"
+      class="rule-story-image"
+      src="{{ruleStorySrc}}"
+      mode="widthFix"
+      webp="{{true}}"
+      data-asset-key="story"
+      binderror="onRuleAssetError"
+    ></image>
   </view>
 
   <scroll-view class="section-tabs" scroll-x enhanced show-scrollbar="{{false}}">
@@ -30,12 +36,22 @@
 
   <view class="rules-list">
     <view wx:if="{{activeSection}}" id="{{activeSection.id}}" class="rule-section is-active">
-      <view class="section-heading">
+      <image
+        wx:if="{{activeSection.imageOnly && activeSectionImageSrc}}"
+        class="rule-one-flow-image"
+        src="{{activeSectionImageSrc}}"
+        mode="widthFix"
+        webp="{{true}}"
+        data-asset-key="{{activeSection.imageAssetKey}}"
+        binderror="onRuleAssetError"
+      ></image>
+
+      <view wx:elif="{{!activeSection.imageOnly}}" class="section-heading">
         <view class="section-index">{{activeSectionIndex + 1}}</view>
         <view class="section-title">{{activeSection.title}}</view>
       </view>
 
-      <view wx:if="{{activeSection.groups && activeSection.groups.length}}" class="rule-groups">
+      <view wx:if="{{!activeSection.imageOnly && activeSection.groups && activeSection.groups.length}}" class="rule-groups">
         <view wx:for="{{activeSection.groups}}" wx:key="title" class="rule-group">
           <view class="rule-group-title">{{item.title}}</view>
           <view class="rule-items">
@@ -47,14 +63,14 @@
         </view>
       </view>
 
-      <view wx:elif="{{activeSection.items && activeSection.items.length}}" class="rule-items">
+      <view wx:elif="{{!activeSection.imageOnly && activeSection.items && activeSection.items.length}}" class="rule-items">
         <view wx:for="{{activeSection.items}}" wx:for-item="rule" wx:key="*this" class="rule-item">
           <view class="rule-bullet"></view>
           <view class="rule-text">{{rule}}</view>
         </view>
       </view>
 
-      <view wx:else class="rule-empty">{{activeSection.emptyText || "暂无内容"}}</view>
+      <view wx:elif="{{!activeSection.imageOnly}}" class="rule-empty">{{activeSection.emptyText || "暂无内容"}}</view>
     </view>
   </view>
 </view>
