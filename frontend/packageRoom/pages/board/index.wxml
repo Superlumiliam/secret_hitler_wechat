@@ -31,79 +31,19 @@
       </view>
 
       <view class="center-board">
-        <view class="phase-banner">
-          <view class="eagle-mark"></view>
-          <view class="phase-title">{{board.phaseName}}</view>
-        </view>
-
-        <view class="track-panel liberal-panel">
-          <view class="policy-track-shell liberal-track-shell">
-            <image wx:if="{{policyAssets.liberalBg}}" class="policy-track-bg" src="{{policyAssets.liberalBg}}" mode="aspectFill" webp="{{true}}"></image>
-            <view class="policy-row liberal-row">
-              <view wx:for="{{liberalTrack}}" wx:key="slot" class="{{item.cellClass}}">
-                <image wx:if="{{item.cardSrc}}" class="policy-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
-                <text wx:else class="policy-label">{{item.label}}</text>
-              </view>
-            </view>
-          </view>
-          <view class="track-progress">已颁布 <text class="progress-count">{{board.liberalPolicyCount}}</text> / 5</view>
-        </view>
-
-        <view class="track-panel fascist-panel">
-          <view class="policy-track-shell fascist-track-shell">
-            <image wx:if="{{policyAssets.authoritarianBg}}" class="policy-track-bg" src="{{policyAssets.authoritarianBg}}" mode="aspectFill" webp="{{true}}"></image>
-            <view class="policy-row fascist-row">
-              <view wx:for="{{fascistTrack}}" wx:key="slot" class="{{item.cellClass}}">
-                <image wx:if="{{item.cardSrc}}" class="policy-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
-                <text wx:else class="policy-label">{{item.label}}</text>
-                <view
-                  wx:if="{{item.powerBadgeSrc}}"
-                  class="power-badge-control"
-                  catchtap="onTogglePowerTip"
-                  data-slot="{{item.slot}}"
-                  role="button"
-                  aria-label="总统权力：{{item.power}}"
-                >
-                  <image
-                    class="power-badge-image"
-                    src="{{item.powerBadgeSrc}}"
-                    mode="aspectFit"
-                    webp="{{true}}"
-                  ></image>
-                  <view wx:if="{{activePowerTipSlot == item.slot}}" class="power-tip">总统权力：{{item.power}}</view>
-                </view>
-              </view>
-            </view>
-          </view>
-          <view class="track-progress fascist-progress">已颁布 <text class="progress-count fascist-count">{{board.fascistPolicyCount}}</text> / 6</view>
-          <view wx:if="{{board.fascistPolicyCount >= 5}}" class="veto-note">第5张后，立法阶段永久解锁否决权</view>
-        </view>
-
-        <view class="election-panel">
-          <view class="election-track-shell">
-            <image wx:if="{{policyAssets.electionTrackBg}}" class="election-track-bg" src="{{policyAssets.electionTrackBg}}" mode="aspectFill" webp="{{true}}"></image>
-            <view class="election-row">
-              <view wx:for="{{electionTrack}}" wx:key="slot" class="{{item.cellClass}}">
-                <image wx:if="{{item.slotSrc}}" class="election-slot-image" src="{{item.slotSrc}}" mode="aspectFit" webp="{{true}}"></image>
-                <text class="election-slot-label">{{item.slot}}</text>
-              </view>
-            </view>
-          </view>
-          <view class="election-progress">当前进度 {{board.electionTracker}} / 3</view>
-        </view>
-
-        <view class="deck-piles-panel">
-          <view wx:for="{{board.deckPiles}}" wx:key="key" class="{{item.pileClass}}">
-            <image wx:if="{{item.bgSrc}}" class="deck-pile-bg" src="{{item.bgSrc}}" mode="scaleToFill" webp="{{true}}"></image>
-            <view class="deck-card-stack" aria-hidden="true">
-              <image wx:if="{{item.cardSrc}}" class="deck-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
-            </view>
-            <view class="deck-pile-copy">
-              <view class="deck-pile-label">{{item.label}}</view>
-              <view class="deck-pile-count">{{item.countText}}</view>
-            </view>
-          </view>
-        </view>
+        <phase-banner title="{{board.phaseName}}"></phase-banner>
+        <policy-track faction="liberal" assets="{{policyAssets}}" slots="{{liberalTrack}}" count="{{board.liberalPolicyCount}}" total="{{5}}"></policy-track>
+        <policy-track
+          faction="fascist"
+          assets="{{policyAssets}}"
+          slots="{{fascistTrack}}"
+          count="{{board.fascistPolicyCount}}"
+          total="{{6}}"
+          active-power-tip-slot="{{activePowerTipSlot}}"
+          bind:togglepowertip="onTogglePowerTip"
+        ></policy-track>
+        <election-track assets="{{policyAssets}}" slots="{{electionTrack}}" election-tracker="{{board.electionTracker}}"></election-track>
+        <deck-piles piles="{{board.deckPiles}}"></deck-piles>
 
         <view class="status-strip">
           <image wx:if="{{policyAssets.frameNarrow}}" class="status-frame-image" src="{{policyAssets.frameNarrow}}" mode="scaleToFill" webp="{{true}}"></image>
@@ -116,46 +56,13 @@
 
       </view>
 
-      <view class="seat-row">
-        <view wx:for="{{seats}}" wx:key="seatNo" class="{{item.seatClass}}" bindtap="onTapSeat" data-member-id="{{item.memberId}}" role="button" aria-label="双击切换操控席位">
-          <view class="seat-art">
-            <image wx:if="{{policyAssets.playerSeat}}" class="seat-frame-image" src="{{policyAssets.playerSeat}}" mode="aspectFill" webp="{{true}}"></image>
-            <view class="seat-no">{{item.seatNo}}</view>
-            <view
-              class="avatar"
-              catchtap="onTapAvatar"
-              data-member-id="{{item.memberId}}"
-              data-is-self="{{item.isSelf}}"
-              role="button"
-              aria-label="{{item.isSelf ? '查看我的身份' : '选择玩家席位'}}"
-            >
-              <image wx:if="{{item.avatarSrc}}" class="avatar-image" src="{{item.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
-            </view>
-            <view class="seat-name">{{item.name}}</view>
-            <view wx:if="{{item.roleBadgeSrc}}" class="role-badge" aria-label="{{item.roleLabel}}">
-              <image class="role-badge-image" src="{{item.roleBadgeSrc}}" mode="aspectFill" webp="{{true}}"></image>
-            </view>
-            <image
-              wx:if="{{item.investigationStampSrc}}"
-              class="investigation-stamp"
-              src="{{item.investigationStampSrc}}"
-              mode="aspectFit"
-              webp="{{true}}"
-              aria-label="调查结果：{{item.investigationStampLabel}}"
-            ></image>
-            <view
-              class="{{item.identityMark.className}}"
-              catchtap="onTapIdentityMark"
-              data-member-id="{{item.memberId}}"
-              data-can-change="{{item.canChangeIdentityMark}}"
-              role="button"
-              aria-label="{{item.identityMark.label}}"
-            >
-              <image wx:if="{{item.identityMark.iconSrc}}" class="identity-mark-image" src="{{item.identityMark.iconSrc}}" mode="aspectFill" webp="{{true}}"></image>
-            </view>
-          </view>
-        </view>
-      </view>
+      <seat-list
+        assets="{{policyAssets}}"
+        seats="{{seats}}"
+        bind:tapseat="onTapSeat"
+        bind:tapavatar="onTapAvatar"
+        bind:tapidentitymark="onTapIdentityMark"
+      ></seat-list>
 
       <view class="action-dock">
         <view wx:if="{{investigationResult}}" class="secret-result-panel">

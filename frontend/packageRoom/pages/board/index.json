@@ -1,3 +1,10 @@
 {
-  "navigationStyle": "custom"
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "phase-banner": "../../components/phase-banner/index",
+    "policy-track": "../../components/policy-track/index",
+    "election-track": "../../components/election-track/index",
+    "deck-piles": "../../components/deck-piles/index",
+    "seat-list": "../../components/seat-list/index"
+  }
 }

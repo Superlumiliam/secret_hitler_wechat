@@ -1,0 +1,32 @@
+<view class="{{seat.seatClass}}" bindtap="onTapSeat" role="button" aria-label="双击切换操控席位">
+  <view class="seat-art">
+    <image wx:if="{{assets.playerSeat}}" class="seat-frame-image" src="{{assets.playerSeat}}" mode="aspectFill" webp="{{true}}"></image>
+    <view class="seat-no">{{seat.seatNo}}</view>
+    <view
+      class="avatar"
+      catchtap="onTapAvatar"
+      role="button"
+      aria-label="{{seat.isSelf ? '查看我的身份' : '选择玩家席位'}}"
+    >
+      <image wx:if="{{seat.avatarSrc}}" class="avatar-image" src="{{seat.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
+    </view>
+    <view class="seat-name">{{seat.name}}</view>
+    <government-badge label="{{seat.roleLabel}}" src="{{seat.roleBadgeSrc}}"></government-badge>
+    <image
+      wx:if="{{seat.investigationStampSrc}}"
+      class="investigation-stamp"
+      src="{{seat.investigationStampSrc}}"
+      mode="aspectFit"
+      webp="{{true}}"
+      aria-label="调查结果：{{seat.investigationStampLabel}}"
+    ></image>
+    <view
+      class="{{seat.identityMark.className}}"
+      catchtap="onTapIdentityMark"
+      role="button"
+      aria-label="{{seat.identityMark.label}}"
+    >
+      <image wx:if="{{seat.identityMark.iconSrc}}" class="identity-mark-image" src="{{seat.identityMark.iconSrc}}" mode="aspectFill" webp="{{true}}"></image>
+    </view>
+  </view>
+</view>

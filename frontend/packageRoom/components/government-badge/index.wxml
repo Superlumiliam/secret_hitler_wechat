@@ -1,0 +1,3 @@
+<view wx:if="{{src}}" class="role-badge" aria-label="{{label}}">
+  <image class="role-badge-image" src="{{src}}" mode="aspectFill" webp="{{true}}"></image>
+</view>

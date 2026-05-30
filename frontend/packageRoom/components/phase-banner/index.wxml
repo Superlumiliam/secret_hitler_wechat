@@ -1,0 +1,4 @@
+<view class="phase-banner">
+  <view class="eagle-mark"></view>
+  <view class="phase-title">{{title}}</view>
+</view>

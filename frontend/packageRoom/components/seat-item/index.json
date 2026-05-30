@@ -1,0 +1,6 @@
+{
+  "component": true,
+  "usingComponents": {
+    "government-badge": "../government-badge/index"
+  }
+}

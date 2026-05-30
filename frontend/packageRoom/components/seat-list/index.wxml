@@ -1,0 +1,11 @@
+<view class="seat-row">
+  <seat-item
+    wx:for="{{seats}}"
+    wx:key="seatNo"
+    assets="{{assets}}"
+    seat="{{item}}"
+    bind:tapseat="onTapSeat"
+    bind:tapavatar="onTapAvatar"
+    bind:tapidentitymark="onTapIdentityMark"
+  ></seat-item>
+</view>

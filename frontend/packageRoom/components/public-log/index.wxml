@@ -1,0 +1,3 @@
+<view class="public-log">
+  <view wx:for="{{items}}" wx:key="eventId" class="public-log-item">{{item.summary}}</view>
+</view>

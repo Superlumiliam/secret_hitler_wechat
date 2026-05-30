@@ -75,9 +75,9 @@ P0 目标是让 `5-10` 人可以不依赖主持人完成一整局标准《secret
 - 桌面页通过 `gameService.getGameSnapshot` 轮询刷新，使用公共快照 + 当前玩家私密任务渲染。
 - 所有按钮只代表“提交意图”，提交成功后仍以服务端返回快照为准。
 
-[ ] 对局快照前端模型与组件
+[x] 对局快照前端模型与组件
 
-- 补齐 `types/game.ts`、`types/task.ts`、`mappers/gameMapper.ts`、`mappers/taskMapper.ts`。
+- 补齐 `types/game.js`、`types/task.js`、`mappers/gameMapper.js`、`mappers/taskMapper.js`。
 - 实现基础组件：`phase-banner`、`policy-track`、`deck-piles`、`election-track`、`seat-list`、`seat-item`、`government-badge`、`public-log`、`pending-task-card`。
 - 组件只消费映射后的 view-model，不直接拼接后端原始字段。
 - 处理加载态、空态、版本冲突、房间已结束、当前用户已出局等状态。
