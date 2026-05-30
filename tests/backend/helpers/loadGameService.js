@@ -52,13 +52,25 @@ function createMemoryDb(initialData = {}) {
     };
   }
 
-  function queryApi(name, query, limitCount = null) {
+  function queryApi(name, query, limitCount = null, order = null) {
     return {
       limit(nextLimitCount) {
-        return queryApi(name, query, nextLimitCount);
+        return queryApi(name, query, nextLimitCount, order);
+      },
+      orderBy(field, direction = "asc") {
+        return queryApi(name, query, limitCount, { field, direction });
       },
       async get() {
         let rows = Array.from(ensureCollection(name).values()).filter((row) => matchesQuery(row, query));
+        if (order) {
+          rows = rows.slice().sort((a, b) => {
+            if (a[order.field] === b[order.field]) {
+              return 0;
+            }
+            const result = a[order.field] > b[order.field] ? 1 : -1;
+            return order.direction === "desc" ? -result : result;
+          });
+        }
         if (Number.isInteger(limitCount)) {
           rows = rows.slice(0, limitCount);
         }
@@ -94,12 +106,20 @@ function createMemoryDb(initialData = {}) {
 }
 
 function loadGameService(options = {}) {
+  return loadCloudFunction("gameService", options);
+}
+
+function loadRoomService(options = {}) {
+  return loadCloudFunction("roomService", options);
+}
+
+function loadCloudFunction(functionName, options = {}) {
   const db = options.db || createMemoryDb();
   const openIdRef = { value: options.openId || "test_openid" };
-  const gameServicePath = path.resolve(__dirname, "../../../cloudfunctions/gameService/index.js");
+  const servicePath = path.resolve(__dirname, `../../../cloudfunctions/${functionName}/index.js`);
   const originalLoad = Module._load;
 
-  delete require.cache[gameServicePath];
+  delete require.cache[servicePath];
   Module._load = function patchedLoad(request, parent, isMain) {
     if (request === "wx-server-sdk") {
       return {
@@ -113,13 +133,18 @@ function loadGameService(options = {}) {
         database() {
           return db;
         },
+        async deleteFile() {
+          return {
+            fileList: [],
+          };
+        },
       };
     }
     return originalLoad(request, parent, isMain);
   };
 
   try {
-    const service = require(gameServicePath);
+    const service = require(servicePath);
     return {
       service,
       db,
@@ -152,4 +177,5 @@ function clone(value) {
 module.exports = {
   createMemoryDb,
   loadGameService,
+  loadRoomService,
 };

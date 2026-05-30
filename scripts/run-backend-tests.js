@@ -8,6 +8,7 @@ const testFiles = [
   "tests/backend/gameService/startGameInit.test.js",
   "tests/backend/gameService/ruleScenarios.test.js",
   "tests/backend/gameService/resultSnapshot.integration.test.js",
+  "tests/backend/roomService/isolation.test.js",
 ];
 
 let failed = 0;
