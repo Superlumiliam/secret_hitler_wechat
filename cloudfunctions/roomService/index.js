@@ -1051,6 +1051,65 @@ async function setReady(payload, openid) {
   });
 }
 
+async function updateRoomSettings(payload, openid) {
+  const roomId = payload && payload.roomId;
+  const targetPlayerCount = Number(payload && payload.targetPlayerCount);
+  if (!roomId || typeof roomId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+  if (
+    !Number.isInteger(targetPlayerCount) ||
+    targetPlayerCount < MIN_PLAYER_COUNT ||
+    targetPlayerCount > MAX_PLAYER_COUNT
+  ) {
+    return fail("INVALID_PAYLOAD", "人数必须是 5-10 的整数");
+  }
+
+  return withCommandIdempotency(openid, payload, async () => {
+    const roomRes = await db.collection("rooms").doc(roomId).get();
+    const room = roomRes.data;
+    if (!room) {
+      return fail("ROOM_NOT_FOUND", "房间不存在");
+    }
+    if (isRoomExpired(room)) {
+      return fail("ROOM_EXPIRED", "房间已过期");
+    }
+    if (room.status !== "lobby") {
+      return fail("GAME_ALREADY_STARTED", "房间已开局");
+    }
+
+    const member = await getRoomMember(roomId, openid);
+    if (!member) {
+      return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+    }
+    if (getMemberId(member) !== room.hostMemberId) {
+      return fail("NOT_ROOM_HOST", "只有房主可以使用房间设置");
+    }
+
+    const activeMembers = await getActiveRoomMembers(roomId);
+    if (targetPlayerCount < activeMembers.length) {
+      return fail("TARGET_COUNT_BELOW_SEATED", "选择人数小于已落座玩家数");
+    }
+
+    const updatedAt = new Date();
+    await db.collection("rooms").doc(roomId).update({
+      data: {
+        targetPlayerCount,
+        version: _.inc(1),
+        updatedAt,
+      },
+    });
+
+    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+    return ok({
+      roomId,
+      roomStatus: "lobby",
+      newVersion: lobbySnapshot && lobbySnapshot.version,
+      lobbySnapshot,
+    });
+  });
+}
+
 async function assertSoloRoomHost(roomId, openid) {
   if (!roomId || typeof roomId !== "string") {
     return {
@@ -1281,6 +1340,8 @@ async function dispatchAction(action, payload, openid) {
       return await leaveRoom(payload, openid);
     case "getLobbySnapshot":
       return await getLobbySnapshot(payload, openid);
+    case "updateRoomSettings":
+      return await updateRoomSettings(payload, openid);
     case "setReady":
       return await setReady(payload, openid);
     case "soloCreateRoom":

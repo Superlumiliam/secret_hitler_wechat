@@ -358,7 +358,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 约束：
 
 - `rooms.version` 仅用于大厅阶段版本控制
-- `targetPlayerCount` 来自创建房间页选择，仅用于大厅展示和开局前提示；开局合法性仍以后端当前有效成员数为准
+- `targetPlayerCount` 来自创建房间页选择，用于大厅席位数量、加入上限展示和开局前提示；大厅阶段房主可通过房间设置更新该值，开局合法性仍以后端当前有效成员数为准
 - 开局后 `playerCount` 不再变化
 - `expireAt` 按房间阶段固定设置：大厅创建后 30 分钟、开局后 2 小时、游戏结束后 30 分钟；准备、加入、退出、游戏命令等有效操作不延长该时间
 - `assetFileIds` 记录该房间已关联的临时云存储资源，用于房间过期或销毁时统一删除；默认头像等公共静态资源不得写入该字段
@@ -720,6 +720,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - `joinRoom`
 - `leaveRoom`
 - `getLobbySnapshot`
+- `updateRoomSettings`
 - `setReady`
 
 说明：`updateSeatOrder` 属于 P1 座位管理扩展，MVP 不要求实现。
@@ -760,13 +761,14 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 2. 校验请求中的 `displayName/avatarUrl`，其中 `avatarUrl` 必须为空或待关联的房间临时头像 `fileID`
 3. 校验房间存在、未过期、仍在大厅；同一 openid 回流只允许恢复自己已有成员身份
 4. 若同一 openid 已在该房间有有效成员，则直接返回该成员记录；不因本次请求覆盖既有成员快照
-5. 若房间是大厅且未满，则使用请求中的 `displayName/avatarUrl` 创建新成员资料快照，并登记房间临时头像到该房间资源清理清单
+5. 若房间是大厅且当前有效成员数小于 `targetPlayerCount`，则使用请求中的 `displayName/avatarUrl` 创建新成员资料快照，并登记房间临时头像到该房间资源清理清单
 6. 更新房间 `playerCount`
 7. 即时组装并返回大厅视图响应
 
 关键约束：
 
 - 大厅阶段最多 10 人
+- 大厅阶段新成员加入上限以当前房间 `targetPlayerCount` 为准；房主调大席位后才允许继续加入
 - 开局后不允许新 openid 加入
 - 同 openid 分享回流时必须复用原成员身份，不重复占座，不因回流请求覆盖既有头像资源；若前端已为回流请求上传新头像但后端未采用，前端应尝试删除该待关联头像
 - 若用户当前只关联到 `ended` 或已过期房间，允许加入新房间
@@ -805,6 +807,31 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - 按数组顺序重写各成员 `seatIndex`
 - `rooms.version + 1`
 - 即时组装并返回大厅视图响应
+
+### 8.2.5 `updateRoomSettings`
+
+用于大厅页房主调整当前房间席位数量。该操作只更新 `rooms.targetPlayerCount`，不创建新房间，不修改 `roomCode`，不修改 `room_members` 中已有成员与座位。
+
+强校验：
+
+- 仅大厅
+- 仅房主
+- `targetPlayerCount` 必须是 `5-10` 的整数
+- `targetPlayerCount` 必须大于等于当前有效成员数；小于当前有效成员数时返回 `TARGET_COUNT_BELOW_SEATED`
+
+更新方式：
+
+- 在同一事务中重新读取 `rooms` 与有效 `room_members`
+- 校验当前 openid 对应成员仍为 `hostMemberId`
+- 更新 `rooms.targetPlayerCount`
+- `rooms.version + 1`
+- 即时组装并返回大厅视图响应
+
+约束：
+
+- 房主进入创建房间页的房间设置模式只是前端视图跳转，不应触发 `leaveRoom`，也不得清理 `user_profiles.activeRoomId/activeMemberId`
+- 已落座玩家的 `memberId`、`seatIndex`、`isReady`、`memberStatus` 与头像昵称快照必须保持不变
+- 该操作不属于 P1 座位管理，不提供座位重排能力
 
 ### 8.2.6 `setReady`
 

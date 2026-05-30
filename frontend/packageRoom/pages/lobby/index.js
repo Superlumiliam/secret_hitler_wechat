@@ -44,6 +44,7 @@ function createServiceError(result, fallbackMessage) {
     ROOM_EXPIRED: "房间已过期",
     NOT_ROOM_MEMBER: "当前用户不在房间中",
     NOT_ROOM_HOST: "只有房主可执行该操作",
+    TARGET_COUNT_BELOW_SEATED: "选择人数小于已落座玩家数",
     NOT_ALL_READY: "还有玩家未准备",
     GAME_ALREADY_STARTED: "对局已开始，正在为你恢复",
     ACTION_NOT_ALLOWED: "当前状态不允许执行该操作",
@@ -405,9 +406,22 @@ Page({
   },
 
   onTapRoomSettings() {
-    wx.showToast({
-      title: "房间设置待开放",
-      icon: "none",
+    const lobby = this.data.lobby;
+    const viewerState = (lobby && lobby.viewerState) || {};
+    if (!lobby || !this.data.roomId) {
+      return;
+    }
+
+    if (!viewerState.isHost) {
+      wx.showToast({
+        title: "只有房主能使用房间设置功能",
+        icon: "none",
+      });
+      return;
+    }
+
+    wx.navigateTo({
+      url: `/pages/create-room/index?mode=roomSettings&roomId=${encodeURIComponent(this.data.roomId)}`,
     });
   },
 

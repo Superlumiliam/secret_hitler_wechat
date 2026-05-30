@@ -71,7 +71,7 @@ MVP 阶段固定为以下三类对外云函数：
 | 云函数 | 职责 | 允许 action |
 | --- | --- | --- |
 | `bootstrapService` | 会话初始化与活跃房间恢复 | `ensureSession`、`recoverActiveRoom`、`clearActiveRoom` |
-| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`setReady` |
+| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`updateRoomSettings`、`setReady` |
 | `gameService` | 游戏开局、对局快照、命令处理、结果快照 | `startGame`、`getGameSnapshot`、`submitCommand`、`getResultSnapshot` |
 
 说明：
@@ -136,7 +136,7 @@ MVP 阶段固定为以下三类对外云函数：
 
 所有会改变状态的请求都必须带 `commandId`：
 
-- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`setReady`
+- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`updateRoomSettings`、`setReady`
 - 游戏写操作：`startGame`、`submitCommand`
 
 用途：
@@ -259,7 +259,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 字段约束：
 
-- `targetPlayerCount` 来自创建房间页选择，用于大厅展示目标人数
+- `targetPlayerCount` 来自创建房间页选择，用于大厅席位数量、加入上限展示和开局前提示；大厅阶段房主可通过房间设置调整该值
 - `roomMode` 当前只暴露 `normal` 或 `solo`；对外文案中 `solo` 房间展示为“单人模式”
 - `seatOrder` 只包含当前有效大厅成员，MVP 顺序由加入顺序初始化
 - `viewerState` 由后端根据当前 openid 与房间成员即时派生，只存在于 API 响应，不写入数据库
@@ -878,7 +878,7 @@ interface PublicHistoryProjection {
 
 - 同一 `openid` 已在该房间有有效成员时必须复用原 `memberId`
 - 开局后不允许新 `openid` 加入
-- 若房间已满返回 `ROOM_FULL`
+- 若当前有效成员数已达到 `targetPlayerCount`，新 `openid` 加入返回 `ROOM_FULL`
 
 主要失败错误码：
 
@@ -1019,6 +1019,64 @@ interface PublicHistoryProjection {
 - `NOT_ROOM_MEMBER`
 - `NOT_ROOM_HOST`
 - `ACTION_NOT_ALLOWED`
+- `INTERNAL_ERROR`
+
+## 6.6 `updateRoomSettings`
+
+`updateRoomSettings` 用于房主在大厅阶段调整房间席位数量。该操作只修改当前房间的 `targetPlayerCount`，不会创建新房间，不会变更 `roomCode`，不会重排或压缩已有 `seatIndex`。
+
+请求：
+
+```json
+{
+  "action": "updateRoomSettings",
+  "payload": {
+    "commandId": "cmd_update_room_settings_xxx",
+    "roomId": "room_xxx",
+    "targetPlayerCount": 8
+  }
+}
+```
+
+字段校验：
+
+- `targetPlayerCount` 必须是 `5-10` 的整数
+- 当前用户必须是该房间有效成员且为房主
+- 房间必须仍处于 `lobby`
+- `targetPlayerCount` 不得小于当前有效成员数
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "requestId": "req_xxx",
+  "serverTime": "2026-04-12T12:00:00.000Z",
+  "data": {
+    "roomId": "room_xxx",
+    "roomStatus": "lobby",
+    "newVersion": 7,
+    "lobbySnapshot": {}
+  }
+}
+```
+
+行为约束：
+
+- 成功后 `lobbySnapshot.targetPlayerCount` 必须等于新选择的人数
+- 已落座成员的 `memberId`、`seatIndex`、准备态、房主身份均保持不变
+- 该操作不调用 `leaveRoom`，不清理当前用户活跃房间锚点，不触发房主转移
+
+主要失败错误码：
+
+- `INVALID_PAYLOAD`
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `NOT_ROOM_HOST`
+- `GAME_ALREADY_STARTED`
+- `TARGET_COUNT_BELOW_SEATED`
+- `DUPLICATE_COMMAND`
 - `INTERNAL_ERROR`
 
 ## 6.7 `setReady`
@@ -1459,6 +1517,7 @@ MVP 阶段统一使用以下错误码：
 | `NOT_ROOM_MEMBER` | `false` | 当前用户不是该房间有效成员 |
 | `NOT_ROOM_HOST` | `false` | 当前用户不是房主 |
 | `INVALID_PLAYER_COUNT` | `false` | 玩家人数不符合开局条件 |
+| `TARGET_COUNT_BELOW_SEATED` | `false` | 房间设置选择人数小于当前已落座玩家数 |
 | `NOT_ALL_READY` | `false` | 大厅成员未全部准备 |
 | `GAME_NOT_STARTED` | `false` | 房间尚未开局 |
 | `GAME_ALREADY_STARTED` | `false` | 房间已经开局，不能做大厅操作 |

@@ -1,10 +1,16 @@
 <view class="create-room-page">
   <view class="top-bar">
     <view class="back-control" bindtap="onBackHome" hover-class="icon-hover" role="button" aria-label="返回">‹</view>
-    <view class="page-title">选择房间人数</view>
+    <view class="page-title">{{mode === 'roomSettings' ? '房间设置' : '选择房间人数'}}</view>
   </view>
 
-  <view class="content">
+  <view wx:if="{{mode === 'roomSettings'}}" class="settings-note">
+    已落座 {{seatedPlayerCount}} 人，席位数量不能小于已落座人数
+  </view>
+
+  <view wx:if="{{isLoadingSettings}}" class="state-text">正在读取房间设置...</view>
+
+  <view wx:else class="content">
     <view class="count-list">
       <view
         wx:for="{{playerCounts}}"
@@ -51,10 +57,10 @@
   </view>
 
   <button
-    class="complete-button {{isSubmitting ? 'complete-button-disabled' : ''}}"
+    class="complete-button {{isSubmitting || isLoadingSettings ? 'complete-button-disabled' : ''}}"
     loading="{{isSubmitting}}"
-    disabled="{{isSubmitting}}"
-    bindtap="onCreateRoom"
+    disabled="{{isSubmitting || isLoadingSettings}}"
+    bindtap="onComplete"
     hover-class="complete-button-hover"
   >
     完成

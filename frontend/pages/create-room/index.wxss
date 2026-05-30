@@ -62,6 +62,19 @@ page {
   padding-top: 28rpx;
 }
 
+.settings-note,
+.state-text {
+  margin: 24rpx auto 0;
+  color: #cfa36b;
+  font-size: 26rpx;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.state-text {
+  padding: 120rpx 0;
+}
+
 .count-list {
   margin-top: 0;
   display: grid;

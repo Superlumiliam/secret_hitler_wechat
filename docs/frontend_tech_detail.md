@@ -306,6 +306,7 @@ frontend/
 - `user-profile -> home`：点击“保存形象”且保存成功后统一回首页；优先 `wx.navigateBack` 回到上一层首页，异常栈下兜底 `wx.reLaunch({ url: '/pages/home/index' })`
 - `create-room -> lobby`：`wx.redirectTo`
 - `home -> lobby`：加入房间或恢复房间成功后 `wx.redirectTo`
+- `lobby -> create-room(roomSettings)`：房主点击“房间设置”后 `wx.navigateTo`，完成后 `wx.navigateBack` 回大厅；该路径不代表离开房间
 - `lobby -> board`：开局成功后 `wx.redirectTo`
 - `board -> identity`：点击底部“我的身份 / 查看身份”入口，或点击当前用户自己的席位头像后 `wx.navigateTo`
 - `identity -> board`：点击“我知道了”后 `wx.navigateBack`
@@ -598,6 +599,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 - `joinRoom(roomCode, localUserProfile)`
 - `leaveRoom(roomId)`
 - `getLobbySnapshot(roomId)`
+- `updateRoomSettings(roomId, targetPlayerCount)`
 - `setReady(roomId, ready)`
 
 补充约束：
@@ -922,13 +924,16 @@ interface UserProfilePageData {
 
 - 选择对局人数
 - 创建普通房间或单人模式房间
+- 作为大厅房间设置视图复用，用于房主调整当前房间席位数量
 
 ### `data` 字段
 
 ```ts
 interface CreateRoomPageData {
   playerCount: number
-  mode: 'normal' | 'solo'
+  mode: 'normal' | 'solo' | 'roomSettings'
+  roomId?: string
+  seatedPlayerCount?: number
   creating: boolean
   errorText: string
 }
@@ -938,6 +943,7 @@ interface CreateRoomPageData {
 
 - `handleSelectPlayerCount`
 - `handleCreateRoom`
+- `handleConfirmRoomSettings`
 
 ### 实现细节
 
@@ -945,6 +951,10 @@ interface CreateRoomPageData {
 2. 从首页“创建房间”进入时创建普通房间；从首页“单人模式”进入时创建单人模式房间。单人模式使用 `mode: 'solo'` 与 `solo*` action；旧开发者模式实现只可作为迁移参考，不作为长期接口契约。
 3. 创建成功后跳转房间大厅。
 4. 选择人数用于创建时的目标人数与大厅展示；实际开局仍以后端校验的当前有效人数为准。
+5. 从大厅“房间设置”进入时使用 `mode=roomSettings&roomId=...`，页面只作为当前房间的设置视图，不创建新房间，不调用 `leaveRoom`，不清理当前活跃房间状态。
+6. 房间设置模式 `onLoad` 先调用 `roomService.getLobbySnapshot(roomId)` 初始化当前目标人数与已落座人数；若当前用户不是房主，提示“只有房主能使用房间设置功能”后返回大厅。
+7. 房间设置模式下点击完成调用 `roomService.updateRoomSettings(roomId, playerCount)`；成功后 `wx.navigateBack` 回大厅页，大厅页使用返回的 `lobbySnapshot` 或立即补拉 `getLobbySnapshot` 更新席位数量。
+8. 房间设置模式下若选择人数小于已落座人数，前端应直接提示“选择人数小于已落座玩家数”；后端返回 `TARGET_COUNT_BELOW_SEATED` 时也映射为同一提示。
 
 ## 12.4 大厅页 `lobby`
 
@@ -954,6 +964,7 @@ interface CreateRoomPageData {
 - 展示玩家列表与座位顺序
 - 设置准备状态
 - 房主开始游戏
+- 房主调整房间设置
 - 发起分享
 
 ### `data` 字段
@@ -963,6 +974,7 @@ interface LobbyPageData {
   lobby: LobbyViewModel | null
   readySubmitting: boolean
   startSubmitting: boolean
+  settingsSubmitting: boolean
   shareEnabled: boolean
 }
 ```
@@ -976,6 +988,8 @@ MVP 不支持房主调整座位，座位顺序由加入顺序初始化并在开�
 - 自己已准备：按钮显示“取消准备”
 - 未准备：按钮显示“准备”
 - 非房主不显示“开始游戏”
+- 大厅提供“房间设置”入口；非房主点击时就地提示“只有房主能使用房间设置功能”，不跳转
+- 房主点击“房间设置”时跳转到 `pages/create-room/index?mode=roomSettings&roomId=...`，该跳转只是视图切换，房主仍是房间成员，其他玩家大厅轮询中仍应看到房主在原座位
 - 房主点击开始前弹出确认弹窗，避免误开局
 - 确认后调用 `gameService.startGame(roomId)`；成功后根据 `routeHint` 进入对局桌面，并立即拉取 `gameService.getGameSnapshot(roomId)`
 
@@ -1646,6 +1660,8 @@ interface ResultSnapshot {
 | `ROOM_FULL` | 留在首页 | 房间已满 |
 | `ROOM_NOT_JOINABLE` | 留在首页 | 房间当前不可加入 |
 | `NOT_ROOM_HOST` | 就地提示 | 只有房主可执行该操作 |
+| `NOT_ROOM_HOST`（房间设置上下文） | 就地提示后回大厅 | 只有房主能使用房间设置功能 |
+| `TARGET_COUNT_BELOW_SEATED` | 创建房间页房间设置模式提示 | 选择人数小于已落座玩家数 |
 | `NOT_ALL_READY` | 大厅页提示 | 还有玩家未准备 |
 | `GAME_ALREADY_STARTED` | 跳转桌面页 | 对局已开始，正在为你恢复 |
 | `GAME_ALREADY_ENDED` | 跳转结果页 | 对局已结束 |

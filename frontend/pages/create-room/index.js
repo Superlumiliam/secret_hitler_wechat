@@ -106,6 +106,26 @@ function createCommandId(prefix = "create_room") {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function createServiceError(result, fallbackMessage) {
+  const error = (result && result.error) || {};
+  const code = error.code || "";
+  const messageByCode = {
+    INVALID_PAYLOAD: "请求参数有误",
+    ROOM_NOT_FOUND: "房间不存在",
+    ROOM_EXPIRED: "房间已过期",
+    NOT_ROOM_MEMBER: "当前用户不在房间中",
+    NOT_ROOM_HOST: "只有房主能使用房间设置功能",
+    TARGET_COUNT_BELOW_SEATED: "选择人数小于已落座玩家数",
+    GAME_ALREADY_STARTED: "对局已开始",
+    ACTION_NOT_ALLOWED: "当前状态不允许执行该操作",
+    INTERNAL_ERROR: "系统繁忙，请稍后重试",
+  };
+  const err = new Error(messageByCode[code] || (error && error.message) || fallbackMessage || "操作失败");
+  err.code = code;
+  err.retryable = Boolean(error.retryable);
+  return err;
+}
+
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
 }
@@ -173,24 +193,33 @@ Page({
     playerCounts,
     selectedCount: 6,
     mode: "normal",
+    roomId: "",
+    seatedPlayerCount: 0,
     isSubmitting: false,
+    isLoadingSettings: false,
     preloadedAvatars: [],
     ...buildRoleData(6),
   },
 
   onLoad(options = {}) {
-    if (!getCachedUserProfile()) {
+    const mode = options.mode === "solo" ? "solo" : options.mode === "roomSettings" ? "roomSettings" : "normal";
+    const roomId = String(options.roomId || "");
+
+    if (mode !== "roomSettings" && !getCachedUserProfile()) {
       wx.redirectTo({
         url: "/pages/user-profile/index",
       });
       return;
     }
 
-    const mode = options.mode === "solo" ? "solo" : "normal";
     this.setData({
       mode,
+      roomId,
     });
     this.loadAllRoleAvatars();
+    if (mode === "roomSettings") {
+      this.loadRoomSettings(roomId);
+    }
   },
 
   onSelectCount(event) {
@@ -272,6 +301,119 @@ Page({
     });
   },
 
+  async callRoomService(action, payload) {
+    const res = await wx.cloud.callFunction({
+      name: "roomService",
+      data: {
+        action,
+        payload,
+      },
+    });
+    const result = res.result || {};
+    if (!result.success) {
+      throw createServiceError(result, "操作失败");
+    }
+    return result.data || {};
+  },
+
+  async loadRoomSettings(roomId) {
+    if (!roomId || !wx.cloud) {
+      wx.showToast({
+        title: "房间信息无效",
+        icon: "none",
+      });
+      wx.navigateBack({ delta: 1 });
+      return;
+    }
+
+    this.setData({
+      isLoadingSettings: true,
+    });
+
+    try {
+      const lobby = await this.callRoomService("getLobbySnapshot", {
+        roomId,
+      });
+      const seatedPlayerCount = Number(lobby.playerCount || ((lobby.seatOrder || []).length || 0));
+      if (!lobby.viewerState || !lobby.viewerState.isHost) {
+        wx.showToast({
+          title: "只有房主能使用房间设置功能",
+          icon: "none",
+        });
+        setTimeout(() => {
+          wx.navigateBack({ delta: 1 });
+        }, 600);
+        return;
+      }
+
+      const selectedCount = Number(lobby.targetPlayerCount || 6);
+      this.setData({
+        selectedCount,
+        seatedPlayerCount,
+        isLoadingSettings: false,
+        ...buildRoleData(selectedCount, this.avatarUrlByFileId),
+      });
+    } catch (err) {
+      console.error("读取房间设置失败", err);
+      wx.showToast({
+        title: err.message || "读取房间失败",
+        icon: "none",
+      });
+      this.setData({
+        isLoadingSettings: false,
+      });
+      setTimeout(() => {
+        wx.navigateBack({ delta: 1 });
+      }, 800);
+    }
+  },
+
+  async onCompleteRoomSettings() {
+    if (this.data.isSubmitting || this.data.isLoadingSettings) {
+      return;
+    }
+
+    if (this.data.selectedCount < this.data.seatedPlayerCount) {
+      wx.showToast({
+        title: "选择人数小于已落座玩家数",
+        icon: "none",
+      });
+      return;
+    }
+
+    this.setData({
+      isSubmitting: true,
+    });
+
+    try {
+      const result = await this.callRoomService("updateRoomSettings", {
+        commandId: createCommandId("update_room_settings"),
+        roomId: this.data.roomId,
+        targetPlayerCount: this.data.selectedCount,
+      });
+      const lobbySnapshot = result.lobbySnapshot || result;
+      if (lobbySnapshot && lobbySnapshot.roomId) {
+        cacheInitialLobbySnapshot({
+          roomId: lobbySnapshot.roomId,
+          memberId: lobbySnapshot.viewerState && lobbySnapshot.viewerState.myMemberId,
+          lobbySnapshot,
+        });
+      }
+      wx.navigateBack({
+        delta: 1,
+      });
+    } catch (err) {
+      console.error("更新房间设置失败", err);
+      wx.showToast({
+        title: err.message || "更新房间设置失败",
+        icon: "none",
+      });
+      this.setData({
+        isSubmitting: false,
+      });
+    }
+  },
+
   async onCreateRoom() {
     if (this.data.isSubmitting) {
       return;
@@ -320,7 +462,7 @@ Page({
       if (!result.success) {
         await this.deleteUploadedAvatar(uploadedAvatarFileId);
         uploadedAvatarFileId = "";
-        throw new Error((result.error && result.error.message) || "创建房间失败");
+        throw createServiceError(result, "创建房间失败");
       }
 
       const room = result.data || {};
@@ -338,5 +480,13 @@ Page({
         isSubmitting: false,
       });
     }
+  },
+
+  onComplete() {
+    if (this.data.mode === "roomSettings") {
+      this.onCompleteRoomSettings();
+      return;
+    }
+    this.onCreateRoom();
   },
 });

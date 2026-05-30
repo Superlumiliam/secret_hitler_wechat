@@ -194,10 +194,160 @@ async function assertNonControllerRejectsVirtualSeatReady() {
   assert.strictEqual(db.dump().room_members.mem_virtual.isReady, false, "virtual seat readiness should not change");
 }
 
+async function assertHostCanUpdateRoomSettingsWithoutChangingSeats() {
+  const db = createMemoryDb({
+    rooms: {
+      room_settings: makeRoom({
+        roomId: "room_settings",
+        roomCode: "500001",
+        targetPlayerCount: 5,
+        playerCount: 3,
+        hostMemberId: "mem_host",
+      }),
+    },
+    room_members: {
+      mem_host: makeMember({
+        memberId: "mem_host",
+        roomId: "room_settings",
+        openId: "host_openid",
+        isHost: true,
+        seatIndex: 1,
+        isReady: true,
+      }),
+      mem_guest_2: makeMember({
+        memberId: "mem_guest_2",
+        roomId: "room_settings",
+        openId: "guest_2_openid",
+        displayName: "玩家2",
+        seatIndex: 2,
+        isReady: true,
+      }),
+      mem_guest_3: makeMember({
+        memberId: "mem_guest_3",
+        roomId: "room_settings",
+        openId: "guest_3_openid",
+        displayName: "玩家3",
+        seatIndex: 3,
+      }),
+    },
+  });
+  const { service } = loadRoomService({ db, openId: "host_openid" });
+
+  const response = await service.main({
+    action: "updateRoomSettings",
+    payload: {
+      commandId: "cmd_update_room_settings_success",
+      roomId: "room_settings",
+      targetPlayerCount: 7,
+    },
+  });
+
+  assert.strictEqual(response.success, true, "host should update room settings");
+  assert.strictEqual(response.data.lobbySnapshot.targetPlayerCount, 7, "lobby snapshot should reflect the new target count");
+
+  const dump = db.dump();
+  assert.strictEqual(dump.rooms.room_settings.targetPlayerCount, 7, "room target count should be updated");
+  assert.strictEqual(dump.rooms.room_settings.roomCode, "500001", "room code should not change");
+  assert.strictEqual(dump.rooms.room_settings.hostMemberId, "mem_host", "host should not change");
+  assert.strictEqual(dump.room_members.mem_host.seatIndex, 1, "host seat should stay unchanged");
+  assert.strictEqual(dump.room_members.mem_guest_2.seatIndex, 2, "guest 2 seat should stay unchanged");
+  assert.strictEqual(dump.room_members.mem_guest_3.seatIndex, 3, "guest 3 seat should stay unchanged");
+  assert.strictEqual(dump.room_members.mem_host.isReady, true, "ready state should stay unchanged");
+}
+
+async function assertNonHostCannotUpdateRoomSettings() {
+  const db = createMemoryDb({
+    rooms: {
+      room_settings: makeRoom({
+        roomId: "room_settings",
+        roomCode: "500002",
+        targetPlayerCount: 5,
+        playerCount: 2,
+        hostMemberId: "mem_host",
+      }),
+    },
+    room_members: {
+      mem_host: makeMember({
+        memberId: "mem_host",
+        roomId: "room_settings",
+        openId: "host_openid",
+        isHost: true,
+        seatIndex: 1,
+      }),
+      mem_guest: makeMember({
+        memberId: "mem_guest",
+        roomId: "room_settings",
+        openId: "guest_openid",
+        displayName: "玩家2",
+        seatIndex: 2,
+      }),
+    },
+  });
+  const { service } = loadRoomService({ db, openId: "guest_openid" });
+
+  const response = await service.main({
+    action: "updateRoomSettings",
+    payload: {
+      commandId: "cmd_update_room_settings_non_host",
+      roomId: "room_settings",
+      targetPlayerCount: 7,
+    },
+  });
+
+  assert.strictEqual(response.success, false, "non-host should not update room settings");
+  assert.strictEqual(response.error.code, "NOT_ROOM_HOST");
+  assert.strictEqual(db.dump().rooms.room_settings.targetPlayerCount, 5, "target count should not change");
+}
+
+async function assertRoomSettingsRejectsTargetBelowSeatedPlayers() {
+  const members = {};
+  for (let seatIndex = 1; seatIndex <= 6; seatIndex += 1) {
+    const memberId = seatIndex === 1 ? "mem_host" : `mem_guest_${seatIndex}`;
+    members[memberId] = makeMember({
+      memberId,
+      roomId: "room_settings",
+      openId: seatIndex === 1 ? "host_openid" : `guest_${seatIndex}_openid`,
+      displayName: seatIndex === 1 ? "房主" : `玩家${seatIndex}`,
+      seatIndex,
+      isHost: seatIndex === 1,
+    });
+  }
+
+  const db = createMemoryDb({
+    rooms: {
+      room_settings: makeRoom({
+        roomId: "room_settings",
+        roomCode: "500003",
+        targetPlayerCount: 8,
+        playerCount: 6,
+        hostMemberId: "mem_host",
+      }),
+    },
+    room_members: members,
+  });
+  const { service } = loadRoomService({ db, openId: "host_openid" });
+
+  const response = await service.main({
+    action: "updateRoomSettings",
+    payload: {
+      commandId: "cmd_update_room_settings_too_small",
+      roomId: "room_settings",
+      targetPlayerCount: 5,
+    },
+  });
+
+  assert.strictEqual(response.success, false, "target count below seated players should be rejected");
+  assert.strictEqual(response.error.code, "TARGET_COUNT_BELOW_SEATED");
+  assert.strictEqual(db.dump().rooms.room_settings.targetPlayerCount, 8, "target count should stay unchanged");
+}
+
 (async () => {
   await assertNormalRoomRejectsSoloActions();
   await assertSoloRoomRejectsRealGuestJoin();
   await assertNonControllerRejectsVirtualSeatReady();
+  await assertHostCanUpdateRoomSettingsWithoutChangingSeats();
+  await assertNonHostCannotUpdateRoomSettings();
+  await assertRoomSettingsRejectsTargetBelowSeatedPlayers();
   console.log("roomService isolation tests passed");
 })().catch((err) => {
   console.error(err);
