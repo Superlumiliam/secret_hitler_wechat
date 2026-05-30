@@ -66,11 +66,6 @@
       ></seat-list>
 
       <view class="action-dock">
-        <view wx:if="{{investigationResult}}" class="secret-result-panel">
-          <view class="secret-result-title">调查结果</view>
-          <view class="secret-result-text">{{investigationResult.targetName}} 属于 <text class="{{investigationResult.partyClass}}">{{investigationResult.partyText}}</text></view>
-        </view>
-
         <view wx:if="{{snapshot.currentPhase === 'executive_action' && !canAckPolicyPeek}}" class="executive-panel">
           <view class="executive-title">{{executiveAction.title || '总统权力'}}</view>
           <view wx:if="{{executiveAction.hint}}" class="executive-hint">{{executiveAction.hint}}</view>
@@ -125,9 +120,9 @@
         </view>
 
         <view class="secondary-actions">
-          <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="查看身份">
+          <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="我的身份">
             <image wx:if="{{policyAssets.buttonNormal}}" class="dock-button-frame" src="{{policyAssets.buttonNormal}}" mode="scaleToFill" webp="{{true}}"></image>
-            <view class="dock-button-text">查看身份</view>
+            <view class="dock-button-text">我的身份</view>
           </view>
           <view class="secondary-action" bindtap="onTapHistory" hover-class="secondary-hover" role="button" aria-label="历史记录">
             <image wx:if="{{policyAssets.buttonNormal}}" class="dock-button-frame" src="{{policyAssets.buttonNormal}}" mode="scaleToFill" webp="{{true}}"></image>
@@ -238,6 +233,15 @@
             <image wx:if="{{policyAssets.modalCancelButtonMobile}}" class="vote-result-confirm-image" src="{{policyAssets.modalCancelButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
             <text class="vote-result-confirm-text">确认</text>
           </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{investigationReveal && (investigationReveal.visible || investigationReveal.exiting)}}" class="investigation-reveal-mask" catchtap="onDismissInvestigationReveal">
+      <view class="investigation-reveal-card {{investigationReveal.exiting ? 'is-exiting' : ''}}" catchtap="onDismissInvestigationReveal" role="button" aria-label="调查结果">
+        <image wx:if="{{investigationReveal.cardSrc}}" class="investigation-reveal-image" src="{{investigationReveal.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
+        <view wx:else class="investigation-reveal-fallback {{investigationReveal.partyClass}}">
+          <view class="investigation-reveal-party">{{investigationReveal.partyText}}</view>
         </view>
       </view>
     </view>

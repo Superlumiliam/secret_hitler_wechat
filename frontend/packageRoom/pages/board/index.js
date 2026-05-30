@@ -12,6 +12,7 @@ const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
 const GAME_POLL_AFTER_COMMAND_INTERVAL_MS = 800;
 const COMMAND_REFRESH_WINDOW_MS = 5000;
 const GAME_POLL_FAILURE_BACKOFF_MS = [3000, 5000, 10000, 15000, 30000];
+const INVESTIGATION_REVEAL_EXIT_MS = 260;
 function isRoomUnavailableError(err) {
   return Boolean(err && ["ROOM_EXPIRED", "ROOM_NOT_FOUND", "NOT_ROOM_MEMBER"].includes(err.code));
 }
@@ -33,6 +34,7 @@ Page({
   refreshTimer: null,
   lastSeatTap: null,
   lastCommandSettledAt: 0,
+  pendingInvestigationRevealActorId: "",
   consecutiveSnapshotFailures: 0,
 
   data: {
@@ -87,6 +89,8 @@ Page({
     selectedExecutiveTargetLabel: "",
     policyPeekCards: [],
     investigationResult: null,
+    investigationReveal: null,
+    shownInvestigationRevealKey: "",
     isSubmittingCommand: false,
   },
 
@@ -280,6 +284,8 @@ Page({
     const voteResultModalVisible = Boolean(
       voteResult && currentVoteResultKey && currentVoteResultKey !== confirmedVoteResultKey,
     );
+    const investigationResult = this.createInvestigationResult(snapshot, policyAssetUrlByKey);
+    const investigationReveal = this.createInvestigationReveal(snapshot, policyAssetUrlByKey);
 
     this.setData({
       snapshot,
@@ -335,7 +341,11 @@ Page({
       selectedExecutiveTargetId: this.resolveSelectedExecutiveTargetId(snapshot),
       selectedExecutiveTargetLabel: this.createSelectedExecutiveTargetLabel(snapshot),
       policyPeekCards: this.createPolicyPeekCards(snapshot, policyAssetUrlByKey),
-      investigationResult: this.createInvestigationResult(snapshot),
+      investigationResult,
+      investigationReveal,
+      shownInvestigationRevealKey: investigationReveal && investigationReveal.visible
+        ? investigationReveal.resultKey
+        : this.data.shownInvestigationRevealKey,
     });
   },
 
@@ -515,8 +525,32 @@ Page({
     return taskMapper.createPolicyPeekCards(snapshot, assets, this.data.isSubmittingCommand);
   },
 
-  createInvestigationResult(snapshot) {
-    return taskMapper.createInvestigationResult(snapshot);
+  createInvestigationResult(snapshot, assets = this.data.policyAssets || {}) {
+    return taskMapper.createInvestigationResult(snapshot, assets);
+  },
+
+  createInvestigationReveal(snapshot, assets = this.data.policyAssets || {}) {
+    const nextResult = this.createInvestigationResult(snapshot, assets);
+    const currentReveal = this.data.investigationReveal || null;
+    if (currentReveal && (currentReveal.visible || currentReveal.exiting)) {
+      return currentReveal;
+    }
+    if (!nextResult || !this.pendingInvestigationRevealActorId) {
+      return null;
+    }
+    if (this.pendingInvestigationRevealActorId !== snapshot.myMemberId) {
+      return null;
+    }
+    if (nextResult.resultKey === this.data.shownInvestigationRevealKey) {
+      this.pendingInvestigationRevealActorId = "";
+      return null;
+    }
+    this.pendingInvestigationRevealActorId = "";
+    return {
+      ...nextResult,
+      visible: true,
+      exiting: false,
+    };
   },
 
   createServiceError(result, fallbackMessage) {
@@ -657,12 +691,19 @@ Page({
     }
 
     if (this.data.canExecuteAction && !this.data.canAckPolicyPeek) {
-      const snapshot = this.data.snapshot || {};
-      const publicState = snapshot.publicState || {};
-      const target = (publicState.seatOrder || []).find((member) => member.memberId === memberId);
+      const target = (this.data.executiveTargets || []).find((item) => item.memberId === memberId);
+      if (target && !target.canTarget) {
+        wx.showModal({
+          title: "不可选择",
+          content: target.disabledReason || "该玩家暂不可选择",
+          showCancel: false,
+          confirmText: "知道了",
+        });
+        return;
+      }
       this.setData({
         selectedExecutiveTargetId: memberId,
-        selectedExecutiveTargetLabel: target ? `${target.seatIndex}号 ${target.displayName}` : "",
+        selectedExecutiveTargetLabel: target ? target.label : "",
         activeIdentityPickerMemberId: "",
         activeIdentityPickerOptions: [],
       });
@@ -734,6 +775,29 @@ Page({
   },
 
   onStopTap() {},
+
+  onDismissInvestigationReveal() {
+    const reveal = this.data.investigationReveal || null;
+    if (!reveal || reveal.exiting) {
+      return;
+    }
+    this.setData({
+      investigationReveal: {
+        ...reveal,
+        visible: false,
+        exiting: true,
+      },
+      shownInvestigationRevealKey: reveal.resultKey || this.data.shownInvestigationRevealKey,
+    });
+    setTimeout(() => {
+      const currentReveal = this.data.investigationReveal || null;
+      if (currentReveal && currentReveal.resultKey === reveal.resultKey) {
+        this.setData({
+          investigationReveal: null,
+        });
+      }
+    }, INVESTIGATION_REVEAL_EXIT_MS);
+  },
 
   onTapIdentityOption(event) {
     const memberId = event.currentTarget.dataset.memberId;
@@ -1333,6 +1397,9 @@ Page({
       const result = res.result || {};
       if (!result.success) {
         throw this.createServiceError(result, "提交总统权力失败");
+      }
+      if (options.commandType === "EXEC_INVESTIGATE") {
+        this.pendingInvestigationRevealActorId = snapshot.myMemberId || "";
       }
       wx.showToast({
         title: options.toastText || "已提交",

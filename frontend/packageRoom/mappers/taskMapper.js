@@ -203,13 +203,22 @@ function createExecutiveTargets(snapshot) {
   }
   const allowedTargets = pendingTask.allowedTargets || [];
   const publicState = (snapshot && snapshot.publicState) || {};
+  const isInvestigateTask = pendingTask.taskType === "EXEC_INVESTIGATE";
   return (publicState.seatOrder || []).map((member) => {
     const canTarget = allowedTargets.includes(member.memberId);
+    let disabledReason = "";
+    if (member.isAlive === false) {
+      disabledReason = "已出局";
+    } else if (!canTarget && isInvestigateTask) {
+      disabledReason = "同一名玩家整局游戏不能被调查两次";
+    } else if (!canTarget) {
+      disabledReason = "暂不可选择";
+    }
     return {
       memberId: member.memberId,
       label: `${member.seatIndex}号 ${member.displayName}`,
       canTarget,
-      disabledReason: member.isAlive === false ? "已出局" : canTarget ? "" : "暂不可选择",
+      disabledReason,
     };
   });
 }
@@ -262,16 +271,23 @@ function createPolicyPeekCards(snapshot, assets = {}, isSubmittingCommand = fals
   });
 }
 
-function createInvestigationResult(snapshot) {
+function createInvestigationResult(snapshot, assets = {}) {
   const privateState = (snapshot && snapshot.privateState) || {};
   const result = privateState.investigationResult || null;
   if (!result) {
     return null;
   }
+  const party = result.party === "LIBERAL" ? "LIBERAL" : "FASCIST";
+  const targetMemberId = result.targetMemberId || "";
+  const round = result.round || "";
+  const revealedAt = result.revealedAt || "";
   return {
+    resultKey: `${targetMemberId}:${party}:${round}:${revealedAt}`,
     targetName: result.targetDisplayName || "目标玩家",
-    partyText: result.party === "LIBERAL" ? "自由派" : "极权派",
-    partyClass: result.party === "LIBERAL" ? "is-liberal-text" : "is-fascist-text",
+    party,
+    partyText: party === "LIBERAL" ? "自由派" : "极权派",
+    partyClass: party === "LIBERAL" ? "is-liberal-text" : "is-fascist-text",
+    cardSrc: party === "LIBERAL" ? assets.identityLiberal : assets.identityFascist,
   };
 }
 

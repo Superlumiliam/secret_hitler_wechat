@@ -26,6 +26,8 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   playerTabletMinister: `${CLOUD_ASSET_ROOT}player-tablet-minister.webp`,
   stampFascist: `${CLOUD_ASSET_ROOT}stamp-fascist.webp`,
   stampLiberal: `${CLOUD_ASSET_ROOT}stamp-liberal.webp`,
+  identityFascist: `${CLOUD_ASSET_ROOT}identity-fascist.webp`,
+  identityLiberal: `${CLOUD_ASSET_ROOT}identity-liberal.webp`,
   liberalBadge: `${CLOUD_ASSET_ROOT}icon-liberal-badge.webp`,
   authoritarianBadge: `${CLOUD_ASSET_ROOT}icon-authoritarian-badge.webp`,
   frameNarrow: `${CLOUD_ASSET_ROOT}frame-narrow.webp`,
