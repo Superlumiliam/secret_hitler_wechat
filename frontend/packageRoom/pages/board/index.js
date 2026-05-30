@@ -83,6 +83,8 @@ Page({
     canExecuteAction: false,
     canAckPolicyPeek: false,
     executiveTargets: [],
+    selectedExecutiveTargetId: "",
+    selectedExecutiveTargetLabel: "",
     policyPeekCards: [],
     investigationResult: null,
     isSubmittingCommand: false,
@@ -330,6 +332,8 @@ Page({
       ),
       canAckPolicyPeek: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "EXEC_POLICY_PEEK_ACK"),
       executiveTargets: this.createExecutiveTargets(snapshot),
+      selectedExecutiveTargetId: this.resolveSelectedExecutiveTargetId(snapshot),
+      selectedExecutiveTargetLabel: this.createSelectedExecutiveTargetLabel(snapshot),
       policyPeekCards: this.createPolicyPeekCards(snapshot, policyAssetUrlByKey),
       investigationResult: this.createInvestigationResult(snapshot),
     });
@@ -345,6 +349,7 @@ Page({
       identityJudgmentByMemberId,
       assets,
       selectedNominationTargetId: this.data.selectedNominationTargetId || "",
+      selectedExecutiveTargetId: this.data.selectedExecutiveTargetId || "",
     });
   },
 
@@ -498,6 +503,14 @@ Page({
     return taskMapper.createExecutiveTargets(snapshot);
   },
 
+  resolveSelectedExecutiveTargetId(snapshot) {
+    return taskMapper.resolveSelectedExecutiveTargetId(snapshot, this.data.selectedExecutiveTargetId || "");
+  },
+
+  createSelectedExecutiveTargetLabel(snapshot) {
+    return taskMapper.createSelectedExecutiveTargetLabel(snapshot, this.data.selectedExecutiveTargetId || "");
+  },
+
   createPolicyPeekCards(snapshot, assets = this.data.policyAssets || {}) {
     return taskMapper.createPolicyPeekCards(snapshot, assets, this.data.isSubmittingCommand);
   },
@@ -643,6 +656,19 @@ Page({
       this.refreshSeatViews();
     }
 
+    if (this.data.canExecuteAction && !this.data.canAckPolicyPeek) {
+      const snapshot = this.data.snapshot || {};
+      const publicState = snapshot.publicState || {};
+      const target = (publicState.seatOrder || []).find((member) => member.memberId === memberId);
+      this.setData({
+        selectedExecutiveTargetId: memberId,
+        selectedExecutiveTargetLabel: target ? `${target.seatIndex}号 ${target.displayName}` : "",
+        activeIdentityPickerMemberId: "",
+        activeIdentityPickerOptions: [],
+      });
+      this.refreshSeatViews();
+    }
+
     if (!this.data.isSoloRoom) {
       return;
     }
@@ -748,6 +774,8 @@ Page({
       ),
       selectedNominationTargetId: this.resolveSelectedNominationTargetId(snapshot),
       selectedNominationTargetLabel: this.createSelectedNominationTargetLabel(snapshot),
+      selectedExecutiveTargetId: this.resolveSelectedExecutiveTargetId(snapshot),
+      selectedExecutiveTargetLabel: this.createSelectedExecutiveTargetLabel(snapshot),
       activeIdentityPickerOptions: this.createActiveIdentityPickerOptions(this.data.activeIdentityPickerMemberId, snapshot),
     });
   },
@@ -1209,32 +1237,41 @@ Page({
     }
   },
 
-  async onTapExecutiveTarget(event) {
-    const targetMemberId = event.currentTarget.dataset.memberId;
-    const canTarget = event.currentTarget.dataset.canTarget;
-    const disabledReason = event.currentTarget.dataset.disabledReason;
-    const snapshot = this.data.snapshot || {};
-    const pendingTask = snapshot.pendingTask || {};
-    const action = this.data.executiveAction || {};
-    if (!targetMemberId || this.data.isSubmittingCommand) {
-      return;
-    }
-    if (canTarget !== true && canTarget !== "true") {
+  async onTapExecutiveSelected() {
+    const targetMemberId = this.data.selectedExecutiveTargetId;
+    if (!targetMemberId) {
       wx.showToast({
-        title: disabledReason || "该玩家暂不可选择",
+        title: "请先点击一个玩家席位",
         icon: "none",
       });
       return;
     }
+    const target = (this.data.executiveTargets || []).find((item) => item.memberId === targetMemberId);
+    if (!target) {
+      wx.showToast({
+        title: "该玩家暂不可选择",
+        icon: "none",
+      });
+      return;
+    }
+    if (!target.canTarget) {
+      wx.showModal({
+        title: "不可选择",
+        content: target.disabledReason || "该玩家暂不可选择",
+        showCancel: false,
+        confirmText: "知道了",
+      });
+      return;
+    }
 
-    const target = this.data.executiveTargets.find((item) => item.memberId === targetMemberId) || {};
+    const snapshot = this.data.snapshot || {};
+    const pendingTask = snapshot.pendingTask || {};
+    const action = this.data.executiveAction || {};
     const isExecution = pendingTask.taskType === "EXECUTE_PLAYER";
     const confirmRes = await new Promise((resolve) => {
       wx.showModal({
         title: action.title || "确认总统权力",
-        content: isExecution
-          ? `确认处决${target.label || "该玩家"}？目标将立即出局。`
-          : `确认选择${target.label || "该玩家"}？`,
+        content: isExecution ? `确认处决${target.label}？目标将立即出局。` : `确认选择${target.label}？`,
         confirmText: isExecution ? "确认处决" : "确认",
         cancelText: "取消",
         success: resolve,

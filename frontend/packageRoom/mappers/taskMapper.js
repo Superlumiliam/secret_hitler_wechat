@@ -214,6 +214,35 @@ function createExecutiveTargets(snapshot) {
   });
 }
 
+function createExecutiveTargetMap(snapshot) {
+  return createExecutiveTargets(snapshot).reduce((map, target) => {
+    map[target.memberId] = target;
+    return map;
+  }, {});
+}
+
+function resolveSelectedExecutiveTargetId(snapshot, selectedExecutiveTargetId = "") {
+  const pendingTask = snapshot && snapshot.pendingTask;
+  if (!pendingTask || !TARGET_EXECUTIVE_COMMAND_TYPES.includes(pendingTask.taskType)) {
+    return "";
+  }
+  if (!selectedExecutiveTargetId) {
+    return "";
+  }
+  const publicState = snapshot.publicState || {};
+  const exists = (publicState.seatOrder || []).some((member) => member.memberId === selectedExecutiveTargetId);
+  return exists ? selectedExecutiveTargetId : "";
+}
+
+function createSelectedExecutiveTargetLabel(snapshot, selectedExecutiveTargetId = "") {
+  const selected = resolveSelectedExecutiveTargetId(snapshot, selectedExecutiveTargetId);
+  if (!selected) {
+    return "";
+  }
+  const target = createExecutiveTargets(snapshot).find((item) => item.memberId === selected);
+  return target ? target.label : "";
+}
+
 function createPolicyPeekCards(snapshot, assets = {}, isSubmittingCommand = false) {
   const privateState = (snapshot && snapshot.privateState) || {};
   const policyPeek = privateState.policyPeek || {};
@@ -249,6 +278,7 @@ function createInvestigationResult(snapshot) {
 module.exports = {
   canRequestVeto,
   createExecutiveAction,
+  createExecutiveTargetMap,
   createExecutiveTargets,
   createInvestigationResult,
   createNominateRuleHint,
@@ -258,8 +288,10 @@ module.exports = {
   createPolicyPeekCards,
   createPolicyPickerHint,
   createPolicyPickerTitle,
+  createSelectedExecutiveTargetLabel,
   createSelectedNominationTargetLabel,
   createVetoResponse,
   getNominationAllowedIds,
+  resolveSelectedExecutiveTargetId,
   resolveSelectedNominationTargetId,
 };

@@ -51,7 +51,13 @@
         <view class="section-title">{{activeSection.title}}</view>
       </view>
 
-      <view wx:if="{{!activeSection.imageOnly && activeSection.description}}" class="section-description">
+      <view wx:if="{{!activeSection.imageOnly && activeSection.descriptions && activeSection.descriptions.length}}" class="section-descriptions">
+        <view wx:for="{{activeSection.descriptions}}" wx:for-item="description" wx:key="*this" class="section-description">
+          {{description}}
+        </view>
+      </view>
+
+      <view wx:elif="{{!activeSection.imageOnly && activeSection.description}}" class="section-description">
         {{activeSection.description}}
       </view>
 

@@ -107,6 +107,7 @@ function createSeats(snapshot, options = {}) {
   const identityJudgmentByMemberId = options.identityJudgmentByMemberId || {};
   const assets = options.assets || {};
   const selectedNominationTargetId = options.selectedNominationTargetId || "";
+  const selectedExecutiveTargetId = options.selectedExecutiveTargetId || "";
   const publicState = (snapshot && snapshot.publicState) || {};
   const presidentCandidateId = publicState.currentPresidentCandidateId;
   const chancellorCandidateId = publicState.currentChancellorCandidateId;
@@ -116,11 +117,16 @@ function createSeats(snapshot, options = {}) {
   const currentViewerMemberId = snapshot && snapshot.myMemberId;
   const nominationAllowedIds = taskMapper.getNominationAllowedIds(snapshot);
   const nominateTargetByMemberId = taskMapper.createNominateTargetMap(snapshot);
+  const executiveTargetByMemberId = taskMapper.createExecutiveTargetMap(snapshot);
   const investigationMarkByMemberId = createInvestigationMarkMap(snapshot);
   const privateIdentity = ((snapshot && snapshot.privateState) || {}).identity || {};
   const resolvedSelectedNominationTargetId = taskMapper.resolveSelectedNominationTargetId(
     snapshot,
     selectedNominationTargetId,
+  );
+  const resolvedSelectedExecutiveTargetId = taskMapper.resolveSelectedExecutiveTargetId(
+    snapshot,
+    selectedExecutiveTargetId,
   );
 
   return (publicState.seatOrder || []).map((member) => {
@@ -141,6 +147,7 @@ function createSeats(snapshot, options = {}) {
     const isSelf = member.memberId === currentViewerMemberId;
     const targetOption = nominateTargetByMemberId[member.memberId] || null;
     const canNominateTarget = targetOption ? targetOption.canNominate : nominationAllowedIds.includes(member.memberId);
+    const executiveTargetOption = executiveTargetByMemberId[member.memberId] || null;
     const judgment = isSelf ? privateIdentity.party || "UNKNOWN" : identityJudgmentByMemberId[member.memberId] || "UNKNOWN";
     const identityMark = createIdentityMarkView(judgment, isSelf, assets);
     const investigationMark = investigationMarkByMemberId[member.memberId] || null;
@@ -169,6 +176,12 @@ function createSeats(snapshot, options = {}) {
         targetOption && !canNominateTarget ? "is-ineligible-nominee" : ""
       } ${
         resolvedSelectedNominationTargetId === member.memberId ? "is-selected-nomination" : ""
+      } ${
+        executiveTargetOption && executiveTargetOption.canTarget ? "is-eligible-executive-target" : ""
+      } ${
+        executiveTargetOption && !executiveTargetOption.canTarget ? "is-ineligible-executive-target" : ""
+      } ${
+        resolvedSelectedExecutiveTargetId === member.memberId ? "is-selected-executive-target" : ""
       } ${
         snapshot.currentPhase === "voting" && submittedVoteMemberIds.includes(member.memberId)
           ? "is-vote-submitted"

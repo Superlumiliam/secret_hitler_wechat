@@ -180,6 +180,10 @@ page {
   line-height: 1.58;
 }
 
+.section-descriptions .section-description + .section-description {
+  margin-top: 14rpx;
+}
+
 .rule-items {
   margin-top: 18rpx;
 }

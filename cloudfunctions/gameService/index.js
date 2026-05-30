@@ -608,7 +608,7 @@ function getExecutiveTaskMeta(actionType) {
   if (actionType === "SPECIAL_ELECTION") {
     return {
       actionTitle: "特别选举",
-      actionHint: "选择另一名存活玩家担任下一任总统候选人，之后总统顺序会回到你左手边。",
+      actionHint: "选择另一名存活玩家担任下一任总统候选人，之后总统顺序会回到你下一位。",
     };
   }
   if (actionType === "POLICY_PEEK") {

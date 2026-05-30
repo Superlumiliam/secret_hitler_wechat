@@ -76,22 +76,11 @@
           <view wx:if="{{executiveAction.hint}}" class="executive-hint">{{executiveAction.hint}}</view>
 
           <view wx:if="{{canExecuteAction}}" class="executive-targets">
-            <view
-              wx:for="{{executiveTargets}}"
-              wx:key="memberId"
-              class="executive-target {{item.canTarget ? '' : 'is-ineligible'}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
-              bindtap="onTapExecutiveTarget"
-              data-member-id="{{item.memberId}}"
-              data-can-target="{{item.canTarget}}"
-              data-disabled-reason="{{item.disabledReason}}"
-              role="button"
-              aria-label="选择总统权力目标"
-            >
-              <image wx:if="{{item.canTarget ? policyAssets.buttonBlue : policyAssets.buttonNormal}}" class="dock-button-frame" src="{{item.canTarget ? policyAssets.buttonBlue : policyAssets.buttonNormal}}" mode="scaleToFill" webp="{{true}}"></image>
-              <view class="dock-button-text">
-                <view class="executive-target-label">{{item.label}}</view>
-                <view wx:if="{{!item.canTarget}}" class="executive-target-reason">{{item.disabledReason}}</view>
-              </view>
+            <view wx:if="{{selectedExecutiveTargetLabel}}" class="executive-selected-title">已选择 {{selectedExecutiveTargetLabel}}</view>
+            <view wx:else class="executive-selected-title">点击玩家席位选择目标</view>
+            <view class="executive-submit {{selectedExecutiveTargetId ? '' : 'is-empty'}} {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapExecutiveSelected" role="button" aria-label="确认总统权力目标">
+              <image wx:if="{{selectedExecutiveTargetId ? policyAssets.buttonBlue : policyAssets.buttonNormal}}" class="dock-button-frame" src="{{selectedExecutiveTargetId ? policyAssets.buttonBlue : policyAssets.buttonNormal}}" mode="scaleToFill" webp="{{true}}"></image>
+              <view class="dock-button-text">{{executiveAction.confirmText || '确认'}}</view>
             </view>
           </view>
 
