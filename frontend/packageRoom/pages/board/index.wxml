@@ -245,6 +245,16 @@
         </view>
       </view>
     </view>
+
+    <view wx:if="{{identityIntroReveal && (identityIntroReveal.visible || identityIntroReveal.exiting)}}" class="identity-intro-mask" catchtap="onDismissIdentityIntroReveal">
+      <view class="identity-intro-stage {{identityIntroReveal.exiting ? 'is-exiting' : ''}}" catchtap="onDismissIdentityIntroReveal" role="button" aria-label="你的身份">
+        <view class="identity-intro-title {{identityIntroReveal.titleVisible ? '' : 'is-hidden'}}">{{identityIntroReveal.titleText}}</view>
+        <image wx:if="{{identityIntroReveal.cardSrc}}" class="identity-intro-card-image" src="{{identityIntroReveal.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
+        <view wx:else class="identity-intro-card-fallback {{identityIntroReveal.roleClass}}">
+          <view class="identity-intro-card-title">{{identityIntroReveal.titleText}}</view>
+        </view>
+      </view>
+    </view>
   </block>
 
   <view wx:elif="{{errorText}}" class="board-loading">{{errorText}}</view>

@@ -27,6 +27,7 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   stampFascist: `${CLOUD_ASSET_ROOT}stamp-fascist.webp`,
   stampLiberal: `${CLOUD_ASSET_ROOT}stamp-liberal.webp`,
   identityFascist: `${CLOUD_ASSET_ROOT}identity-fascist.webp`,
+  identityHitler: `${CLOUD_ASSET_ROOT}identity-hitler.webp`,
   identityLiberal: `${CLOUD_ASSET_ROOT}identity-liberal.webp`,
   liberalBadge: `${CLOUD_ASSET_ROOT}icon-liberal-badge.webp`,
   authoritarianBadge: `${CLOUD_ASSET_ROOT}icon-authoritarian-badge.webp`,

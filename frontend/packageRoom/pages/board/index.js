@@ -13,6 +13,7 @@ const GAME_POLL_AFTER_COMMAND_INTERVAL_MS = 800;
 const COMMAND_REFRESH_WINDOW_MS = 5000;
 const GAME_POLL_FAILURE_BACKOFF_MS = [3000, 5000, 10000, 15000, 30000];
 const INVESTIGATION_REVEAL_EXIT_MS = 260;
+const IDENTITY_INTRO_REVEAL_EXIT_MS = 320;
 function isRoomUnavailableError(err) {
   return Boolean(err && ["ROOM_EXPIRED", "ROOM_NOT_FOUND", "NOT_ROOM_MEMBER"].includes(err.code));
 }
@@ -90,6 +91,7 @@ Page({
     policyPeekCards: [],
     investigationResult: null,
     investigationReveal: null,
+    identityIntroReveal: null,
     shownInvestigationRevealKey: "",
     isSubmittingCommand: false,
   },
@@ -286,6 +288,7 @@ Page({
     );
     const investigationResult = this.createInvestigationResult(snapshot, policyAssetUrlByKey);
     const investigationReveal = this.createInvestigationReveal(snapshot, policyAssetUrlByKey);
+    const identityIntroReveal = this.createIdentityIntroReveal(snapshot, policyAssetUrlByKey);
 
     this.setData({
       snapshot,
@@ -343,6 +346,7 @@ Page({
       policyPeekCards: this.createPolicyPeekCards(snapshot, policyAssetUrlByKey),
       investigationResult,
       investigationReveal,
+      identityIntroReveal,
       shownInvestigationRevealKey: investigationReveal && investigationReveal.visible
         ? investigationReveal.resultKey
         : this.data.shownInvestigationRevealKey,
@@ -550,6 +554,84 @@ Page({
       ...nextResult,
       visible: true,
       exiting: false,
+    };
+  },
+
+  createIdentityIntroReveal(snapshot, assets = this.data.policyAssets || {}) {
+    const currentReveal = this.data.identityIntroReveal || null;
+    if (currentReveal && (currentReveal.visible || currentReveal.exiting)) {
+      return currentReveal;
+    }
+
+    const privateState = (snapshot && snapshot.privateState) || {};
+    const identity = privateState.identity || {};
+    if (!identity.role || !snapshot.roomId || !snapshot.myMemberId) {
+      return null;
+    }
+
+    const storageKey = this.createIdentityIntroRevealStorageKey(snapshot);
+    if (!storageKey || this.hasShownIdentityIntroReveal(storageKey)) {
+      return null;
+    }
+
+    this.markIdentityIntroRevealShown(storageKey);
+    const roleMeta = this.createIdentityIntroRoleMeta(identity.role, assets);
+    return {
+      visible: true,
+      exiting: false,
+      titleVisible: true,
+      role: identity.role,
+      titleText: roleMeta.titleText,
+      cardSrc: roleMeta.cardSrc,
+      roleClass: roleMeta.roleClass,
+    };
+  },
+
+  createIdentityIntroRevealStorageKey(snapshot) {
+    const roomId = (snapshot && snapshot.roomId) || this.data.roomId || "";
+    const memberId = snapshot && snapshot.myMemberId;
+    if (!roomId || !memberId) {
+      return "";
+    }
+    return `board_identity_intro_reveal:${roomId}:${memberId}`;
+  },
+
+  hasShownIdentityIntroReveal(storageKey) {
+    try {
+      return Boolean(wx.getStorageSync(storageKey));
+    } catch (err) {
+      console.error("读取入场身份揭示状态失败", err);
+      return false;
+    }
+  },
+
+  markIdentityIntroRevealShown(storageKey) {
+    try {
+      wx.setStorageSync(storageKey, true);
+    } catch (err) {
+      console.error("保存入场身份揭示状态失败", err);
+    }
+  },
+
+  createIdentityIntroRoleMeta(role, assets = {}) {
+    if (role === "HITLER") {
+      return {
+        titleText: "你的身份是独裁者",
+        cardSrc: assets.identityHitler || "",
+        roleClass: "is-dictator",
+      };
+    }
+    if (role === "FASCIST") {
+      return {
+        titleText: "你的身份是极权派",
+        cardSrc: assets.identityFascist || "",
+        roleClass: "is-fascist",
+      };
+    }
+    return {
+      titleText: "你的身份是自由派",
+      cardSrc: assets.identityLiberal || "",
+      roleClass: "is-liberal",
     };
   },
 
@@ -797,6 +879,29 @@ Page({
         });
       }
     }, INVESTIGATION_REVEAL_EXIT_MS);
+  },
+
+  onDismissIdentityIntroReveal() {
+    const reveal = this.data.identityIntroReveal || null;
+    if (!reveal || reveal.exiting) {
+      return;
+    }
+    this.setData({
+      identityIntroReveal: {
+        ...reveal,
+        titleVisible: false,
+        visible: false,
+        exiting: true,
+      },
+    });
+    setTimeout(() => {
+      const currentReveal = this.data.identityIntroReveal || null;
+      if (currentReveal && currentReveal.role === reveal.role) {
+        this.setData({
+          identityIntroReveal: null,
+        });
+      }
+    }, IDENTITY_INTRO_REVEAL_EXIT_MS);
   },
 
   onTapIdentityOption(event) {
