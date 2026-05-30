@@ -47,8 +47,12 @@
       ></image>
 
       <view wx:elif="{{!activeSection.imageOnly && !activeSection.hideHeading}}" class="section-heading">
-        <view class="section-index">{{activeSectionIndex + 1}}</view>
+        <view wx:if="{{!activeSection.hideIndex}}" class="section-index">{{activeSectionIndex + 1}}</view>
         <view class="section-title">{{activeSection.title}}</view>
+      </view>
+
+      <view wx:if="{{!activeSection.imageOnly && activeSection.description}}" class="section-description">
+        {{activeSection.description}}
       </view>
 
       <view wx:if="{{!activeSection.imageOnly && activeSection.groups && activeSection.groups.length}}" class="rule-groups {{activeSection.layout === 'identity-cards' ? 'identity-rule-groups' : ''}}">

@@ -169,6 +169,16 @@ page {
   line-height: 1.2;
 }
 
+.section-description {
+  margin-top: 18rpx;
+  padding: 18rpx 20rpx;
+  border-left: 4rpx solid rgba(38, 210, 218, 0.72);
+  color: rgba(244, 226, 197, 0.9);
+  background: rgba(4, 17, 19, 0.62);
+  font-size: 27rpx;
+  line-height: 1.58;
+}
+
 .rule-items {
   margin-top: 18rpx;
 }
