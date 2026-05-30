@@ -11,7 +11,11 @@
       <image wx:if="{{seat.avatarSrc}}" class="avatar-image" src="{{seat.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
     </view>
     <view class="seat-name">{{seat.name}}</view>
-    <government-badge label="{{seat.roleLabel}}" src="{{seat.roleBadgeSrc}}"></government-badge>
+    <government-badge
+      wx:if="{{seat.roleBadgeSrc}}"
+      label="{{seat.roleLabel || ''}}"
+      src="{{seat.roleBadgeSrc || ''}}"
+    ></government-badge>
     <image
       wx:if="{{seat.investigationStampSrc}}"
       class="investigation-stamp"
