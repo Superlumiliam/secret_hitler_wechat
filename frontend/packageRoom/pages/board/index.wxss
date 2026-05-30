@@ -1235,6 +1235,12 @@
   animation: identityModalIn 150ms ease-out both;
 }
 
+.policy-peek-modal {
+  width: calc(100vw - 24rpx);
+  max-width: 744rpx;
+  min-height: 506rpx;
+}
+
 .policy-modal-frame {
   position: absolute;
   inset: 0;
@@ -1249,6 +1255,11 @@
   min-height: 430rpx;
   padding: 34rpx 30rpx 28rpx;
   box-sizing: border-box;
+}
+
+.policy-peek-modal .policy-modal-content {
+  min-height: 506rpx;
+  padding: 58rpx 32rpx 48rpx;
 }
 
 .policy-modal-title {
@@ -1281,6 +1292,10 @@
   grid-template-columns: repeat(2, 198rpx);
   justify-content: center;
   gap: 22rpx;
+}
+
+.policy-peek-row {
+  pointer-events: none;
 }
 
 .policy-choice-item {
@@ -1358,6 +1373,43 @@
 }
 
 .policy-veto-action-text {
+  position: relative;
+  z-index: 1;
+  max-width: 88%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.policy-peek-confirm {
+  position: relative;
+  width: 100%;
+  max-width: 244rpx;
+  height: 62rpx;
+  margin: 34rpx auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e9bf83;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.58);
+}
+
+.policy-peek-confirm.is-disabled {
+  opacity: 0.56;
+}
+
+.policy-peek-confirm-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.policy-peek-confirm-text {
   position: relative;
   z-index: 1;
   max-width: 88%;

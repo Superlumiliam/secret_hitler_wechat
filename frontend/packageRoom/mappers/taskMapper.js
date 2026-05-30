@@ -214,7 +214,7 @@ function createExecutiveTargets(snapshot) {
   });
 }
 
-function createPolicyPeekCards(snapshot) {
+function createPolicyPeekCards(snapshot, assets = {}, isSubmittingCommand = false) {
   const privateState = (snapshot && snapshot.privateState) || {};
   const policyPeek = privateState.policyPeek || {};
   const cards = Array.isArray(policyPeek.cards) ? policyPeek.cards : [];
@@ -225,7 +225,10 @@ function createPolicyPeekCards(snapshot) {
       policy,
       title: isLiberal ? "自由派政策" : "极权派政策",
       mark: isLiberal ? "自" : "极",
-      cardClass: `policy-pick-card ${isLiberal ? "is-liberal" : "is-fascist"}`,
+      cardSrc: isLiberal ? assets.liberalCard : assets.authoritarianCard,
+      cardClass: `policy-pick-card ${isLiberal ? "is-liberal" : "is-fascist"} ${
+        isSubmittingCommand ? "is-disabled" : ""
+      }`,
     };
   });
 }

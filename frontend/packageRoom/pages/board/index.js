@@ -81,6 +81,7 @@ Page({
     policyPickerHint: "",
     executiveAction: null,
     canExecuteAction: false,
+    canAckPolicyPeek: false,
     executiveTargets: [],
     policyPeekCards: [],
     investigationResult: null,
@@ -327,8 +328,9 @@ Page({
         snapshot.pendingTask &&
           EXECUTIVE_COMMAND_TYPES.includes(snapshot.pendingTask.taskType),
       ),
+      canAckPolicyPeek: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "EXEC_POLICY_PEEK_ACK"),
       executiveTargets: this.createExecutiveTargets(snapshot),
-      policyPeekCards: this.createPolicyPeekCards(snapshot),
+      policyPeekCards: this.createPolicyPeekCards(snapshot, policyAssetUrlByKey),
       investigationResult: this.createInvestigationResult(snapshot),
     });
   },
@@ -496,8 +498,8 @@ Page({
     return taskMapper.createExecutiveTargets(snapshot);
   },
 
-  createPolicyPeekCards(snapshot) {
-    return taskMapper.createPolicyPeekCards(snapshot);
+  createPolicyPeekCards(snapshot, assets = this.data.policyAssets || {}) {
+    return taskMapper.createPolicyPeekCards(snapshot, assets, this.data.isSubmittingCommand);
   },
 
   createInvestigationResult(snapshot) {

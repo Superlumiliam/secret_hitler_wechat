@@ -71,24 +71,11 @@
           <view class="secret-result-text">{{investigationResult.targetName}} 属于 <text class="{{investigationResult.partyClass}}">{{investigationResult.partyText}}</text></view>
         </view>
 
-        <view wx:if="{{snapshot.currentPhase === 'executive_action'}}" class="executive-panel">
+        <view wx:if="{{snapshot.currentPhase === 'executive_action' && !canAckPolicyPeek}}" class="executive-panel">
           <view class="executive-title">{{executiveAction.title || '总统权力'}}</view>
           <view wx:if="{{executiveAction.hint}}" class="executive-hint">{{executiveAction.hint}}</view>
 
-          <view wx:if="{{canExecuteAction && executiveAction.taskType === 'EXEC_POLICY_PEEK_ACK'}}" class="policy-picker-row is-three-cards">
-            <view wx:for="{{policyPeekCards}}" wx:key="index" class="{{item.cardClass}}">
-              <view class="policy-card-mark">{{item.mark}}</view>
-              <view class="policy-card-title">{{item.title}}</view>
-              <view class="policy-card-action">政策牌</view>
-            </view>
-          </view>
-
-          <view wx:if="{{canExecuteAction && executiveAction.taskType === 'EXEC_POLICY_PEEK_ACK'}}" class="executive-confirm {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapPolicyPeekAck" role="button" aria-label="确认政策预览">
-            <image wx:if="{{policyAssets.buttonBlue}}" class="dock-button-frame" src="{{policyAssets.buttonBlue}}" mode="scaleToFill" webp="{{true}}"></image>
-            <view class="dock-button-text">{{executiveAction.confirmText || '确认已查看'}}</view>
-          </view>
-
-          <view wx:elif="{{canExecuteAction}}" class="executive-targets">
+          <view wx:if="{{canExecuteAction}}" class="executive-targets">
             <view
               wx:for="{{executiveTargets}}"
               wx:key="memberId"
@@ -188,6 +175,29 @@
           <view wx:if="{{canRequestVeto}}" class="policy-veto-action {{isSubmittingCommand ? 'is-disabled' : ''}}" catchtap="onTapRequestVeto" role="button" aria-label="提出否决">
             <image wx:if="{{policyAssets.modalFrameButtonMobile}}" class="policy-veto-action-image" src="{{policyAssets.modalFrameButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
             <text class="policy-veto-action-text">提出否决</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{canAckPolicyPeek && !voteResultModalVisible}}" class="policy-modal-mask" catchtap="onStopTap">
+      <view class="policy-modal policy-peek-modal" catchtap="onStopTap" role="dialog" aria-label="政策预览">
+        <image wx:if="{{policyAssets.modalFrameMobile}}" class="policy-modal-frame" src="{{policyAssets.modalFrameMobile}}" mode="scaleToFill" webp="{{true}}"></image>
+        <view class="policy-modal-content">
+          <view class="policy-modal-title">{{executiveAction.title || '政策预览'}}</view>
+          <view wx:if="{{executiveAction.hint}}" class="policy-modal-hint">{{executiveAction.hint}}</view>
+          <view class="policy-choice-row is-three-cards policy-peek-row">
+            <view wx:for="{{policyPeekCards}}" wx:key="index" class="policy-choice-item {{item.policy === 'LIBERAL' ? 'is-liberal' : 'is-fascist'}}">
+              <image wx:if="{{item.cardSrc}}" class="policy-choice-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
+              <view wx:else class="policy-choice-card-fallback">
+                <view class="policy-card-mark">{{item.mark}}</view>
+                <view class="policy-card-title">{{item.title}}</view>
+              </view>
+            </view>
+          </view>
+          <view class="policy-peek-confirm {{isSubmittingCommand ? 'is-disabled' : ''}}" catchtap="onTapPolicyPeekAck" role="button" aria-label="确认政策预览">
+            <image wx:if="{{policyAssets.modalCancelButtonMobile}}" class="policy-peek-confirm-image" src="{{policyAssets.modalCancelButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
+            <text class="policy-peek-confirm-text">确认</text>
           </view>
         </view>
       </view>
