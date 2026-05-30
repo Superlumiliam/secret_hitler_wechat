@@ -273,6 +273,7 @@ page {
   flex: 0 0 72rpx;
   width: 72rpx;
   height: 72rpx;
+  box-sizing: border-box;
   border: 4rpx solid rgba(196, 151, 85, 0.96);
   border-radius: 50%;
   background: rgba(4, 12, 12, 0.9);
@@ -280,12 +281,14 @@ page {
 }
 
 .seat-name {
+  flex: 0 0 24rpx;
   width: 100%;
-  margin-top: 10rpx;
+  height: 24rpx;
+  margin-top: 16rpx;
   color: #d4a461;
   font-size: 20rpx;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 24rpx;
   text-align: center;
   text-shadow: 0 2rpx 5rpx rgba(0, 0, 0, 0.84);
   overflow: hidden;
@@ -294,18 +297,18 @@ page {
 }
 
 .seat-badges {
-  position: absolute;
-  left: 50%;
-  bottom: 8rpx;
+  flex: 0 0 33rpx;
   width: 104rpx;
+  height: 33rpx;
+  margin-top: 16rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: translateX(-50%);
 }
 
 .seat-identity {
   position: relative;
+  flex: 0 0 33rpx;
   width: 68rpx;
   height: 33rpx;
   display: flex;
