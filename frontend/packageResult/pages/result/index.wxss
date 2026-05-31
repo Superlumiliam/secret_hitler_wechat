@@ -129,54 +129,9 @@
   font-weight: 700;
 }
 
-.policy-row {
-  margin-bottom: 14rpx;
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-}
-
-.policy-label {
-  width: 96rpx;
-  font-size: 24rpx;
-}
-
-.policy-label.is-liberal {
-  color: #9fc7d6;
-}
-
-.policy-label.is-fascist {
-  color: #d09a84;
-}
-
-.policy-track {
-  flex: 1;
+.final-policy-tracks {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8rpx;
-}
-
-.policy-slot {
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(243, 228, 200, 0.36);
-  border: 1rpx solid rgba(184, 132, 66, 0.32);
-  background: rgba(18, 17, 14, 0.78);
-  font-size: 22rpx;
-}
-
-.policy-slot.is-liberal {
-  color: #e9f7ff;
-  border-color: rgba(112, 176, 196, 0.78);
-  background: rgba(38, 83, 92, 0.88);
-}
-
-.policy-slot.is-fascist {
-  color: #fff0e8;
-  border-color: rgba(185, 81, 62, 0.72);
-  background: rgba(91, 35, 29, 0.88);
+  gap: 18rpx;
 }
 
 .player-grid {

@@ -1,9 +1,8 @@
 const {
-  FASCIST_POWER_MAP,
   PHASE_NAME_MAP,
   POLICY_TRACK_ASSET_FILE_IDS,
-  POWER_BADGE_ASSET_KEY_MAP,
 } = require("../types/game");
+const { createFascistTrack, createLiberalTrack } = require("../../utils/policyTrack");
 const taskMapper = require("./taskMapper");
 
 function isCloudFileId(fileId) {
@@ -234,64 +233,6 @@ function createActiveIdentityPickerOptions(memberId, snapshot, judgments = {}, a
   }
   const currentJudgment = judgments[memberId] || "UNKNOWN";
   return createIdentityPickerOptions(memberId, currentJudgment, assets);
-}
-
-function createLiberalTrack(liberalPolicyCount, assets = {}, newPolicySlot = 0) {
-  return Array.from({ length: 5 }, (_, index) => {
-    const slot = index + 1;
-    const isVictory = slot === 5;
-    const isEnacted = slot <= liberalPolicyCount;
-    const cardSrc = isEnacted ? assets.liberalCard : assets.liberalSlot;
-
-    return {
-      slot,
-      label: isVictory ? "自由派胜利" : String(slot),
-      isVictory,
-      isEnacted,
-      cardSrc,
-      cellClass: [
-        "policy-cell",
-        "liberal-cell",
-        isEnacted ? "is-enacted" : "is-empty",
-        slot === newPolicySlot ? "is-new-policy" : "",
-        isVictory ? "is-victory" : "",
-      ]
-        .filter(Boolean)
-        .join(" "),
-    };
-  });
-}
-
-function createFascistTrack(targetPlayerCount, fascistPolicyCount, assets = {}, newPolicySlot = 0) {
-  const powers = FASCIST_POWER_MAP[targetPlayerCount] || FASCIST_POWER_MAP[6];
-
-  return Array.from({ length: 6 }, (_, index) => {
-    const slot = index + 1;
-    const isVictory = slot === 6;
-    const isEnacted = slot <= fascistPolicyCount;
-    const power = isVictory ? "极权派胜利" : powers[index];
-    const powerBadgeAssetKey = POWER_BADGE_ASSET_KEY_MAP[power] || "";
-    const cardSrc = isEnacted ? assets.authoritarianCard : assets.authoritarianSlot;
-
-    return {
-      slot,
-      label: isVictory ? "极权派胜利" : String(slot),
-      power,
-      powerBadgeSrc: powerBadgeAssetKey ? assets[powerBadgeAssetKey] : "",
-      isEnacted,
-      isVictory,
-      cardSrc,
-      cellClass: [
-        "policy-cell",
-        "fascist-cell",
-        isEnacted ? "is-enacted" : "is-empty",
-        slot === newPolicySlot ? "is-new-policy" : "",
-        isVictory ? "is-victory" : "",
-      ]
-        .filter(Boolean)
-        .join(" "),
-    };
-  });
 }
 
 function createElectionTrack(electionTracker, assets = {}) {

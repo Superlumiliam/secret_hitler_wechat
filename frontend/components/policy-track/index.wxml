@@ -1,0 +1,32 @@
+<view class="track-panel {{faction === 'liberal' ? 'liberal-panel' : 'fascist-panel'}}">
+  <view class="policy-track-shell {{faction === 'liberal' ? 'liberal-track-shell' : 'fascist-track-shell'}}">
+    <image
+      wx:if="{{faction === 'liberal' ? assets.liberalBg : assets.authoritarianBg}}"
+      class="policy-track-bg"
+      src="{{faction === 'liberal' ? assets.liberalBg : assets.authoritarianBg}}"
+      mode="aspectFill"
+      webp="{{true}}"
+    ></image>
+    <view class="policy-row {{faction === 'liberal' ? 'liberal-row' : 'fascist-row'}}">
+      <view wx:for="{{slots}}" wx:key="slot" class="{{item.cellClass}}">
+        <image wx:if="{{item.cardSrc}}" class="policy-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
+        <text wx:else class="policy-label">{{item.label}}</text>
+        <view
+          wx:if="{{item.powerBadgeSrc}}"
+          class="power-badge-control"
+          catchtap="onTogglePowerTip"
+          data-slot="{{item.slot}}"
+          role="button"
+          aria-label="总统权力：{{item.power}}"
+        >
+          <image class="power-badge-image" src="{{item.powerBadgeSrc}}" mode="aspectFit" webp="{{true}}"></image>
+          <view wx:if="{{activePowerTipSlot == item.slot}}" class="power-tip">总统权力：{{item.power}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+  <view wx:if="{{showProgress}}" class="track-progress {{faction === 'liberal' ? '' : 'fascist-progress'}}">
+    已颁布 <text class="progress-count {{faction === 'liberal' ? '' : 'fascist-count'}}">{{count}}</text> / {{total}}
+  </view>
+  <view wx:if="{{faction === 'fascist' && count >= 5}}" class="veto-note">第5张后，立法阶段永久解锁否决权</view>
+</view>

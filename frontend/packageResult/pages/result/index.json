@@ -1,3 +1,6 @@
 {
-  "navigationStyle": "custom"
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "policy-track": "../../../components/policy-track/index"
+  }
 }

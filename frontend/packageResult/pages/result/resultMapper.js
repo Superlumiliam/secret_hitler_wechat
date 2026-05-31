@@ -1,3 +1,5 @@
+const { createFascistTrack, createLiberalTrack } = require("../../../utils/policyTrack");
+
 const WINNER_TEXT = {
   LIBERAL: "自由派胜利",
   FASCIST: "极权派胜利",
@@ -16,14 +18,6 @@ const ROLE_TEXT = {
   HITLER: "独裁者",
 };
 
-function mapPolicySlots(count, total, activeClass) {
-  return Array.from({ length: total }).map((_, index) => ({
-    slot: index + 1,
-    isActive: index < count,
-    className: `policy-slot ${index < count ? activeClass : ""}`,
-  }));
-}
-
 function formatTime(value) {
   if (!value) {
     return "";
@@ -36,11 +30,14 @@ function formatTime(value) {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function mapResultSnapshot(snapshot) {
+function mapResultSnapshot(snapshot, assets = {}) {
   const policySummary = snapshot.policySummary || {};
   const finalPlayers = snapshot.finalPlayers || [];
   const timeline = snapshot.timeline || [];
   const winner = snapshot.winner || "";
+  const targetPlayerCount = finalPlayers.length || 6;
+  const liberalPolicyCount = policySummary.liberal || 0;
+  const fascistPolicyCount = policySummary.fascist || 0;
 
   return {
     roomId: snapshot.roomId || "",
@@ -55,10 +52,11 @@ function mapResultSnapshot(snapshot) {
     winReasonText: WIN_REASON_TEXT[snapshot.winReason] || "胜负已判定",
     endedAtText: formatTime(snapshot.endedAt),
     policySummary: {
-      liberal: policySummary.liberal || 0,
-      fascist: policySummary.fascist || 0,
-      liberalSlots: mapPolicySlots(policySummary.liberal || 0, 5, "is-liberal"),
-      fascistSlots: mapPolicySlots(policySummary.fascist || 0, 6, "is-fascist"),
+      liberal: liberalPolicyCount,
+      fascist: fascistPolicyCount,
+      targetPlayerCount,
+      liberalTrack: createLiberalTrack(liberalPolicyCount, assets),
+      fascistTrack: createFascistTrack(targetPlayerCount, fascistPolicyCount, assets),
     },
     players: finalPlayers
       .slice()

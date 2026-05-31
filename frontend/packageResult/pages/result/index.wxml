@@ -21,17 +21,25 @@
 
     <view class="section">
       <view class="section-title">最终政策轨</view>
-      <view class="policy-row">
-        <view class="policy-label is-liberal">自由派</view>
-        <view class="policy-track">
-          <view wx:for="{{result.policySummary.liberalSlots}}" wx:key="slot" class="{{item.className}}">{{item.slot}}</view>
-        </view>
-      </view>
-      <view class="policy-row">
-        <view class="policy-label is-fascist">极权派</view>
-        <view class="policy-track">
-          <view wx:for="{{result.policySummary.fascistSlots}}" wx:key="slot" class="{{item.className}}">{{item.slot}}</view>
-        </view>
+      <view class="final-policy-tracks">
+        <policy-track
+          faction="liberal"
+          assets="{{policyAssets}}"
+          slots="{{result.policySummary.liberalTrack}}"
+          count="{{result.policySummary.liberal}}"
+          total="{{5}}"
+          show-progress="{{false}}"
+        ></policy-track>
+        <policy-track
+          faction="fascist"
+          assets="{{policyAssets}}"
+          slots="{{result.policySummary.fascistTrack}}"
+          count="{{result.policySummary.fascist}}"
+          total="{{6}}"
+          show-progress="{{false}}"
+          active-power-tip-slot="{{activePowerTipSlot}}"
+          bind:togglepowertip="onTogglePowerTip"
+        ></policy-track>
       </view>
     </view>
 
