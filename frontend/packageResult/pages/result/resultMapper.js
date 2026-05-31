@@ -35,6 +35,9 @@ function mapResultSnapshot(snapshot, assets = {}) {
   const finalPlayers = snapshot.finalPlayers || [];
   const timeline = snapshot.timeline || [];
   const winner = snapshot.winner || "";
+  const myPlayer = finalPlayers.find((player) => player.memberId === snapshot.myMemberId);
+  const isMyWinner = myPlayer ? myPlayer.party === winner : true;
+  const myPartyAssetSuffix = myPlayer && myPlayer.party === "FASCIST" ? "fascist" : "liberal";
   const targetPlayerCount = finalPlayers.length || 6;
   const liberalPolicyCount = policySummary.liberal || 0;
   const fascistPolicyCount = policySummary.fascist || 0;
@@ -48,6 +51,7 @@ function mapResultSnapshot(snapshot, assets = {}) {
     winner,
     winnerText: WINNER_TEXT[winner] || "对局结束",
     winnerClass: winner === "LIBERAL" ? "is-liberal" : "is-fascist",
+    resultImageAssetKey: `result-${isMyWinner ? "success" : "fail"}-${myPartyAssetSuffix}`,
     winReason: snapshot.winReason || "",
     winReasonText: WIN_REASON_TEXT[snapshot.winReason] || "胜负已判定",
     endedAtText: formatTime(snapshot.endedAt),

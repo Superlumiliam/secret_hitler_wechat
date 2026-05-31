@@ -1430,7 +1430,6 @@
 }
 
 .executive-hint,
-.executive-waiting,
 .veto-response-hint,
 .veto-response-waiting {
   margin-top: 7rpx;

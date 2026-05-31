@@ -10,6 +10,15 @@ const {
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
 
+const CLOUD_ASSET_ROOT =
+  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
+const RESULT_ASSET_FILE_IDS_BY_KEY = {
+  "result-success-liberal": `${CLOUD_ASSET_ROOT}result-success-liberal.webp`,
+  "result-success-fascist": `${CLOUD_ASSET_ROOT}result-success-fascist.webp`,
+  "result-fail-liberal": `${CLOUD_ASSET_ROOT}result-fail-liberal.webp`,
+  "result-fail-fascist": `${CLOUD_ASSET_ROOT}result-fail-fascist.webp`,
+};
+
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
 }
@@ -22,7 +31,9 @@ Page({
     loading: true,
     errorText: "",
     result: null,
+    resultImageSrc: "",
     policyAssets: {},
+    resultAssetSrcByKey: {},
     activePowerTipSlot: 0,
   },
 
@@ -70,9 +81,12 @@ Page({
       const snapshot = await gameService.getResultSnapshot(this.data.roomId);
       syncPageTimeoutDeadline(this, snapshot && snapshot.expireAt);
       const hydrated = await this.hydrateResultAssets(snapshot);
+      const result = mapResultSnapshot(hydrated, hydrated.policyAssets || {});
       this.setData({
-        result: mapResultSnapshot(hydrated, hydrated.policyAssets || {}),
+        result,
+        resultImageSrc: (hydrated.resultAssets || {})[result.resultImageAssetKey] || "",
         policyAssets: hydrated.policyAssets || {},
+        resultAssetSrcByKey: hydrated.resultAssets || {},
         roomCode: hydrated.roomCode || this.data.roomCode,
         displayRoomCode: hydrated.roomCode || this.data.roomCode || "------",
       });
@@ -102,21 +116,29 @@ Page({
   async hydrateResultAssets(snapshot) {
     const players = (snapshot && snapshot.finalPlayers) || [];
     const cachedPolicyAssets = this.data.policyAssets || {};
+    const cachedResultAssets = this.data.resultAssetSrcByKey || {};
     const hasCachedPolicyAssets = Object.keys(POLICY_TRACK_ASSET_FILE_IDS).every((key) => Boolean(cachedPolicyAssets[key]));
+    const hasCachedResultAssets = Object.keys(RESULT_ASSET_FILE_IDS_BY_KEY).every((key) =>
+      Boolean(cachedResultAssets[key]),
+    );
     const policyAssetFileIds = Object.values(POLICY_TRACK_ASSET_FILE_IDS);
+    const resultAssetFileIds = Object.values(RESULT_ASSET_FILE_IDS_BY_KEY);
     const fileIds = players
       .map((player) => player.avatarUrl)
       .filter(isCloudFileId)
-      .concat(hasCachedPolicyAssets ? [] : policyAssetFileIds);
+      .concat(hasCachedPolicyAssets ? [] : policyAssetFileIds)
+      .concat(hasCachedResultAssets ? [] : resultAssetFileIds);
     if (!fileIds.length || !wx.cloud) {
       return {
         ...snapshot,
         policyAssets: cachedPolicyAssets,
+        resultAssets: cachedResultAssets,
       };
     }
 
     const urlByFileId = {};
     const policyAssets = { ...cachedPolicyAssets };
+    const resultAssets = { ...cachedResultAssets };
     try {
       const res = await wx.cloud.getTempFileURL({
         fileList: Array.from(new Set(fileIds)),
@@ -132,6 +154,12 @@ Page({
           policyAssets[key] = urlByFileId[fileId] || "";
         });
       }
+      if (!hasCachedResultAssets) {
+        Object.keys(RESULT_ASSET_FILE_IDS_BY_KEY).forEach((key) => {
+          const fileId = RESULT_ASSET_FILE_IDS_BY_KEY[key];
+          resultAssets[key] = urlByFileId[fileId] || "";
+        });
+      }
     } catch (err) {
       console.error("结果页图片临时链接获取失败", err);
     }
@@ -139,11 +167,28 @@ Page({
     return {
       ...snapshot,
       policyAssets,
+      resultAssets,
       finalPlayers: players.map((player) => ({
         ...player,
         avatarUrl: urlByFileId[player.avatarUrl] || player.avatarUrl || "",
       })),
     };
+  },
+
+  onResultAssetError(event) {
+    console.error("结果页素材加载失败", event && event.detail);
+    const assetKey = event.currentTarget.dataset.assetKey || "";
+    if (!assetKey) {
+      return;
+    }
+    const nextSrcByKey = {
+      ...(this.data.resultAssetSrcByKey || {}),
+      [assetKey]: "",
+    };
+    this.setData({
+      resultImageSrc: "",
+      resultAssetSrcByKey: nextSrcByKey,
+    });
   },
 
   onTogglePowerTip(event) {

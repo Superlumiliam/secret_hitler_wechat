@@ -12,11 +12,21 @@
   </view>
 
   <block wx:elif="{{result}}">
-    <view class="result-hero {{result.winnerClass}}">
-      <view class="eyebrow">《揭秘独裁者》终局复盘</view>
-      <view class="winner-title">{{result.winnerText}}</view>
-      <view class="winner-reason">{{result.winReasonText}}</view>
-      <view class="ended-at">结束时间 {{result.endedAtText}}</view>
+    <view class="result-story">
+      <image
+        wx:if="{{resultImageSrc}}"
+        class="result-story-image"
+        src="{{resultImageSrc}}"
+        mode="widthFix"
+        webp="{{true}}"
+        data-asset-key="{{result.resultImageAssetKey}}"
+        binderror="onResultAssetError"
+      ></image>
+    </view>
+
+    <view class="section">
+      <view class="section-title">对局结束原因</view>
+      <view class="section-body">{{result.winReasonText}}</view>
     </view>
 
     <view class="section">

@@ -68,11 +68,11 @@
       ></seat-list>
 
       <view class="action-dock">
-        <view wx:if="{{snapshot.currentPhase === 'executive_action' && !canAckPolicyPeek}}" class="executive-panel">
+        <view wx:if="{{snapshot.currentPhase === 'executive_action' && canExecuteAction && !canAckPolicyPeek}}" class="executive-panel">
           <view class="executive-title">{{executiveAction.title || '总统权力'}}</view>
           <view wx:if="{{executiveAction.hint}}" class="executive-hint">{{executiveAction.hint}}</view>
 
-          <view wx:if="{{canExecuteAction}}" class="executive-targets">
+          <view class="executive-targets">
             <view wx:if="{{selectedExecutiveTargetLabel}}" class="executive-selected-title">已选择 {{selectedExecutiveTargetLabel}}</view>
             <view wx:else class="executive-selected-title">点击玩家席位选择目标</view>
             <view class="executive-submit {{selectedExecutiveTargetId ? '' : 'is-empty'}} {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapExecutiveSelected" role="button" aria-label="确认总统权力目标">
@@ -81,7 +81,6 @@
             </view>
           </view>
 
-          <view wx:else class="executive-waiting">{{executiveAction.waitingText}}</view>
         </view>
 
         <view wx:if="{{vetoResponse}}" class="veto-response-panel">
