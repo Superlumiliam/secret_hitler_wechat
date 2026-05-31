@@ -1,4 +1,5 @@
 const gameService = require("../../services/gameService");
+const bootstrapService = require("../../../services/bootstrapService");
 const { mapResultSnapshot } = require("./resultMapper");
 const { POLICY_TRACK_ASSET_FILE_IDS } = require("../../utils/policyTrack");
 const {
@@ -29,6 +30,16 @@ function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
 }
 
+function clearRuntimeActiveRoomState() {
+  const app = typeof getApp === "function" ? getApp() : null;
+  if (!app || !app.globalData) {
+    return;
+  }
+
+  app.globalData.activeRoom = null;
+  app.globalData.initialLobbySnapshots = {};
+}
+
 Page({
   data: {
     roomId: "",
@@ -41,6 +52,7 @@ Page({
     policyAssets: {},
     resultAssetSrcByKey: {},
     activePowerTipSlot: 0,
+    isLeaving: false,
   },
 
   onLoad(options = {}) {
@@ -67,6 +79,7 @@ Page({
 
   onUnload() {
     clearPageTimeout(this);
+    this.clearResultActiveRoom({ silent: true });
   },
 
   async loadResult() {
@@ -212,7 +225,32 @@ Page({
     });
   },
 
-  onBackHome() {
+  async clearResultActiveRoom(options = {}) {
+    if (this.__resultActiveRoomCleared) {
+      return;
+    }
+
+    this.__resultActiveRoomCleared = true;
+    clearRuntimeActiveRoomState();
+    try {
+      await bootstrapService.clearActiveRoom();
+    } catch (err) {
+      if (!options.silent) {
+        console.error("清理结果页活跃房间失败", err);
+      }
+    }
+  },
+
+  async onBackHome() {
+    if (this.data.isLeaving) {
+      return;
+    }
+
+    this.setData({
+      isLeaving: true,
+    });
+
+    await this.clearResultActiveRoom();
     wx.reLaunch({
       url: "/pages/home/index",
     });
