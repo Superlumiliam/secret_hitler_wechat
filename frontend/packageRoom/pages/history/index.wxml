@@ -6,11 +6,7 @@
   <block wx:if="{{header}}">
     <view class="top-bar">
       <view class="back-control" bindtap="onBackBoard" hover-class="icon-hover" role="button" aria-label="返回对局桌面">‹</view>
-      <view class="title-wrap">
-        <view class="wing-line"></view>
-        <view class="page-title">历史记录</view>
-        <view class="wing-line"></view>
-      </view>
+      <view class="page-title">历史记录</view>
     </view>
 
     <view class="room-strip">
@@ -85,7 +81,8 @@
       <view class="legend-item"><text class="legend-dot is-ja">✔</text>赞成</view>
       <view class="legend-item"><text class="legend-dot is-nein">×</text>反对</view>
       <view class="legend-item"><text class="legend-dot is-dead">出</text>已出局</view>
-      <view class="legend-item"><text class="legend-dot is-pending">…</text>未公开/等待</view>
+      <view class="legend-item"><text class="legend-dot is-pending">…</text>未公开</view>
+      <view class="legend-item"><text class="legend-dot is-not-started">·</text>未投票</view>
     </view>
   </block>
 

@@ -49,7 +49,6 @@ page {
     inset 0 0 90rpx rgba(0, 0, 0, 0.86);
 }
 
-.page-frame::before,
 .page-frame::after {
   content: "";
   position: absolute;
@@ -57,10 +56,6 @@ page {
   right: 18rpx;
   height: 1rpx;
   background: rgba(186, 129, 62, 0.3);
-}
-
-.page-frame::before {
-  top: 122rpx;
 }
 
 .page-frame::after {
@@ -104,18 +99,6 @@ page {
 
 .icon-hover {
   opacity: 0.72;
-}
-
-.title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-}
-
-.wing-line {
-  width: 92rpx;
-  height: 1rpx;
-  background: linear-gradient(90deg, transparent, rgba(199, 135, 67, 0.82), transparent);
 }
 
 .page-title {
@@ -360,6 +343,9 @@ page {
   align-self: end;
   padding-left: 22rpx;
   padding-right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
 
 .round-line {
@@ -367,6 +353,7 @@ page {
   color: #d9a25f;
   font-size: 28rpx;
   font-weight: 800;
+  line-height: 1.28;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -386,10 +373,10 @@ page {
 
 .vote-result-line {
   min-width: 0;
-  margin-top: 12rpx;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 12rpx;
   color: #d8a05e;
   font-size: 28rpx;
   font-weight: 800;
@@ -401,7 +388,6 @@ page {
 }
 
 .vote-result-text {
-  margin-top: 4rpx;
   color: #e0b26f;
   max-width: calc(100% - 206rpx);
   overflow: hidden;
@@ -546,12 +532,12 @@ page {
   min-height: 74rpx;
   margin-top: 22rpx;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
   justify-content: stretch;
   gap: 0;
   color: #d5a062;
-  font-size: 22rpx;
+  font-size: 21rpx;
 }
 
 .legend-item {
@@ -594,6 +580,11 @@ page {
 .legend-dot.is-pending {
   color: #d5a062;
   background: rgba(113, 83, 50, 0.24);
+}
+
+.legend-dot.is-not-started {
+  color: #8c704e;
+  background: rgba(113, 83, 50, 0.18);
 }
 
 .history-loading {
