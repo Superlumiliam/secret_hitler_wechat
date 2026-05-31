@@ -9,6 +9,15 @@ const OUTCOME_CLASS_BY_TYPE = {
   chaos_policy: "is-chaos",
   win: "is-win",
 };
+const CLOUD_ASSET_ROOT =
+  "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
+const HISTORY_ASSET_FILE_IDS = {
+  background: `${CLOUD_ASSET_ROOT}background-room-prepare.webp`,
+  frame: `${CLOUD_ASSET_ROOT}history-frame.webp`,
+  ring: `${CLOUD_ASSET_ROOT}history-ring.webp`,
+  liberal: `${CLOUD_ASSET_ROOT}history-liberal.webp`,
+  fascist: `${CLOUD_ASSET_ROOT}history-fascist.webp`,
+};
 const {
   GAME_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -17,6 +26,10 @@ const {
   setupPageTimeout,
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
+
+function isCloudFileId(fileId) {
+  return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
 
 function getSeatLabel(member, fallback = "待定") {
   if (!member) {
@@ -34,6 +47,7 @@ Page({
     header: null,
     summary: null,
     rounds: [],
+    historyAssets: {},
   },
 
   onLoad(options = {}) {
@@ -92,7 +106,7 @@ Page({
         throw this.createServiceError(result, "获取历史记录失败");
       }
       syncPageTimeoutDeadline(this, result.data && result.data.expireAt);
-      this.hydrateHistory(result.data);
+      await this.hydrateHistory(result.data);
     } catch (err) {
       console.error("获取历史记录失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
@@ -116,7 +130,7 @@ Page({
     }
   },
 
-  hydrateHistory(snapshot) {
+  async hydrateHistory(snapshot) {
     const publicState = (snapshot && snapshot.publicState) || {};
     const history = publicState.history || {
       roundsStarted: snapshot.round || 1,
@@ -128,6 +142,8 @@ Page({
     seatOrder.forEach((member) => {
       memberById[member.memberId] = member;
     });
+
+    const historyAssets = await this.loadHistoryAssets();
 
     this.setData({
       header: {
@@ -143,8 +159,42 @@ Page({
         electionTracker: publicState.electionTracker || 0,
         electionDots: this.createElectionDots(publicState.electionTracker || 0),
       },
-      rounds: this.createRoundViews(history.rounds || [], seatOrder, memberById),
+      rounds: this.createRoundViews(history.rounds || [], seatOrder, memberById, historyAssets),
     });
+  },
+
+  async loadHistoryAssets() {
+    const cachedAssets = this.data.historyAssets || {};
+    const hasCachedAssets = Object.keys(HISTORY_ASSET_FILE_IDS).every((key) => Boolean(cachedAssets[key]));
+    if (hasCachedAssets || !wx.cloud || !wx.cloud.getTempFileURL) {
+      return cachedAssets;
+    }
+
+    const urlByKey = { ...cachedAssets };
+    const fileIds = Object.values(HISTORY_ASSET_FILE_IDS).filter(isCloudFileId);
+    try {
+      const tempRes = await wx.cloud.getTempFileURL({
+        fileList: Array.from(new Set(fileIds)),
+      });
+      const urlByFileId = {};
+      (tempRes.fileList || []).forEach((file) => {
+        if (file.status === 0 && file.tempFileURL) {
+          urlByFileId[file.fileID] = file.tempFileURL;
+        } else {
+          console.error("历史记录页云存储临时链接获取失败", file);
+        }
+      });
+      Object.keys(HISTORY_ASSET_FILE_IDS).forEach((key) => {
+        const fileId = HISTORY_ASSET_FILE_IDS[key];
+        urlByKey[key] = urlByFileId[fileId] || "";
+      });
+      this.setData({
+        historyAssets: urlByKey,
+      });
+    } catch (err) {
+      console.error("历史记录页云存储临时链接获取失败", err);
+    }
+    return urlByKey;
   },
 
   createElectionDots(electionTracker) {
@@ -154,7 +204,7 @@ Page({
     }));
   },
 
-  createRoundViews(rounds, seatOrder, memberById) {
+  createRoundViews(rounds, seatOrder, memberById, historyAssets = {}) {
     return rounds.map((round) => {
       const president = memberById[round.presidentId] || null;
       const chancellor = memberById[round.chancellorId] || null;
@@ -171,10 +221,22 @@ Page({
           : this.getHiddenVoteText(round.status),
         outcomeText: this.createOutcomeText(outcome),
         outcomeClass: `outcome-badge ${OUTCOME_CLASS_BY_TYPE[outcome.type] || "is-pending"}`,
+        showPolicyBadge: outcome.type === "liberal_policy" || outcome.type === "fascist_policy",
+        outcomeImageSrc: this.getOutcomeImageSrc(outcome, historyAssets),
         executiveResultText: executiveResult && executiveResult.text ? executiveResult.text : "",
         votes: this.createVoteRows(round.votes || [], seatOrder),
       };
     });
+  },
+
+  getOutcomeImageSrc(outcome, historyAssets = {}) {
+    if (outcome.type === "liberal_policy") {
+      return historyAssets.liberal || "";
+    }
+    if (outcome.type === "fascist_policy") {
+      return historyAssets.fascist || "";
+    }
+    return "";
   },
 
   getHiddenVoteText(status) {
@@ -211,13 +273,13 @@ Page({
 
   getVoteMark(state) {
     if (state === "ja") {
-      return "✓";
+      return "✔";
     }
     if (state === "nein") {
       return "×";
     }
     if (state === "dead") {
-      return "☠";
+      return "出";
     }
     if (state === "pending") {
       return "…";

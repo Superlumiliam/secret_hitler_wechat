@@ -1,4 +1,6 @@
 <view class="history-page">
+  <image wx:if="{{historyAssets.background}}" class="history-background" src="{{historyAssets.background}}" mode="aspectFill" webp="{{true}}" />
+  <view class="history-overlay"></view>
   <view class="page-frame"></view>
 
   <block wx:if="{{header}}">
@@ -21,48 +23,53 @@
     </view>
 
     <view class="summary-board">
+      <image wx:if="{{historyAssets.frame}}" class="board-frame-image" src="{{historyAssets.frame}}" mode="scaleToFill" webp="{{true}}" />
       <view class="summary-item">
         <view class="summary-label">已进行轮次</view>
         <view class="summary-value"><text class="big-number">{{summary.roundsStarted}}</text><text class="limit-text"> / 无限</text></view>
-        <view class="summary-foot">已完成 {{summary.roundsCompleted}} 轮</view>
       </view>
       <view class="summary-item is-liberal">
-        <view class="summary-label">自由派已颁布</view>
+        <view class="summary-label"><text>自由派</text><text>已颁布</text></view>
         <view class="summary-value"><text class="big-number">{{summary.liberalPolicyCount}}</text><text class="limit-text"> / 5</text></view>
       </view>
       <view class="summary-item is-fascist">
-        <view class="summary-label">极权派已颁布</view>
+        <view class="summary-label"><text>极权派</text><text>已颁布</text></view>
         <view class="summary-value"><text class="big-number">{{summary.fascistPolicyCount}}</text><text class="limit-text"> / 6</text></view>
       </view>
       <view class="summary-item">
-        <view class="summary-label">当前选举计数器</view>
+        <view class="summary-label">选举计数器</view>
         <view class="summary-value"><text class="big-number">{{summary.electionTracker}}</text><text class="limit-text"> / 3</text></view>
-        <view class="tracker-row">
-          <view wx:for="{{summary.electionDots}}" wx:key="slot" class="{{item.dotClass}}">{{item.slot}}</view>
-        </view>
       </view>
     </view>
 
     <view class="round-list">
       <view wx:for="{{rounds}}" wx:key="round" class="round-board">
+        <image wx:if="{{historyAssets.frame}}" class="round-frame-image" src="{{historyAssets.frame}}" mode="scaleToFill" webp="{{true}}" />
+        <view class="round-divider"></view>
         <view class="round-side">
           <view class="round-medal">
+            <image wx:if="{{historyAssets.ring}}" class="round-ring-image" src="{{historyAssets.ring}}" mode="aspectFit" webp="{{true}}" />
             <view class="round-small">第</view>
             <view class="round-number">{{item.round}}</view>
             <view class="round-small">轮</view>
           </view>
-          <view class="round-outcome">
-            <view class="{{item.outcomeClass}}">{{item.outcomeText}}</view>
+        </view>
+        <view wx:if="{{item.showPolicyBadge}}" class="round-outcome">
+          <view class="{{item.outcomeClass}}">
+            <image wx:if="{{item.outcomeImageSrc}}" class="outcome-image" src="{{item.outcomeImageSrc}}" mode="scaleToFill" webp="{{true}}" />
           </view>
         </view>
         <view class="round-main">
           <view class="round-line">
             <text class="president-text">{{item.presidentText}}</text>
-            <text class="role-text">总统提名</text>
+            <text class="role-text">总统提名了</text>
             <text class="chancellor-text">{{item.chancellorText}}</text>
             <text class="role-text">总理</text>
           </view>
-          <view class="vote-result-line">投票结果：<text class="vote-result-text">{{item.voteText}}</text></view>
+          <view class="vote-result-line">
+            <text class="vote-result-label">投票结果：</text>
+            <text class="vote-result-text">{{item.voteText}}</text>
+          </view>
         </view>
         <view class="vote-strip" style="grid-template-columns: repeat({{item.votes.length}}, minmax(0, 1fr));">
           <view wx:for="{{item.votes}}" wx:key="memberId" class="{{item.cellClass}}">
@@ -75,9 +82,9 @@
     </view>
 
     <view class="legend">
-      <view class="legend-item"><text class="legend-dot is-ja">✓</text>赞成</view>
+      <view class="legend-item"><text class="legend-dot is-ja">✔</text>赞成</view>
       <view class="legend-item"><text class="legend-dot is-nein">×</text>反对</view>
-      <view class="legend-item"><text class="legend-dot is-dead">☠</text>已出局（无法投票）</view>
+      <view class="legend-item"><text class="legend-dot is-dead">出</text>已出局</view>
       <view class="legend-item"><text class="legend-dot is-pending">…</text>未公开/等待</view>
     </view>
   </block>

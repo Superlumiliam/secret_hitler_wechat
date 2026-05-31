@@ -6,23 +6,65 @@ page {
 .history-page {
   position: relative;
   min-height: 100vh;
-  padding: calc(96rpx + env(safe-area-inset-top)) 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  padding: calc(96rpx + env(safe-area-inset-top)) 24rpx calc(28rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
+  overflow-x: hidden;
   color: #d7a35d;
   font-family: "Songti SC", STSong, SimSun, serif;
   background:
-    radial-gradient(circle at 50% 12%, rgba(27, 85, 82, 0.26), transparent 34%),
+    radial-gradient(circle at 52% 15%, rgba(31, 183, 188, 0.16), transparent 32%),
+    radial-gradient(circle at 50% 54%, rgba(73, 45, 23, 0.24), transparent 46%),
     linear-gradient(180deg, #061719 0%, #020809 100%);
+}
+
+.history-background,
+.history-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.history-background {
+  z-index: 0;
+}
+
+.history-overlay {
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(1, 8, 10, 0.08) 0%, rgba(1, 8, 10, 0.24) 45%, rgba(1, 5, 8, 0.74) 100%),
+    radial-gradient(circle at 50% 14%, rgba(31, 183, 188, 0.12), transparent 34%);
 }
 
 .page-frame {
   position: fixed;
+  z-index: 1;
   inset: 10rpx;
   pointer-events: none;
   border: 2rpx solid rgba(158, 92, 42, 0.72);
   box-shadow:
     inset 0 0 0 3rpx rgba(4, 17, 18, 0.88),
     inset 0 0 90rpx rgba(0, 0, 0, 0.86);
+}
+
+.page-frame::before,
+.page-frame::after {
+  content: "";
+  position: absolute;
+  left: 18rpx;
+  right: 18rpx;
+  height: 1rpx;
+  background: rgba(186, 129, 62, 0.3);
+}
+
+.page-frame::before {
+  top: 122rpx;
+}
+
+.page-frame::after {
+  bottom: 20rpx;
 }
 
 .top-bar,
@@ -67,10 +109,13 @@ page {
 .title-wrap {
   display: flex;
   align-items: center;
+  gap: 18rpx;
 }
 
 .wing-line {
-  display: none;
+  width: 92rpx;
+  height: 1rpx;
+  background: linear-gradient(90deg, transparent, rgba(199, 135, 67, 0.82), transparent);
 }
 
 .page-title {
@@ -130,16 +175,32 @@ page {
 }
 
 .summary-board {
+  position: relative;
   margin-top: 24rpx;
-  padding: 28rpx 18rpx;
+  padding: 34rpx 28rpx;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 2rpx solid rgba(174, 96, 42, 0.68);
-  background: rgba(3, 17, 18, 0.74);
-  box-shadow: inset 0 0 34rpx rgba(221, 136, 53, 0.08);
+  overflow: hidden;
+  border: 0;
+  background: rgba(3, 17, 18, 0.62);
+  box-shadow:
+    0 16rpx 42rpx rgba(0, 0, 0, 0.24),
+    inset 0 0 34rpx rgba(221, 136, 53, 0.08);
+}
+
+.board-frame-image,
+.round-frame-image {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .summary-item {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   min-height: 156rpx;
   padding: 0 16rpx;
@@ -156,6 +217,10 @@ page {
 }
 
 .summary-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   color: #dca765;
   font-size: 24rpx;
   font-weight: 700;
@@ -198,32 +263,6 @@ page {
   color: #d2412f;
 }
 
-.tracker-row {
-  margin-top: 12rpx;
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.tracker-dot {
-  width: 36rpx;
-  height: 36rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1rpx solid rgba(206, 140, 66, 0.64);
-  border-radius: 50%;
-  color: #a77945;
-  font-size: 20rpx;
-  background: rgba(2, 10, 12, 0.82);
-}
-
-.tracker-dot.is-active {
-  color: #071315;
-  background: #d28e38;
-  box-shadow: 0 0 14rpx rgba(210, 142, 56, 0.34);
-}
-
 .round-list {
   margin-top: 26rpx;
   display: flex;
@@ -232,44 +271,73 @@ page {
 }
 
 .round-board {
-  min-height: 250rpx;
-  padding: 20rpx 22rpx;
+  position: relative;
+  min-height: 236rpx;
+  padding: 28rpx 26rpx 28rpx 24rpx;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 154rpx minmax(0, 1fr);
+  grid-template-columns: 168rpx minmax(0, 1fr);
   grid-template-rows: auto auto auto;
   column-gap: 22rpx;
-  row-gap: 16rpx;
+  row-gap: 18rpx;
   align-items: stretch;
-  border: 2rpx solid rgba(148, 82, 39, 0.72);
-  background: rgba(3, 16, 18, 0.82);
-  box-shadow: inset 0 0 28rpx rgba(222, 132, 52, 0.07);
+  overflow: hidden;
+  border: 0;
+  background: rgba(3, 16, 18, 0.7);
+  box-shadow:
+    0 16rpx 40rpx rgba(0, 0, 0, 0.22),
+    inset 0 0 28rpx rgba(222, 132, 52, 0.07);
+}
+
+.round-divider {
+  position: absolute;
+  z-index: 1;
+  left: 192rpx;
+  top: 30rpx;
+  bottom: 30rpx;
+  width: 1rpx;
+  background: rgba(159, 91, 44, 0.58);
 }
 
 .round-side {
+  position: relative;
+  z-index: 1;
   grid-row: 1 / 4;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14rpx;
+  padding-right: 10rpx;
 }
 
 .round-medal {
+  position: relative;
   width: 118rpx;
   height: 118rpx;
   display: grid;
   grid-template-columns: auto auto auto;
   align-items: center;
   justify-content: center;
-  border: 2rpx solid rgba(129, 83, 47, 0.62);
+  border: 0;
   border-radius: 50%;
   color: #d7a35d;
-  background: radial-gradient(circle, rgba(26, 41, 39, 0.82), rgba(4, 15, 16, 0.92));
+  background: radial-gradient(circle, rgba(8, 28, 30, 0.76), rgba(3, 12, 14, 0.48));
+}
+
+.round-ring-image {
+  position: absolute;
+  left: -15rpx;
+  top: -15rpx;
+  width: 148rpx;
+  height: 148rpx;
+  pointer-events: none;
+  opacity: 0.72;
 }
 
 .round-number {
+  position: relative;
+  z-index: 1;
   color: #e3ad6b;
   font-size: 54rpx;
   font-weight: 900;
@@ -277,19 +345,24 @@ page {
 }
 
 .round-small {
+  position: relative;
+  z-index: 1;
   font-size: 24rpx;
   font-weight: 800;
 }
 
 .round-main {
+  position: relative;
+  z-index: 1;
   min-width: 0;
-  align-self: center;
-  border-left: 1rpx solid rgba(133, 79, 42, 0.48);
-  padding-left: 24rpx;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  padding-left: 22rpx;
+  padding-right: 0;
 }
 
-.round-line,
-.vote-result-line {
+.round-line {
   min-width: 0;
   color: #d9a25f;
   font-size: 28rpx;
@@ -312,18 +385,36 @@ page {
 }
 
 .vote-result-line {
+  min-width: 0;
   margin-top: 12rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: #d8a05e;
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 1.28;
+}
+
+.vote-result-label {
   color: #d8a05e;
 }
 
 .vote-result-text {
+  margin-top: 4rpx;
   color: #e0b26f;
+  max-width: calc(100% - 206rpx);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vote-strip {
+  position: relative;
+  z-index: 1;
   grid-column: 2;
   grid-row: 2;
-  margin-left: 24rpx;
+  margin-left: 22rpx;
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
   border-top: 1rpx solid rgba(102, 67, 41, 0.72);
@@ -364,6 +455,7 @@ page {
 
 .vote-cell.is-ja .vote-mark {
   background: #108fc0;
+  font-size: 22rpx;
 }
 
 .vote-cell.is-nein .vote-mark {
@@ -371,8 +463,11 @@ page {
 }
 
 .vote-cell.is-dead .vote-mark {
-  color: #b5aaa0;
-  background: transparent;
+  border: 1rpx solid rgba(190, 176, 150, 0.74);
+  color: #d0c2a5;
+  background: rgba(99, 88, 70, 0.28);
+  font-size: 20rpx;
+  box-shadow: inset 0 0 8rpx rgba(0, 0, 0, 0.34);
 }
 
 .vote-cell.is-pending .vote-mark,
@@ -382,9 +477,11 @@ page {
 }
 
 .executive-result {
+  position: relative;
+  z-index: 1;
   grid-column: 2;
   grid-row: 3;
-  margin-left: 24rpx;
+  margin-left: 22rpx;
   padding-top: 12rpx;
   border-top: 1rpx solid rgba(176, 125, 72, 0.32);
   color: #d9b178;
@@ -393,40 +490,47 @@ page {
 }
 
 .round-outcome {
-  width: 144rpx;
+  position: absolute;
+  z-index: 1;
+  right: 14rpx;
+  top: 92rpx;
+  width: 188rpx;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .outcome-badge {
+  position: relative;
   width: 100%;
+  height: 58rpx;
   min-height: 58rpx;
-  padding: 8rpx 10rpx;
+  padding: 0;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2rpx solid rgba(204, 143, 70, 0.72);
-  color: #e2b572;
-  font-size: 22rpx;
-  font-weight: 900;
-  text-align: center;
-  line-height: 1.18;
-  background: rgba(6, 18, 20, 0.74);
-  box-shadow: inset 0 0 18rpx rgba(219, 149, 68, 0.12);
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.outcome-image {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.96;
 }
 
 .outcome-badge.is-liberal {
-  border-color: rgba(22, 166, 209, 0.78);
-  color: #18aad7;
-  box-shadow: inset 0 0 18rpx rgba(22, 166, 209, 0.2);
+  box-shadow: none;
 }
 
 .outcome-badge.is-fascist {
-  border-color: rgba(209, 62, 46, 0.78);
-  color: #d84733;
-  box-shadow: inset 0 0 18rpx rgba(209, 62, 46, 0.18);
+  box-shadow: none;
 }
 
 .outcome-badge.is-failed,
@@ -441,19 +545,22 @@ page {
 .legend {
   min-height: 74rpx;
   margin-top: 22rpx;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  justify-content: center;
-  gap: 32rpx;
+  justify-content: stretch;
+  gap: 0;
   color: #d5a062;
-  font-size: 24rpx;
-  flex-wrap: wrap;
+  font-size: 22rpx;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10rpx;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .legend-dot {
@@ -470,6 +577,7 @@ page {
 
 .legend-dot.is-ja {
   background: #108fc0;
+  font-size: 22rpx;
 }
 
 .legend-dot.is-nein {
@@ -477,8 +585,10 @@ page {
 }
 
 .legend-dot.is-dead {
-  color: #b5aaa0;
-  background: transparent;
+  border: 1rpx solid rgba(190, 176, 150, 0.74);
+  color: #d0c2a5;
+  background: rgba(99, 88, 70, 0.28);
+  font-size: 22rpx;
 }
 
 .legend-dot.is-pending {
