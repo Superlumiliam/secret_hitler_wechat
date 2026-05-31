@@ -1,4 +1,0 @@
-<view wx:if="{{task}}" class="pending-task-card">
-  <view class="pending-task-title">{{task.title}}</view>
-  <view wx:if="{{task.hint}}" class="pending-task-hint">{{task.hint}}</view>
-</view>

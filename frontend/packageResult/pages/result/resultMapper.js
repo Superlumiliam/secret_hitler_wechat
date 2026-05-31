@@ -1,4 +1,4 @@
-const { createFascistTrack, createLiberalTrack } = require("../../../utils/policyTrack");
+const { createFascistTrack, createLiberalTrack } = require("../../utils/policyTrack");
 
 const WINNER_TEXT = {
   LIBERAL: "自由派胜利",

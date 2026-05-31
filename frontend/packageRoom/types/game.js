@@ -2,7 +2,7 @@ const {
   FASCIST_POWER_MAP,
   POLICY_TRACK_ASSET_FILE_IDS,
   POWER_BADGE_ASSET_KEY_MAP,
-} = require("../../utils/policyTrack");
+} = require("../utils/policyTrack");
 
 const PHASE_NAME_MAP = {
   nomination: "总统候选人提名总理",

@@ -2,7 +2,7 @@ const {
   PHASE_NAME_MAP,
   POLICY_TRACK_ASSET_FILE_IDS,
 } = require("../types/game");
-const { createFascistTrack, createLiberalTrack } = require("../../utils/policyTrack");
+const { createFascistTrack, createLiberalTrack } = require("../utils/policyTrack");
 const taskMapper = require("./taskMapper");
 
 function isCloudFileId(fileId) {

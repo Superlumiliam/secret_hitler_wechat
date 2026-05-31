@@ -1,6 +1,6 @@
 const gameService = require("../../services/gameService");
 const { mapResultSnapshot } = require("./resultMapper");
-const { POLICY_TRACK_ASSET_FILE_IDS } = require("../../../utils/policyTrack");
+const { POLICY_TRACK_ASSET_FILE_IDS } = require("../../utils/policyTrack");
 const {
   RESULT_PAGE_TIMEOUT_MS,
   clearPageTimeout,
