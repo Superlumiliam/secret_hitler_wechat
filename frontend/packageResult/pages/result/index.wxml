@@ -57,13 +57,26 @@
       <view class="section-title">最终身份</view>
       <view class="player-grid">
         <view wx:for="{{result.players}}" wx:key="memberId" class="{{item.className}}">
-          <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill" />
-          <view wx:else class="avatar placeholder">{{item.seatIndex}}</view>
-          <view class="player-main">
+          <image
+            wx:if="{{item.identityPlateSrc}}"
+            class="player-plate"
+            src="{{item.identityPlateSrc}}"
+            mode="scaleToFill"
+            webp="{{true}}"
+          ></image>
+          <view class="player-plate-fallback"></view>
+          <view class="player-card-inner">
+            <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill" />
+            <view wx:else class="avatar placeholder">{{item.seatIndex}}</view>
             <view class="player-name">{{item.seatIndex}}号 {{item.displayName}}</view>
-            <view class="player-role">{{item.roleText}}</view>
+            <image
+              wx:if="{{item.roleChipSrc}}"
+              class="player-role-chip"
+              src="{{item.roleChipSrc}}"
+              mode="scaleToFill"
+              webp="{{true}}"
+            ></image>
           </view>
-          <view class="player-state">{{item.aliveText}}</view>
         </view>
       </view>
     </view>

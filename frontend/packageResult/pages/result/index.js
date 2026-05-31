@@ -17,6 +17,12 @@ const RESULT_ASSET_FILE_IDS_BY_KEY = {
   "result-success-fascist": `${CLOUD_ASSET_ROOT}result-success-fascist.webp`,
   "result-fail-liberal": `${CLOUD_ASSET_ROOT}result-fail-liberal.webp`,
   "result-fail-fascist": `${CLOUD_ASSET_ROOT}result-fail-fascist.webp`,
+  "result-identity-row-liberal": `${CLOUD_ASSET_ROOT}result-identity-row-liberal-transparent.webp`,
+  "result-identity-row-fascist": `${CLOUD_ASSET_ROOT}result-identity-row-fascist-transparent.webp`,
+  "result-role-chip-liberal": `${CLOUD_ASSET_ROOT}result-role-chip-liberal-transparent.webp`,
+  "result-role-chip-fascist": `${CLOUD_ASSET_ROOT}result-role-chip-fascist-transparent.webp`,
+  "result-role-chip-dictator": `${CLOUD_ASSET_ROOT}result-role-chip-dictator-transparent.webp`,
+  "default-avatar": `${CLOUD_ASSET_ROOT}man-in-black.webp`,
 };
 
 function isCloudFileId(fileId) {
@@ -81,12 +87,18 @@ Page({
       const snapshot = await gameService.getResultSnapshot(this.data.roomId);
       syncPageTimeoutDeadline(this, snapshot && snapshot.expireAt);
       const hydrated = await this.hydrateResultAssets(snapshot);
+      const resultAssets = hydrated.resultAssets || {};
       const result = mapResultSnapshot(hydrated, hydrated.policyAssets || {});
+      result.players = result.players.map((player) => ({
+        ...player,
+        identityPlateSrc: resultAssets[player.identityPlateAssetKey] || "",
+        roleChipSrc: resultAssets[player.roleChipAssetKey] || "",
+      }));
       this.setData({
         result,
-        resultImageSrc: (hydrated.resultAssets || {})[result.resultImageAssetKey] || "",
+        resultImageSrc: resultAssets[result.resultImageAssetKey] || "",
         policyAssets: hydrated.policyAssets || {},
-        resultAssetSrcByKey: hydrated.resultAssets || {},
+        resultAssetSrcByKey: resultAssets,
         roomCode: hydrated.roomCode || this.data.roomCode,
         displayRoomCode: hydrated.roomCode || this.data.roomCode || "------",
       });
@@ -170,7 +182,9 @@ Page({
       resultAssets,
       finalPlayers: players.map((player) => ({
         ...player,
-        avatarUrl: urlByFileId[player.avatarUrl] || player.avatarUrl || "",
+        avatarUrl: isCloudFileId(player.avatarUrl)
+          ? urlByFileId[player.avatarUrl] || resultAssets["default-avatar"] || ""
+          : player.avatarUrl || resultAssets["default-avatar"] || "",
       })),
     };
   },
