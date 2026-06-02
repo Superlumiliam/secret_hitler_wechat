@@ -101,6 +101,24 @@ function createIdentityMarkView(judgment, isSelf, assets = {}) {
   };
 }
 
+function createVisibleFascistNameMemberIdSet(snapshot) {
+  const privateIdentity = ((snapshot && snapshot.privateState) || {}).identity || {};
+  const visibleMemberIds = new Set();
+  if (privateIdentity.party !== "FASCIST") {
+    return visibleMemberIds;
+  }
+
+  if (snapshot && snapshot.myMemberId) {
+    visibleMemberIds.add(snapshot.myMemberId);
+  }
+  (privateIdentity.knownMembers || []).forEach((member) => {
+    if (member && member.memberId) {
+      visibleMemberIds.add(member.memberId);
+    }
+  });
+  return visibleMemberIds;
+}
+
 function createSeats(snapshot, options = {}) {
   const avatarUrlByFileId = options.avatarUrlByFileId || {};
   const identityJudgmentByMemberId = options.identityJudgmentByMemberId || {};
@@ -119,6 +137,7 @@ function createSeats(snapshot, options = {}) {
   const executiveTargetByMemberId = taskMapper.createExecutiveTargetMap(snapshot);
   const investigationMarkByMemberId = createInvestigationMarkMap(snapshot);
   const privateIdentity = ((snapshot && snapshot.privateState) || {}).identity || {};
+  const visibleFascistNameMemberIds = createVisibleFascistNameMemberIdSet(snapshot);
   const resolvedSelectedNominationTargetId = taskMapper.resolveSelectedNominationTargetId(
     snapshot,
     selectedNominationTargetId,
@@ -150,11 +169,13 @@ function createSeats(snapshot, options = {}) {
     const judgment = isSelf ? privateIdentity.party || "UNKNOWN" : identityJudgmentByMemberId[member.memberId] || "UNKNOWN";
     const identityMark = createIdentityMarkView(judgment, isSelf, assets);
     const investigationMark = investigationMarkByMemberId[member.memberId] || null;
+    const isVisibleFascistName = visibleFascistNameMemberIds.has(member.memberId);
 
     return {
       memberId: member.memberId,
       seatNo: member.seatIndex,
       name: member.displayName,
+      nameClass: isVisibleFascistName ? "seat-name is-visible-fascist" : "seat-name",
       avatarSrc: (isCloudFileId(member.avatarUrl) ? avatarSrc : member.avatarUrl || "") || defaultAvatarSrc,
       roleLabel,
       roleBadgeSrc,
@@ -419,6 +440,7 @@ module.exports = {
   createFascistTrack,
   createIdentityMarkView,
   createIdentityPickerOptions,
+  createVisibleFascistNameMemberIdSet,
   createInvestigationMarkMap,
   createLiberalTrack,
   createPhaseHintText,

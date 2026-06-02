@@ -375,6 +375,12 @@
   word-break: break-all;
 }
 
+.seat-name.is-visible-fascist {
+  color: #ff5b4a;
+  font-weight: 900;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.86), 0 0 9rpx rgba(168, 24, 18, 0.72);
+}
+
 .role-badge {
   position: absolute;
   left: 50%;

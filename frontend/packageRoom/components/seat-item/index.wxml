@@ -10,7 +10,7 @@
     >
       <image wx:if="{{seat.avatarSrc}}" class="avatar-image" src="{{seat.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
     </view>
-    <view class="seat-name">{{seat.name}}</view>
+    <view class="{{seat.nameClass || 'seat-name'}}">{{seat.name}}</view>
     <government-badge
       wx:if="{{seat.roleBadgeSrc}}"
       label="{{seat.roleLabel || ''}}"
