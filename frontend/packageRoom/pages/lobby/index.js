@@ -488,6 +488,13 @@ Page({
     }
 
     if (viewerState.isHost && viewerState.myIsReady) {
+      if (!viewerState.canStart) {
+        wx.showToast({
+          title: "房间未满或有玩家未准备",
+          icon: "none",
+        });
+        return;
+      }
       await this.onStartGame();
       return;
     }

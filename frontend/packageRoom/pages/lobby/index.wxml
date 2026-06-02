@@ -93,7 +93,7 @@
       class="primary-action {{lobby.viewerState.isHost && lobby.viewerState.myIsReady && !lobby.viewerState.canStart ? 'is-disabled' : ''}}"
       bindtap="onReadyAction"
       loading="{{isSubmitting}}"
-      disabled="{{isSubmitting || (lobby.viewerState.isHost && lobby.viewerState.myIsReady && !lobby.viewerState.canStart)}}"
+      disabled="{{isSubmitting}}"
     >
       {{lobby.viewerState.isHost && lobby.viewerState.myIsReady ? '开始' : (lobby.viewerState.myIsReady ? '已准备' : '准备')}}
     </button>
