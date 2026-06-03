@@ -116,6 +116,19 @@ page {
   font-size: 40rpx;
 }
 
+.license-note {
+  position: absolute;
+  z-index: 2;
+  left: 32rpx;
+  right: 32rpx;
+  bottom: calc(28rpx + env(safe-area-inset-bottom));
+  color: rgba(233, 200, 153, 0.62);
+  font-size: 20rpx;
+  line-height: 1.4;
+  text-align: center;
+  text-shadow: 0 3rpx 8rpx rgba(0, 0, 0, 0.76);
+}
+
 .join-dialog-layer {
   position: absolute;
   z-index: 5;

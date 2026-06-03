@@ -46,6 +46,8 @@
     </button>
   </view>
 
+  <text class="license-note">Licensed under CC BY-NC-SA 4.0.</text>
+
   <view wx:if="{{joinDialogVisible}}" class="join-dialog-layer">
     <view class="join-dialog-mask" bindtap="onCloseJoinDialog"></view>
     <view class="join-dialog" role="dialog" aria-label="加入房间">
