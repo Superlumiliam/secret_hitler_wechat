@@ -5,6 +5,7 @@ const DEFAULT_AVATAR_FILE_ID =
 const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const INITIAL_LOBBY_SNAPSHOT_TTL_MS = 30 * 1000;
 const { showTimeoutModalIfNeeded } = require("../../utils/pageTimeout");
+const { buildHomeShare, enableShareMenu } = require("../../utils/share");
 
 function createCommandId(prefix) {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -133,6 +134,7 @@ Page({
 
   onLoad(options = {}) {
     showTimeoutModalIfNeeded(options);
+    enableShareMenu();
 
     const sharedRoomCode = parseJoinTarget(options.roomCode);
     if (sharedRoomCode && sharedRoomCode.roomCode) {
@@ -146,6 +148,17 @@ Page({
 
   onShow() {
     this.loadProfileAvatar();
+  },
+
+  onShareAppMessage() {
+    return buildHomeShare();
+  },
+
+  onShareTimeline() {
+    const share = buildHomeShare();
+    return {
+      title: share.title,
+    };
   },
 
   loadHomeBackground() {

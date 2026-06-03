@@ -17,6 +17,7 @@ const {
   setupPageTimeout,
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
+const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
 const REFRESH_AFTER_ERROR_CODES = [
   "VERSION_CONFLICT",
   "PHASE_MISMATCH",
@@ -119,6 +120,7 @@ Page({
   onLoad(options) {
     const roomId = options.roomId || "";
     const initialLobby = takeInitialLobbySnapshot(roomId);
+    enableShareMenu();
     this.setData({
       roomId,
       memberId: (initialLobby && initialLobby.memberId) || options.memberId || "",
@@ -163,10 +165,14 @@ Page({
   },
 
   onShareAppMessage() {
-    const roomCode = this.data.lobby && this.data.lobby.roomCode;
+    return buildRoomShare(this.data.lobby && this.data.lobby.roomCode);
+  },
+
+  onShareTimeline() {
+    const share = buildRoomShare(this.data.lobby && this.data.lobby.roomCode);
     return {
-      title: `加入 secret dictator 房间 ${roomCode || ""}`.trim(),
-      path: `/pages/home/index?roomCode=${encodeURIComponent(roomCode || "")}`,
+      title: share.title,
+      query: share.query,
     };
   },
 
