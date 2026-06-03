@@ -28,7 +28,7 @@ function buildRoomShare(roomCode) {
 
   return {
     title,
-    path: query ? `/pages/home/index?${query}` : "/pages/home/index",
+    path: query ? `/packageRoom/pages/lobby/index?${query}` : "/pages/home/index",
     query,
   };
 }

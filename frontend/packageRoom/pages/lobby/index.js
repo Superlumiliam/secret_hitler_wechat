@@ -9,6 +9,7 @@ const LOBBY_ASSET_FILE_IDS = {
   logoRule: `${CLOUD_ASSET_ROOT}logo-rule.webp`,
 };
 const LOBBY_POLL_INTERVAL_MS = 2000;
+const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const {
   LOBBY_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -32,8 +33,37 @@ function createCommandId(prefix) {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function buildProfileRedirectUrl(targetUrl) {
+  return `/pages/user-profile/index?redirect=${encodeURIComponent(targetUrl)}`;
+}
+
+function getCachedUserProfile() {
+  try {
+    const profile = wx.getStorageSync(PROFILE_STORAGE_KEY);
+    if (profile && profile.profileCompleted && profile.displayName) {
+      return profile;
+    }
+  } catch (err) {
+    console.error("读取用户资料缓存失败", err);
+  }
+  return null;
+}
+
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
+
+function getFileExtension(filePath) {
+  const cleanPath = String(filePath || "").split("?")[0];
+  const matched = cleanPath.match(/\.([a-zA-Z0-9]+)$/);
+  return matched ? matched[1].toLowerCase() : "jpg";
+}
+
+function buildRoomAvatarCloudPath(commandId, filePath) {
+  const ext = getFileExtension(filePath);
+  return `room_assets/pending/${commandId}/avatars/avatar_${Date.now()}_${Math.random()
+    .toString(36)
+    .slice(2, 10)}.${ext}`;
 }
 
 function createServiceError(result, fallbackMessage) {
@@ -60,6 +90,21 @@ function createServiceError(result, fallbackMessage) {
 
 function isRoomUnavailableError(err) {
   return Boolean(err && ["ROOM_EXPIRED", "ROOM_NOT_FOUND", "NOT_ROOM_MEMBER"].includes(err.code));
+}
+
+function getJoinErrorMessage(err) {
+  const code = err && err.code;
+  const messages = {
+    INVALID_PAYLOAD: "房间链接无效",
+    ROOM_NOT_FOUND: "房间不存在",
+    ROOM_EXPIRED: "房间已过期",
+    ROOM_FULL: "房间已满",
+    ROOM_NOT_JOINABLE: "房间不可加入",
+    ACTION_NOT_ALLOWED: "当前账号已有进行中的房间",
+    PROFILE_REQUIRED: "请先创建用户资料",
+    INTERNAL_ERROR: "系统繁忙，请稍后重试",
+  };
+  return messages[code] || (err && err.message) || "加入房间失败";
 }
 
 function takeInitialLobbySnapshot(roomId) {
@@ -98,14 +143,21 @@ function normalizeLobbyView(lobby) {
   };
 }
 
+function parseRoomCode(value) {
+  const roomCode = String(value || "").replace(/\s|-/g, "");
+  return /^\d{6}$/.test(roomCode) ? roomCode : "";
+}
+
 Page({
   refreshTimer: null,
 
   data: {
     roomId: "",
     memberId: "",
+    shareRoomCode: "",
     lobby: null,
     isLoading: true,
+    isJoiningFromShare: false,
     isSubmitting: false,
     isSoloActionSubmitting: false,
     isLeaving: false,
@@ -119,10 +171,12 @@ Page({
 
   onLoad(options) {
     const roomId = options.roomId || "";
+    const shareRoomCode = parseRoomCode(options.roomCode);
     const initialLobby = takeInitialLobbySnapshot(roomId);
     enableShareMenu();
     this.setData({
       roomId,
+      shareRoomCode,
       memberId: (initialLobby && initialLobby.memberId) || options.memberId || "",
     });
     setupPageTimeout(this, {
@@ -130,6 +184,11 @@ Page({
       beforeRedirect: () => this.stopRefreshTimer(),
     });
     this.loadPageAssets();
+    if (!roomId && shareRoomCode) {
+      this.joinSharedRoom(shareRoomCode);
+      return;
+    }
+
     if (initialLobby && initialLobby.lobbySnapshot) {
       this.hydrateLobby(initialLobby.lobbySnapshot).then(() => {
         this.setData({
@@ -367,6 +426,124 @@ Page({
         });
       }
       this.setData({
+        isLoading: false,
+      });
+    }
+  },
+
+  cacheInitialLobbySnapshot(room) {
+    if (!room || !room.roomId || !room.lobbySnapshot) {
+      return;
+    }
+
+    const app = getApp();
+    app.globalData.initialLobbySnapshots = app.globalData.initialLobbySnapshots || {};
+    app.globalData.initialLobbySnapshots[room.roomId] = {
+      memberId: room.memberId || "",
+      lobbySnapshot: room.lobbySnapshot,
+      expiresAt: Date.now() + 30 * 1000,
+    };
+  },
+
+  async uploadRoomAvatarIfNeeded(profile, commandId) {
+    const avatarUrl = profile && profile.avatarUrl;
+    if (!avatarUrl || avatarUrl === DEFAULT_AVATAR_FILE_ID || isCloudFileId(avatarUrl)) {
+      return "";
+    }
+
+    if (!wx.cloud || !wx.cloud.uploadFile) {
+      throw new Error("当前基础库不支持头像上传");
+    }
+
+    const res = await wx.cloud.uploadFile({
+      cloudPath: buildRoomAvatarCloudPath(commandId, avatarUrl),
+      filePath: avatarUrl,
+    });
+
+    if (!res.fileID) {
+      throw new Error("头像上传失败");
+    }
+
+    return res.fileID;
+  },
+
+  async deleteUploadedAvatar(fileID) {
+    if (!fileID || !wx.cloud || !wx.cloud.deleteFile) {
+      return;
+    }
+
+    try {
+      await wx.cloud.deleteFile({
+        fileList: [fileID],
+      });
+    } catch (err) {
+      console.error("清理未使用房间头像失败", err);
+    }
+  },
+
+  async joinSharedRoom(roomCode) {
+    if (this.data.isJoiningFromShare) {
+      return;
+    }
+
+    if (!roomCode) {
+      wx.reLaunch({
+        url: "/pages/home/index",
+      });
+      return;
+    }
+
+    if (!getCachedUserProfile()) {
+      wx.redirectTo({
+        url: buildProfileRedirectUrl(`/packageRoom/pages/lobby/index?roomCode=${encodeURIComponent(roomCode)}`),
+      });
+      return;
+    }
+
+    if (!wx.cloud) {
+      wx.showToast({
+        title: "当前基础库不支持云能力",
+        icon: "none",
+      });
+      this.setData({
+        isLoading: false,
+      });
+      return;
+    }
+
+    this.setData({
+      isJoiningFromShare: true,
+      isLoading: true,
+    });
+
+    let uploadedAvatarFileId = "";
+    try {
+      const profile = getCachedUserProfile();
+      const commandId = createCommandId("join_room");
+      uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
+      const room = await this.callRoomService("joinRoom", {
+        commandId,
+        roomCode,
+        displayName: profile.displayName,
+        avatarUrl: uploadedAvatarFileId,
+      });
+
+      this.cacheInitialLobbySnapshot(room);
+      wx.redirectTo({
+        url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}`,
+      });
+    } catch (err) {
+      if (err.isBusinessFailure) {
+        await this.deleteUploadedAvatar(uploadedAvatarFileId);
+        uploadedAvatarFileId = "";
+      }
+      console.error("分享链接加入房间失败", err);
+      wx.showToast({
+        title: getJoinErrorMessage(err),
+        icon: "none",
+      });
+      this.setData({
+        isJoiningFromShare: false,
         isLoading: false,
       });
     }
