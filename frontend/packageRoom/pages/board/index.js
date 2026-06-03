@@ -18,6 +18,15 @@ function isRoomUnavailableError(err) {
   return Boolean(err && ["ROOM_EXPIRED", "ROOM_NOT_FOUND", "NOT_ROOM_MEMBER"].includes(err.code));
 }
 
+function isCloudFunctionPollingTimeout(err) {
+  if (!err) {
+    return false;
+  }
+  const errCode = err.errCode || err.code;
+  const message = String(err.errMsg || err.message || "");
+  return errCode === -404012 || message.includes("-404012") || message.includes("polling exceed");
+}
+
 const {
   GAME_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -679,6 +688,12 @@ Page({
     this.lastCommandSettledAt = Date.now();
   },
 
+  createCommandFailureToast(err, fallbackMessage) {
+    return isCloudFunctionPollingTimeout(err)
+      ? "网络超时，请稍后查看局势是否已更新"
+      : err.message || fallbackMessage || "操作失败";
+  },
+
   redirectToResultIfNeeded(snapshot) {
     if (!snapshot) {
       return false;
@@ -1036,7 +1051,7 @@ Page({
         return;
       }
       wx.showToast({
-        title: err.message || "提交提名失败",
+        title: this.createCommandFailureToast(err, "提交提名失败"),
         icon: "none",
       });
       if (this.shouldRefreshAfterCommandError(err)) {
@@ -1107,14 +1122,17 @@ Page({
         throw this.createServiceError(result, "提交投票失败");
       }
       wx.showToast({
-        title: "投票已提交",
+        title: "投票已提交，等待局势更新",
         icon: "none",
       });
       if (this.redirectToResultIfNeeded(result.data)) {
         return;
       }
       this.markCommandSettled();
-      await this.loadGameSnapshot({ silent: true });
+      this.setData({
+        canVote: false,
+        statusText: "投票已提交，等待局势更新",
+      });
     } catch (err) {
       console.error("提交投票失败", err);
       if (this.handleRoomUnavailable(err)) {
@@ -1126,10 +1144,10 @@ Page({
       }
       if (this.shouldRefreshAfterCommandError(err) || err.code === "DUPLICATE_COMMAND") {
         this.markCommandSettled();
-        await this.loadGameSnapshot({ silent: true });
+        this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
-        title: err.code === "DUPLICATE_COMMAND" ? "投票已提交" : err.message || "提交投票失败",
+        title: err.code === "DUPLICATE_COMMAND" ? "投票已提交" : this.createCommandFailureToast(err, "提交投票失败"),
         icon: "none",
       });
     } finally {
@@ -1226,7 +1244,7 @@ Page({
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
-        title: err.message || (isDiscard ? "提交弃牌失败" : "提交颁布失败"),
+        title: this.createCommandFailureToast(err, isDiscard ? "提交弃牌失败" : "提交颁布失败"),
         icon: "none",
       });
     } finally {
@@ -1306,7 +1324,7 @@ Page({
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
-        title: err.message || "提出否决失败",
+        title: this.createCommandFailureToast(err, "提出否决失败"),
         icon: "none",
       });
     } finally {
@@ -1396,7 +1414,7 @@ Page({
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
-        title: err.message || "回应否决失败",
+        title: this.createCommandFailureToast(err, "回应否决失败"),
         icon: "none",
       });
     } finally {
@@ -1529,7 +1547,7 @@ Page({
         await this.loadGameSnapshot({ silent: true });
       }
       wx.showToast({
-        title: err.message || "提交总统权力失败",
+        title: this.createCommandFailureToast(err, "提交总统权力失败"),
         icon: "none",
       });
     } finally {
