@@ -1298,6 +1298,7 @@ export const EXECUTIVE_POWER_TRACK = {
 校验：
 
 - 目标必须存活
+- 目标必须不是总统自己
 - 目标不能重复被调查
 
 落库：

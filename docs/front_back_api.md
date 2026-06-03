@@ -552,6 +552,7 @@ interface PublicHistoryProjection {
 - `taskId` 由后端生成，前端只能回传不能伪造语义
 - `taskType` 必须与命令类型一一对应；唯一例外是 `CHANCELLOR_REQUEST_VETO` 作为 `CHANCELLOR_ENACT_POLICY` 阶段的可选子动作，不单独生成任务卡
 - `allowedTargets` 是权威目标列表；前端不得自行扩大
+- `EXEC_INVESTIGATE.allowedTargets` 必须排除当前总统本人；前端若总统点击自身，应弹框提示“不能调查自身”
 - `meta` 只放“无法从快照其他字段可靠推导”的附加信息；目标类任务可在 `meta.targetOptions` 下发禁用原因供前端展示
 - `NOMINATE_CHANCELLOR` 的目标资格仍由 `allowedTargets + meta.targetOptions` 提供；前端可以把交互呈现在玩家席位上，而不是目标选择面板中
 
@@ -1359,6 +1360,7 @@ interface PublicHistoryProjection {
 - `CHANCELLOR_REQUEST_VETO` 仅在 `vetoUnlocked === true` 时允许
 - `PRESIDENT_DISCARD_POLICY.discardPolicyIndex` 必须是当前 3 张手牌中的有效下标
 - `CHANCELLOR_ENACT_POLICY.enactPolicyIndex` 必须是当前 2 张手牌中的有效下标
+- `EXEC_INVESTIGATE.targetMemberId` 必须是未被调查过的其他存活玩家，不允许等于当前总统本人
 - `EXEC_POLICY_PEEK_ACK` 仅用于确认查看，不修改公共真相
 - `EXECUTE_PLAYER.targetMemberId` 必须是存活玩家；允许等于当前总统本人
 

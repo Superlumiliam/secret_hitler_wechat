@@ -204,11 +204,18 @@ function createExecutiveTargets(snapshot) {
   const allowedTargets = pendingTask.allowedTargets || [];
   const publicState = (snapshot && snapshot.publicState) || {};
   const isInvestigateTask = pendingTask.taskType === "EXEC_INVESTIGATE";
+  const currentPresidentId =
+    (publicState.government && publicState.government.presidentId) ||
+    publicState.currentPresidentId ||
+    publicState.presidentId ||
+    "";
   return (publicState.seatOrder || []).map((member) => {
     const canTarget = allowedTargets.includes(member.memberId);
     let disabledReason = "";
     if (member.isAlive === false) {
       disabledReason = "已出局";
+    } else if (isInvestigateTask && member.memberId === currentPresidentId) {
+      disabledReason = "不能调查自身";
     } else if (!canTarget && isInvestigateTask) {
       disabledReason = "同一名玩家整局游戏不能被调查两次";
     } else if (!canTarget) {

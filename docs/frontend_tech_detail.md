@@ -1498,6 +1498,7 @@ interface PendingTaskViewModel {
 - 数据源：`allowedTargets`
 - UI：
   - 只显示合法目标
+  - 总统点击自身时弹框提示“不能调查自身”
   - 已调查过的人不出现在可选列表中，或显示禁用原因
   - 调查提交成功后，当前总统的视图中目标席位右上角盖调查印章；印章阵营来自 `privateState.investigationMarks`，不是玩家手动判断标记
 

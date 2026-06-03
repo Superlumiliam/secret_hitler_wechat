@@ -574,7 +574,9 @@ function getExecutiveAllowedTargetIds(gameCore, actionType) {
   }
   if (actionType === "INVESTIGATE") {
     const investigatedMemberIds = gameCore.investigatedMemberIds || [];
-    return aliveMemberIds.filter((memberId) => !investigatedMemberIds.includes(memberId));
+    return aliveMemberIds.filter(
+      (memberId) => memberId !== gameCore.currentPresidentId && !investigatedMemberIds.includes(memberId),
+    );
   }
   if (actionType === "EXECUTION") {
     return aliveMemberIds;
@@ -602,7 +604,7 @@ function getExecutiveTaskMeta(actionType) {
   if (actionType === "INVESTIGATE") {
     return {
       actionTitle: "调查忠诚",
-      actionHint: "选择一名仍存活且本局未被调查的玩家，只会向你显示其阵营。",
+      actionHint: "选择另一名仍存活且本局未被调查的玩家，只会向你显示其阵营。",
     };
   }
   if (actionType === "SPECIAL_ELECTION") {

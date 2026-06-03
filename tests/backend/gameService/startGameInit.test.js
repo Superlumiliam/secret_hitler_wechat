@@ -548,6 +548,11 @@ function assertExecutivePrivateAndPublicProjection() {
     false,
     "already investigated player should not be targetable",
   );
+  assert.strictEqual(
+    presidentPrivate.pendingTask.allowedTargets.includes("mem_1"),
+    false,
+    "president should not be able to investigate self",
+  );
 
   const withResult = {
     ...investigate.gameCore,
