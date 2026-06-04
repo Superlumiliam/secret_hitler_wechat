@@ -14,6 +14,8 @@ const COMMAND_REFRESH_WINDOW_MS = 5000;
 const GAME_POLL_FAILURE_BACKOFF_MS = [3000, 5000, 10000, 15000, 30000];
 const INVESTIGATION_REVEAL_EXIT_MS = 260;
 const IDENTITY_INTRO_REVEAL_EXIT_MS = 320;
+const POLICY_PEEK_REVEAL_READY_MS = 1050;
+const POLICY_PEEK_REVEAL_EXIT_MS = 320;
 function isRoomUnavailableError(err) {
   return Boolean(err && ["ROOM_EXPIRED", "ROOM_NOT_FOUND", "NOT_ROOM_MEMBER"].includes(err.code));
 }
@@ -48,6 +50,9 @@ Page({
   isPageUnloaded: false,
   identityJudgmentCacheByKey: {},
   identityIntroRevealShownByKey: {},
+  policyPeekRevealShownByKey: {},
+  policyPeekRevealReadyTimer: null,
+  policyPeekRevealExitTimer: null,
   lastSeatTap: null,
   lastCommandSettledAt: 0,
   pendingInvestigationRevealActorId: "",
@@ -104,6 +109,7 @@ Page({
     selectedExecutiveTargetId: "",
     selectedExecutiveTargetLabel: "",
     policyPeekCards: [],
+    policyPeekReveal: null,
     investigationResult: null,
     investigationReveal: null,
     identityIntroReveal: null,
@@ -118,6 +124,7 @@ Page({
     this.isPageUnloaded = false;
     this.identityJudgmentCacheByKey = {};
     this.identityIntroRevealShownByKey = {};
+    this.policyPeekRevealShownByKey = {};
     this.setData({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
@@ -151,6 +158,12 @@ Page({
     this.isPageVisible = false;
     this.shouldStartRefreshAfterInitial = false;
     this.stopRefreshTimer();
+    this.clearPolicyPeekRevealTimers();
+    if (this.data.policyPeekReveal) {
+      this.setData({
+        policyPeekReveal: null,
+      });
+    }
     clearPageTimeout(this);
   },
 
@@ -159,6 +172,7 @@ Page({
     this.isPageUnloaded = true;
     this.shouldStartRefreshAfterInitial = false;
     this.stopRefreshTimer();
+    this.clearPolicyPeekRevealTimers();
     clearPageTimeout(this);
   },
 
@@ -342,6 +356,11 @@ Page({
     const investigationResult = this.createInvestigationResult(snapshot, policyAssetUrlByKey);
     const investigationReveal = this.createInvestigationReveal(snapshot, policyAssetUrlByKey);
     const identityIntroReveal = this.createIdentityIntroReveal(snapshot, policyAssetUrlByKey);
+    const policyPeekCards = this.createPolicyPeekCards(snapshot, policyAssetUrlByKey);
+    const policyPeekReveal =
+      voteResultModalVisible || investigationReveal || identityIntroReveal
+        ? null
+        : this.createPolicyPeekReveal(snapshot, policyPeekCards);
 
     this.setData({
       snapshot,
@@ -396,7 +415,8 @@ Page({
       executiveTargets: this.createExecutiveTargets(snapshot),
       selectedExecutiveTargetId: this.resolveSelectedExecutiveTargetId(snapshot),
       selectedExecutiveTargetLabel: this.createSelectedExecutiveTargetLabel(snapshot),
-      policyPeekCards: this.createPolicyPeekCards(snapshot, policyAssetUrlByKey),
+      policyPeekCards,
+      policyPeekReveal,
       investigationResult,
       investigationReveal,
       identityIntroReveal,
@@ -404,6 +424,9 @@ Page({
         ? investigationReveal.resultKey
         : this.data.shownInvestigationRevealKey,
     });
+    if (policyPeekReveal && policyPeekReveal.visible && !policyPeekReveal.dismissible) {
+      this.schedulePolicyPeekRevealReady(policyPeekReveal.revealKey);
+    }
   },
 
   createBoard(snapshot, assets = {}) {
@@ -590,6 +613,58 @@ Page({
 
   createPolicyPeekCards(snapshot, assets = this.data.policyAssets || {}) {
     return taskMapper.createPolicyPeekCards(snapshot, assets, this.data.isSubmittingCommand);
+  },
+
+  createPolicyPeekReveal(snapshot, policyPeekCards = []) {
+    const pendingTask = snapshot && snapshot.pendingTask;
+    if (!pendingTask || pendingTask.taskType !== "EXEC_POLICY_PEEK_ACK" || policyPeekCards.length !== 3) {
+      this.clearPolicyPeekRevealTimers();
+      return null;
+    }
+    const revealKey = `${snapshot.myMemberId || ""}:${pendingTask.taskId || snapshot.version || ""}`;
+    const currentReveal = this.data.policyPeekReveal || null;
+    if (currentReveal && currentReveal.revealKey === revealKey && (currentReveal.visible || currentReveal.exiting)) {
+      return currentReveal;
+    }
+    if (this.policyPeekRevealShownByKey[revealKey]) {
+      return null;
+    }
+    this.policyPeekRevealShownByKey[revealKey] = true;
+    return {
+      revealKey,
+      visible: true,
+      exiting: false,
+      dismissible: false,
+    };
+  },
+
+  schedulePolicyPeekRevealReady(revealKey) {
+    if (this.policyPeekRevealReadyTimer) {
+      return;
+    }
+    this.policyPeekRevealReadyTimer = setTimeout(() => {
+      this.policyPeekRevealReadyTimer = null;
+      const reveal = this.data.policyPeekReveal || null;
+      if (reveal && reveal.revealKey === revealKey && reveal.visible && !reveal.exiting) {
+        this.setData({
+          policyPeekReveal: {
+            ...reveal,
+            dismissible: true,
+          },
+        });
+      }
+    }, POLICY_PEEK_REVEAL_READY_MS);
+  },
+
+  clearPolicyPeekRevealTimers() {
+    if (this.policyPeekRevealReadyTimer) {
+      clearTimeout(this.policyPeekRevealReadyTimer);
+      this.policyPeekRevealReadyTimer = null;
+    }
+    if (this.policyPeekRevealExitTimer) {
+      clearTimeout(this.policyPeekRevealExitTimer);
+      this.policyPeekRevealExitTimer = null;
+    }
   },
 
   createInvestigationResult(snapshot, assets = this.data.policyAssets || {}) {
@@ -935,6 +1010,55 @@ Page({
   },
 
   onStopTap() {},
+
+  onTapDrawPile() {
+    if (!this.data.canAckPolicyPeek || this.data.policyPeekCards.length !== 3) {
+      return;
+    }
+    const currentReveal = this.data.policyPeekReveal || null;
+    if (currentReveal && (currentReveal.visible || currentReveal.exiting)) {
+      return;
+    }
+    const pendingTask = (this.data.snapshot && this.data.snapshot.pendingTask) || {};
+    const revealKey = `${(this.data.snapshot && this.data.snapshot.myMemberId) || ""}:${
+      pendingTask.taskId || (this.data.snapshot && this.data.snapshot.version) || ""
+    }`;
+    const policyPeekReveal = {
+      revealKey,
+      visible: true,
+      exiting: false,
+      dismissible: false,
+    };
+    this.setData({
+      policyPeekReveal,
+    });
+    this.schedulePolicyPeekRevealReady(revealKey);
+  },
+
+  onDismissPolicyPeekReveal() {
+    const reveal = this.data.policyPeekReveal || null;
+    if (!reveal || !reveal.dismissible || reveal.exiting) {
+      return;
+    }
+    this.clearPolicyPeekRevealTimers();
+    this.setData({
+      policyPeekReveal: {
+        ...reveal,
+        visible: false,
+        exiting: true,
+        dismissible: false,
+      },
+    });
+    this.policyPeekRevealExitTimer = setTimeout(() => {
+      this.policyPeekRevealExitTimer = null;
+      const currentReveal = this.data.policyPeekReveal || null;
+      if (currentReveal && currentReveal.revealKey === reveal.revealKey && currentReveal.exiting) {
+        this.setData({
+          policyPeekReveal: null,
+        });
+      }
+    }, POLICY_PEEK_REVEAL_EXIT_MS);
+  },
 
   onDismissInvestigationReveal() {
     const reveal = this.data.investigationReveal || null;

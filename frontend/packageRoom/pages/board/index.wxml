@@ -46,7 +46,11 @@
           bind:togglepowertip="onTogglePowerTip"
         ></policy-track>
         <election-track assets="{{policyAssets}}" slots="{{electionTrack}}" election-tracker="{{board.electionTracker}}"></election-track>
-        <deck-piles piles="{{board.deckPiles}}"></deck-piles>
+        <deck-piles
+          piles="{{board.deckPiles}}"
+          can-preview-draw-pile="{{canAckPolicyPeek}}"
+          bind:tapdraw="onTapDrawPile"
+        ></deck-piles>
 
         <view class="status-strip">
           <image wx:if="{{policyAssets.frameNarrow}}" class="status-frame-image" src="{{policyAssets.frameNarrow}}" mode="scaleToFill" webp="{{true}}"></image>
@@ -68,6 +72,14 @@
       ></seat-list>
 
       <view class="action-dock">
+        <view wx:if="{{canAckPolicyPeek}}" class="policy-peek-action-panel">
+          <view class="policy-peek-action-hint">可点击抽牌堆回看顶部政策牌</view>
+          <view class="policy-peek-action-submit {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapPolicyPeekAck" role="button" aria-label="完成政策预览">
+            <image wx:if="{{policyAssets.buttonBlue}}" class="dock-button-frame" src="{{policyAssets.buttonBlue}}" mode="scaleToFill" webp="{{true}}"></image>
+            <view class="dock-button-text">完成政策预览</view>
+          </view>
+        </view>
+
         <view wx:if="{{snapshot.currentPhase === 'executive_action' && canExecuteAction && !canAckPolicyPeek}}" class="executive-panel">
           <view class="executive-title">{{executiveAction.title || '总统权力'}}</view>
           <view wx:if="{{executiveAction.hint}}" class="executive-hint">{{executiveAction.hint}}</view>
@@ -165,24 +177,23 @@
       </view>
     </view>
 
-    <view wx:if="{{canAckPolicyPeek && !voteResultModalVisible}}" class="policy-modal-mask" catchtap="onStopTap">
-      <view class="policy-modal policy-peek-modal" catchtap="onStopTap" role="dialog" aria-label="政策预览">
-        <image wx:if="{{policyAssets.modalFrameMobile}}" class="policy-modal-frame" src="{{policyAssets.modalFrameMobile}}" mode="scaleToFill" webp="{{true}}"></image>
-        <view class="policy-modal-content">
-          <view class="policy-modal-title">{{executiveAction.title || '政策预览'}}</view>
-          <view wx:if="{{executiveAction.hint}}" class="policy-modal-hint">{{executiveAction.hint}}</view>
-          <view class="policy-choice-row is-three-cards policy-peek-row">
-            <view wx:for="{{policyPeekCards}}" wx:key="index" class="policy-choice-item {{item.policy === 'LIBERAL' ? 'is-liberal' : 'is-fascist'}}">
-              <image wx:if="{{item.cardSrc}}" class="policy-choice-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
-              <view wx:else class="policy-choice-card-fallback">
-                <view class="policy-card-mark">{{item.mark}}</view>
-                <view class="policy-card-title">{{item.title}}</view>
-              </view>
-            </view>
-          </view>
-          <view class="policy-peek-confirm {{isSubmittingCommand ? 'is-disabled' : ''}}" catchtap="onTapPolicyPeekAck" role="button" aria-label="确认政策预览">
-            <image wx:if="{{policyAssets.modalCancelButtonMobile}}" class="policy-peek-confirm-image" src="{{policyAssets.modalCancelButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
-            <text class="policy-peek-confirm-text">确认</text>
+    <view
+      wx:if="{{policyPeekReveal && (policyPeekReveal.visible || policyPeekReveal.exiting)}}"
+      class="policy-peek-reveal-mask {{policyPeekReveal.exiting ? 'is-exiting' : ''}}"
+      catchtap="onDismissPolicyPeekReveal"
+      role="button"
+      aria-label="收起政策预览"
+    >
+      <view class="policy-peek-reveal-stage">
+        <view
+          wx:for="{{policyPeekCards}}"
+          wx:key="index"
+          class="policy-peek-reveal-card is-order-{{index + 1}} {{item.policy === 'LIBERAL' ? 'is-liberal' : 'is-fascist'}}"
+        >
+          <image wx:if="{{item.cardSrc}}" class="policy-peek-reveal-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
+          <view wx:else class="policy-peek-reveal-fallback">
+            <view class="policy-card-mark">{{item.mark}}</view>
+            <view class="policy-card-title">{{item.title}}</view>
           </view>
         </view>
       </view>

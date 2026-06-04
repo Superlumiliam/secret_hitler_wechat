@@ -953,6 +953,18 @@
   box-shadow: 0 8rpx 8rpx rgba(0, 0, 0, 0.34);
 }
 
+.deck-pile.can-preview .deck-card-stack {
+  animation: drawPilePreviewPulse 1600ms ease-in-out infinite;
+}
+
+.deck-pile.can-preview .deck-card-stack::after {
+  content: "";
+  position: absolute;
+  inset: -5rpx;
+  pointer-events: none;
+  box-shadow: 0 0 16rpx rgba(234, 188, 116, 0.32);
+}
+
 .deck-card-image {
   width: 100%;
   height: 100%;
@@ -1230,12 +1242,6 @@
   animation: identityModalIn 150ms ease-out both;
 }
 
-.policy-peek-modal {
-  width: calc(100vw - 24rpx);
-  max-width: 744rpx;
-  min-height: 506rpx;
-}
-
 .policy-modal-frame {
   position: absolute;
   inset: 0;
@@ -1250,11 +1256,6 @@
   min-height: 430rpx;
   padding: 34rpx 30rpx 28rpx;
   box-sizing: border-box;
-}
-
-.policy-peek-modal .policy-modal-content {
-  min-height: 506rpx;
-  padding: 58rpx 32rpx 48rpx;
 }
 
 .policy-modal-title {
@@ -1287,10 +1288,6 @@
   grid-template-columns: repeat(2, 198rpx);
   justify-content: center;
   gap: 22rpx;
-}
-
-.policy-peek-row {
-  pointer-events: none;
 }
 
 .policy-choice-item {
@@ -1376,49 +1373,13 @@
   white-space: nowrap;
 }
 
-.policy-peek-confirm {
-  position: relative;
-  width: 100%;
-  max-width: 244rpx;
-  height: 62rpx;
-  margin: 34rpx auto 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #e9bf83;
-  font-size: 24rpx;
-  font-weight: 900;
-  line-height: 1;
-  text-align: center;
-  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.58);
-}
-
-.policy-peek-confirm.is-disabled {
-  opacity: 0.56;
-}
-
-.policy-peek-confirm-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.policy-peek-confirm-text {
-  position: relative;
-  z-index: 1;
-  max-width: 88%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .action-dock {
   margin-top: auto;
   padding: 4rpx 10rpx 0;
 }
 
 .executive-panel,
+.policy-peek-action-panel,
 .veto-response-panel {
   margin-bottom: 10rpx;
   padding: 12rpx;
@@ -1426,6 +1387,167 @@
   background: rgba(7, 24, 24, 0.9);
 }
 
+.policy-peek-action-hint {
+  color: rgba(221, 190, 143, 0.82);
+  font-size: 20rpx;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.policy-peek-action-submit {
+  position: relative;
+  min-height: 58rpx;
+  margin-top: 10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #071719;
+  font-size: 24rpx;
+  font-weight: 900;
+  overflow: visible;
+}
+
+.policy-peek-action-submit.is-disabled {
+  opacity: 0.56;
+}
+
+.policy-peek-reveal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(20, 52, 55, 0.18), transparent 54%),
+    rgba(0, 5, 6, 0.86);
+  animation: policyPeekMaskIn 240ms ease-out both;
+}
+
+.policy-peek-reveal-mask.is-exiting {
+  animation: policyPeekMaskOut 320ms ease-in both;
+}
+
+.policy-peek-reveal-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 700rpx;
+  max-width: 94vw;
+  height: 310rpx;
+  transform: translate(-50%, -50%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 14rpx;
+}
+
+.policy-peek-reveal-card {
+  position: relative;
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(72vh) rotate(0deg) scale(0.84);
+  animation: policyPeekCardIn 560ms cubic-bezier(0.15, 0.88, 0.24, 1) both;
+}
+
+.policy-peek-reveal-card.is-order-1 {
+  animation-delay: 80ms;
+}
+
+.policy-peek-reveal-card.is-order-2 {
+  animation-delay: 260ms;
+}
+
+.policy-peek-reveal-card.is-order-3 {
+  animation-delay: 440ms;
+}
+
+.policy-peek-reveal-mask.is-exiting .policy-peek-reveal-card {
+  animation: policyPeekCardOut 320ms cubic-bezier(0.48, 0, 0.78, 0.18) both;
+}
+
+.policy-peek-reveal-image,
+.policy-peek-reveal-fallback {
+  display: block;
+  width: 100%;
+  height: 286rpx;
+  filter: drop-shadow(0 22rpx 24rpx rgba(0, 0, 0, 0.64)) drop-shadow(0 0 12rpx rgba(225, 179, 115, 0.12));
+}
+
+.policy-peek-reveal-fallback {
+  box-sizing: border-box;
+  padding: 34rpx 12rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  border: 2rpx solid rgba(185, 128, 66, 0.72);
+  background: rgba(13, 18, 17, 0.96);
+}
+
+.policy-peek-reveal-card.is-liberal .policy-peek-reveal-fallback {
+  border-color: rgba(31, 204, 215, 0.66);
+  box-shadow: inset 0 0 34rpx rgba(31, 204, 215, 0.16);
+}
+
+.policy-peek-reveal-card.is-fascist .policy-peek-reveal-fallback {
+  border-color: rgba(239, 96, 72, 0.66);
+  box-shadow: inset 0 0 34rpx rgba(239, 96, 72, 0.16);
+}
+
+@keyframes drawPilePreviewPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 0 0 rgba(234, 188, 116, 0));
+  }
+  50% {
+    transform: translateY(-3rpx);
+    filter: drop-shadow(0 0 12rpx rgba(234, 188, 116, 0.34));
+  }
+}
+
+@keyframes policyPeekMaskIn {
+  from {
+    background-color: rgba(0, 5, 6, 0);
+  }
+  to {
+    background-color: rgba(0, 5, 6, 0.86);
+  }
+}
+
+@keyframes policyPeekMaskOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes policyPeekCardIn {
+  0% {
+    opacity: 0;
+    transform: translateY(72vh) scale(0.84);
+  }
+  72% {
+    opacity: 1;
+    transform: translateY(-10rpx) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes policyPeekCardOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(72vh) scale(0.88);
+  }
+}
 .executive-title,
 .veto-response-title {
   color: #e8bf83;

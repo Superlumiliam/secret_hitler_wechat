@@ -1,7 +1,13 @@
 <view class="deck-piles-panel">
-  <view wx:for="{{piles}}" wx:key="key" class="{{item.pileClass}}">
+  <view wx:for="{{piles}}" wx:key="key" class="{{item.pileClass}} {{item.key === 'draw' && canPreviewDrawPile ? 'can-preview' : ''}}">
     <image wx:if="{{item.bgSrc}}" class="deck-pile-bg" src="{{item.bgSrc}}" mode="scaleToFill" webp="{{true}}"></image>
-    <view class="deck-card-stack" aria-hidden="true">
+    <view
+      class="deck-card-stack"
+      bindtap="onTapPileCard"
+      data-key="{{item.key}}"
+      role="{{item.key === 'draw' && canPreviewDrawPile ? 'button' : ''}}"
+      aria-label="{{item.key === 'draw' && canPreviewDrawPile ? '回看牌堆顶部政策牌' : ''}}"
+    >
       <image wx:if="{{item.cardSrc}}" class="deck-card-image" src="{{item.cardSrc}}" mode="aspectFit" webp="{{true}}"></image>
     </view>
     <view class="deck-pile-copy">
