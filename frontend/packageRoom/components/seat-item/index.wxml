@@ -1,6 +1,6 @@
 <view class="{{seat.seatClass}}" bindtap="onTapSeat" role="button" aria-label="双击切换操控席位">
   <view class="seat-art">
-    <image wx:if="{{assets.playerSeat}}" class="seat-frame-image" src="{{assets.playerSeat}}" mode="aspectFill" webp="{{true}}"></image>
+    <image wx:if="{{seat.seatFrameSrc}}" class="seat-frame-image" src="{{seat.seatFrameSrc}}" mode="aspectFill" webp="{{true}}"></image>
     <view class="seat-no">{{seat.seatNo}}</view>
     <view
       class="avatar"

@@ -22,6 +22,7 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   policyPeek: `${CLOUD_ASSET_ROOT}power-badge-policy-peek.webp`,
   specialElection: `${CLOUD_ASSET_ROOT}power-badge-special-election.webp`,
   playerSeat: `${CLOUD_ASSET_ROOT}player-seat.webp`,
+  playerSeatHitler: `${CLOUD_ASSET_ROOT}player-seat-hitler.webp`,
   playerTabletPresident: `${CLOUD_ASSET_ROOT}player-tablet-president.webp`,
   playerTabletMinister: `${CLOUD_ASSET_ROOT}player-tablet-minister.webp`,
   stampFascist: `${CLOUD_ASSET_ROOT}stamp-fascist.webp`,

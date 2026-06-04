@@ -119,6 +119,24 @@ function createVisibleFascistNameMemberIdSet(snapshot) {
   return visibleMemberIds;
 }
 
+function createVisibleHitlerSeatMemberIdSet(snapshot) {
+  const privateIdentity = ((snapshot && snapshot.privateState) || {}).identity || {};
+  const visibleMemberIds = new Set();
+  if (privateIdentity.party !== "FASCIST") {
+    return visibleMemberIds;
+  }
+
+  if (privateIdentity.role === "HITLER" && snapshot && snapshot.myMemberId) {
+    visibleMemberIds.add(snapshot.myMemberId);
+  }
+  (privateIdentity.knownMembers || []).forEach((member) => {
+    if (member && member.memberId && member.role === "HITLER") {
+      visibleMemberIds.add(member.memberId);
+    }
+  });
+  return visibleMemberIds;
+}
+
 function createSeats(snapshot, options = {}) {
   const avatarUrlByFileId = options.avatarUrlByFileId || {};
   const identityJudgmentByMemberId = options.identityJudgmentByMemberId || {};
@@ -138,6 +156,7 @@ function createSeats(snapshot, options = {}) {
   const investigationMarkByMemberId = createInvestigationMarkMap(snapshot);
   const privateIdentity = ((snapshot && snapshot.privateState) || {}).identity || {};
   const visibleFascistNameMemberIds = createVisibleFascistNameMemberIdSet(snapshot);
+  const visibleHitlerSeatMemberIds = createVisibleHitlerSeatMemberIdSet(snapshot);
   const resolvedSelectedNominationTargetId = taskMapper.resolveSelectedNominationTargetId(
     snapshot,
     selectedNominationTargetId,
@@ -170,6 +189,7 @@ function createSeats(snapshot, options = {}) {
     const identityMark = createIdentityMarkView(judgment, isSelf, assets);
     const investigationMark = investigationMarkByMemberId[member.memberId] || null;
     const isVisibleFascistName = visibleFascistNameMemberIds.has(member.memberId);
+    const isVisibleHitlerSeat = visibleHitlerSeatMemberIds.has(member.memberId);
 
     return {
       memberId: member.memberId,
@@ -177,6 +197,9 @@ function createSeats(snapshot, options = {}) {
       name: member.displayName,
       nameClass: isVisibleFascistName ? "seat-name is-visible-fascist" : "seat-name",
       avatarSrc: (isCloudFileId(member.avatarUrl) ? avatarSrc : member.avatarUrl || "") || defaultAvatarSrc,
+      seatFrameSrc: isVisibleHitlerSeat
+        ? assets.playerSeatHitler || assets.playerSeat || ""
+        : assets.playerSeat || "",
       roleLabel,
       roleBadgeSrc,
       isSelf,
