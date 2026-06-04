@@ -1,19 +1,10 @@
-const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
 const IDENTITY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-identity.webp`;
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const DISPLAY_NAME_MIN_LENGTH = 2;
 const DISPLAY_NAME_MAX_LENGTH = 12;
-
-function readCachedProfile() {
-  try {
-    return wx.getStorageSync(PROFILE_STORAGE_KEY) || null;
-  } catch (err) {
-    console.error("读取用户资料缓存失败", err);
-    return null;
-  }
-}
+const userProfileStore = require("../../utils/userProfileStore");
 
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
@@ -32,8 +23,8 @@ Page({
     redirect: "",
   },
 
-  onLoad(options = {}) {
-    const cached = readCachedProfile();
+  async onLoad(options = {}) {
+    const cached = await userProfileStore.getCachedProfileAsync();
     if (cached) {
       const avatarUrl = cached.avatarUrl || "";
       this.setData({
@@ -168,7 +159,7 @@ Page({
         updatedAt: new Date().toISOString(),
       };
 
-      wx.setStorageSync(PROFILE_STORAGE_KEY, savedProfile);
+      await userProfileStore.saveProfile(savedProfile);
       wx.showToast({
         title: "已保存",
         icon: "success",

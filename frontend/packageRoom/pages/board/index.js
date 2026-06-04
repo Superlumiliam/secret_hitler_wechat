@@ -42,6 +42,12 @@ function isCloudFileId(fileId) {
 
 Page({
   refreshTimer: null,
+  initialSnapshotSettled: false,
+  shouldStartRefreshAfterInitial: false,
+  isPageVisible: false,
+  isPageUnloaded: false,
+  identityJudgmentCacheByKey: {},
+  identityIntroRevealShownByKey: {},
   lastSeatTap: null,
   lastCommandSettledAt: 0,
   pendingInvestigationRevealActorId: "",
@@ -106,6 +112,12 @@ Page({
   },
 
   onLoad(options) {
+    this.initialSnapshotSettled = false;
+    this.shouldStartRefreshAfterInitial = false;
+    this.isPageVisible = false;
+    this.isPageUnloaded = false;
+    this.identityJudgmentCacheByKey = {};
+    this.identityIntroRevealShownByKey = {};
     this.setData({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
@@ -114,32 +126,47 @@ Page({
       timeoutMs: GAME_PAGE_TIMEOUT_MS,
       beforeRedirect: () => this.stopRefreshTimer(),
     });
-    this.loadGameSnapshot();
+    this.loadGameSnapshot().then((shouldContinuePolling) => {
+      this.markInitialSnapshotSettled(shouldContinuePolling);
+    });
   },
 
   onShow() {
+    this.isPageVisible = true;
     schedulePageTimeout(this, {
       timeoutMs: GAME_PAGE_TIMEOUT_MS,
       beforeRedirect: () => this.stopRefreshTimer(),
     });
     if (this.data.roomId) {
+      if (!this.initialSnapshotSettled) {
+        this.shouldStartRefreshAfterInitial = true;
+        return;
+      }
       this.loadGameSnapshot({ silent: true });
       this.startRefreshTimer();
     }
   },
 
   onHide() {
+    this.isPageVisible = false;
+    this.shouldStartRefreshAfterInitial = false;
     this.stopRefreshTimer();
     clearPageTimeout(this);
   },
 
   onUnload() {
+    this.isPageVisible = false;
+    this.isPageUnloaded = true;
+    this.shouldStartRefreshAfterInitial = false;
     this.stopRefreshTimer();
     clearPageTimeout(this);
   },
 
   startRefreshTimer() {
     this.stopRefreshTimer();
+    if (!this.isPageVisible || this.isPageUnloaded) {
+      return;
+    }
     this.refreshTimer = setInterval(() => {
       this.loadGameSnapshot({ silent: true });
     }, this.getPollIntervalMs());
@@ -152,12 +179,27 @@ Page({
     }
   },
 
+  markInitialSnapshotSettled(shouldStartRefresh) {
+    this.initialSnapshotSettled = true;
+    const canStartRefresh =
+      shouldStartRefresh &&
+      this.shouldStartRefreshAfterInitial &&
+      this.isPageVisible &&
+      !this.isPageUnloaded &&
+      this.data.roomId &&
+      !this.data.isLeaving;
+    this.shouldStartRefreshAfterInitial = false;
+    if (canStartRefresh) {
+      this.startRefreshTimer();
+    }
+  },
+
   async loadGameSnapshot(options = {}) {
     if (!this.data.roomId || !wx.cloud) {
       this.setData({
         isLoading: false,
       });
-      return;
+      return false;
     }
 
     if (!options.silent) {
@@ -183,7 +225,7 @@ Page({
         throw this.createServiceError(result, "获取对局数据失败");
       }
       if (this.redirectToResultIfNeeded(result.data)) {
-        return;
+        return false;
       }
 
       this.consecutiveSnapshotFailures = 0;
@@ -194,6 +236,7 @@ Page({
       if (this.refreshTimer) {
         this.startRefreshTimer();
       }
+      return true;
     } catch (err) {
       console.error("获取对局数据失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
@@ -201,12 +244,12 @@ Page({
           reasonCode: err.code,
           beforeRedirect: () => this.stopRefreshTimer(),
         });
-        return;
+        return false;
       }
 
       if (err.code === "GAME_ALREADY_ENDED") {
         this.redirectToResult();
-        return;
+        return false;
       }
       this.consecutiveSnapshotFailures += 1;
       if (this.refreshTimer) {
@@ -222,6 +265,7 @@ Page({
           icon: "none",
         });
       }
+      return true;
     } finally {
       this.setData({
         isLoading: false,
@@ -418,11 +462,17 @@ Page({
     if (!key) {
       return {};
     }
+    if (Object.prototype.hasOwnProperty.call(this.identityJudgmentCacheByKey, key)) {
+      return this.identityJudgmentCacheByKey[key];
+    }
     try {
       const stored = wx.getStorageSync(key);
-      return stored && typeof stored === "object" ? stored : {};
+      const judgments = stored && typeof stored === "object" ? stored : {};
+      this.identityJudgmentCacheByKey[key] = judgments;
+      return judgments;
     } catch (err) {
       console.error("读取身份判断标记失败", err);
+      this.identityJudgmentCacheByKey[key] = {};
       return {};
     }
   },
@@ -432,15 +482,19 @@ Page({
     if (!key) {
       return;
     }
-    try {
-      wx.setStorageSync(key, judgments || {});
-    } catch (err) {
-      console.error("保存身份判断标记失败", err);
-      wx.showToast({
-        title: "标记保存失败",
-        icon: "none",
-      });
-    }
+    const nextJudgments = judgments || {};
+    this.identityJudgmentCacheByKey[key] = nextJudgments;
+    wx.setStorage({
+      key,
+      data: nextJudgments,
+      fail: (err) => {
+        console.error("保存身份判断标记失败", err);
+        wx.showToast({
+          title: "标记保存失败",
+          icon: "none",
+        });
+      },
+    });
   },
 
   createIdentityJudgmentStorageKey(snapshot) {
@@ -606,20 +660,29 @@ Page({
   },
 
   hasShownIdentityIntroReveal(storageKey) {
+    if (Object.prototype.hasOwnProperty.call(this.identityIntroRevealShownByKey, storageKey)) {
+      return this.identityIntroRevealShownByKey[storageKey];
+    }
     try {
-      return Boolean(wx.getStorageSync(storageKey));
+      const hasShown = Boolean(wx.getStorageSync(storageKey));
+      this.identityIntroRevealShownByKey[storageKey] = hasShown;
+      return hasShown;
     } catch (err) {
       console.error("读取入场身份揭示状态失败", err);
+      this.identityIntroRevealShownByKey[storageKey] = false;
       return false;
     }
   },
 
   markIdentityIntroRevealShown(storageKey) {
-    try {
-      wx.setStorageSync(storageKey, true);
-    } catch (err) {
-      console.error("保存入场身份揭示状态失败", err);
-    }
+    this.identityIntroRevealShownByKey[storageKey] = true;
+    wx.setStorage({
+      key: storageKey,
+      data: true,
+      fail: (err) => {
+        console.error("保存入场身份揭示状态失败", err);
+      },
+    });
   },
 
   createIdentityIntroRoleMeta(role, assets = {}) {

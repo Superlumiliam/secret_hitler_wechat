@@ -2,10 +2,10 @@ const HOME_BACKGROUND_FILE_ID =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/background-home.webp";
 const DEFAULT_AVATAR_FILE_ID =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/man-in-black.webp";
-const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const INITIAL_LOBBY_SNAPSHOT_TTL_MS = 30 * 1000;
 const { showTimeoutModalIfNeeded } = require("../../utils/pageTimeout");
 const { buildHomeShare, enableShareMenu } = require("../../utils/share");
+const userProfileStore = require("../../utils/userProfileStore");
 
 function createCommandId(prefix) {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -13,18 +13,6 @@ function createCommandId(prefix) {
 
 function buildProfileRedirectUrl(targetUrl) {
   return `/pages/user-profile/index?redirect=${encodeURIComponent(targetUrl)}`;
-}
-
-function getCachedUserProfile() {
-  try {
-    const profile = wx.getStorageSync(PROFILE_STORAGE_KEY);
-    if (profile && profile.profileCompleted && profile.displayName) {
-      return profile;
-    }
-  } catch (err) {
-    console.error("读取用户资料缓存失败", err);
-  }
-  return null;
 }
 
 function isCloudFileId(fileId) {
@@ -202,8 +190,8 @@ Page({
     });
   },
 
-  loadProfileAvatar() {
-    const profile = getCachedUserProfile();
+  async loadProfileAvatar() {
+    const profile = await userProfileStore.getCachedProfileAsync();
     const avatarUrl = profile && profile.avatarUrl ? profile.avatarUrl : DEFAULT_AVATAR_FILE_ID;
     this.loadCloudAvatar(avatarUrl, avatarUrl !== DEFAULT_AVATAR_FILE_ID);
   },
@@ -262,8 +250,8 @@ Page({
     });
   },
 
-  onCreateRoom() {
-    if (!getCachedUserProfile()) {
+  async onCreateRoom() {
+    if (!(await userProfileStore.getCachedProfileAsync())) {
       wx.navigateTo({
         url: buildProfileRedirectUrl("/pages/create-room/index"),
       });
@@ -275,8 +263,8 @@ Page({
     });
   },
 
-  onCreateSoloRoom() {
-    if (!getCachedUserProfile()) {
+  async onCreateSoloRoom() {
+    if (!(await userProfileStore.getCachedProfileAsync())) {
       wx.navigateTo({
         url: buildProfileRedirectUrl("/pages/create-room/index?mode=solo"),
       });
@@ -352,7 +340,8 @@ Page({
     }
 
     const joinTarget = parseJoinTarget(this.data.joinCode);
-    if (!getCachedUserProfile()) {
+    const profile = await userProfileStore.getCachedProfileAsync();
+    if (!profile) {
       const homeUrl =
         joinTarget && joinTarget.roomCode
           ? `/pages/home/index?roomCode=${encodeURIComponent(joinTarget.roomCode)}`
@@ -385,7 +374,6 @@ Page({
 
     let uploadedAvatarFileId = "";
     try {
-      const profile = getCachedUserProfile();
       const commandId = createCommandId("join_room");
       uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
 

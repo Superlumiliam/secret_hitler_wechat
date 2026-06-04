@@ -98,9 +98,9 @@ const ALL_ROOM_AVATAR_FILE_IDS = [
   `${CLOUD_ASSET_ROOT}room-fascist-female.webp`,
   `${CLOUD_ASSET_ROOT}room-fascist-hitler.webp`,
 ];
-const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const INITIAL_LOBBY_SNAPSHOT_TTL_MS = 30 * 1000;
+const userProfileStore = require("../../utils/userProfileStore");
 
 function createCommandId(prefix = "create_room") {
   return `cmd_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -144,15 +144,7 @@ function buildRoomAvatarCloudPath(commandId, filePath) {
 }
 
 function getCachedUserProfile() {
-  try {
-    const profile = wx.getStorageSync(PROFILE_STORAGE_KEY);
-    if (profile && profile.profileCompleted && profile.displayName) {
-      return profile;
-    }
-  } catch (err) {
-    console.error("读取用户资料缓存失败", err);
-  }
-  return null;
+  return userProfileStore.getCachedProfile();
 }
 
 function cacheInitialLobbySnapshot(room) {
@@ -201,11 +193,11 @@ Page({
     ...buildRoleData(6),
   },
 
-  onLoad(options = {}) {
+  async onLoad(options = {}) {
     const mode = options.mode === "solo" ? "solo" : options.mode === "roomSettings" ? "roomSettings" : "normal";
     const roomId = String(options.roomId || "");
 
-    if (mode !== "roomSettings" && !getCachedUserProfile()) {
+    if (mode !== "roomSettings" && !(await userProfileStore.getCachedProfileAsync())) {
       wx.redirectTo({
         url: "/pages/user-profile/index",
       });

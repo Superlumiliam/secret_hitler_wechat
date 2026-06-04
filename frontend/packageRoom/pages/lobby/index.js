@@ -9,7 +9,6 @@ const LOBBY_ASSET_FILE_IDS = {
   logoRule: `${CLOUD_ASSET_ROOT}logo-rule.webp`,
 };
 const LOBBY_POLL_INTERVAL_MS = 2000;
-const PROFILE_STORAGE_KEY = "secret_hitler_user_profile";
 const {
   LOBBY_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -19,6 +18,7 @@ const {
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
 const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
+const userProfileStore = require("../../../utils/userProfileStore");
 const REFRESH_AFTER_ERROR_CODES = [
   "VERSION_CONFLICT",
   "PHASE_MISMATCH",
@@ -35,18 +35,6 @@ function createCommandId(prefix) {
 
 function buildProfileRedirectUrl(targetUrl) {
   return `/pages/user-profile/index?redirect=${encodeURIComponent(targetUrl)}`;
-}
-
-function getCachedUserProfile() {
-  try {
-    const profile = wx.getStorageSync(PROFILE_STORAGE_KEY);
-    if (profile && profile.profileCompleted && profile.displayName) {
-      return profile;
-    }
-  } catch (err) {
-    console.error("读取用户资料缓存失败", err);
-  }
-  return null;
 }
 
 function isCloudFileId(fileId) {
@@ -150,6 +138,10 @@ function parseRoomCode(value) {
 
 Page({
   refreshTimer: null,
+  initialSnapshotSettled: false,
+  shouldStartRefreshAfterInitial: false,
+  isPageVisible: false,
+  isPageUnloaded: false,
 
   data: {
     roomId: "",
@@ -170,6 +162,10 @@ Page({
   },
 
   onLoad(options) {
+    this.initialSnapshotSettled = false;
+    this.shouldStartRefreshAfterInitial = false;
+    this.isPageVisible = false;
+    this.isPageUnloaded = false;
     const roomId = options.roomId || "";
     const shareRoomCode = parseRoomCode(options.roomCode);
     const initialLobby = takeInitialLobbySnapshot(roomId);
@@ -195,30 +191,44 @@ Page({
           isLoading: false,
         });
       });
-      this.loadLobbySnapshot({ silent: true });
+      this.loadLobbySnapshot({ silent: true }).then((shouldContinuePolling) => {
+        this.markInitialSnapshotSettled(shouldContinuePolling);
+      });
       return;
     }
 
-    this.loadLobbySnapshot();
+    this.loadLobbySnapshot().then((shouldContinuePolling) => {
+      this.markInitialSnapshotSettled(shouldContinuePolling);
+    });
   },
 
   onShow() {
+    this.isPageVisible = true;
     schedulePageTimeout(this, {
       timeoutMs: LOBBY_PAGE_TIMEOUT_MS,
       beforeRedirect: () => this.stopRefreshTimer(),
     });
     if (this.data.roomId) {
+      if (!this.initialSnapshotSettled) {
+        this.shouldStartRefreshAfterInitial = true;
+        return;
+      }
       this.loadLobbySnapshot({ silent: true });
       this.startRefreshTimer();
     }
   },
 
   onHide() {
+    this.isPageVisible = false;
+    this.shouldStartRefreshAfterInitial = false;
     this.stopRefreshTimer();
     clearPageTimeout(this);
   },
 
   onUnload() {
+    this.isPageVisible = false;
+    this.isPageUnloaded = true;
+    this.shouldStartRefreshAfterInitial = false;
     this.stopRefreshTimer();
     clearPageTimeout(this);
   },
@@ -244,6 +254,9 @@ Page({
 
   startRefreshTimer() {
     this.stopRefreshTimer();
+    if (!this.isPageVisible || this.isPageUnloaded) {
+      return;
+    }
     this.refreshTimer = setInterval(() => {
       this.loadLobbySnapshot({ silent: true });
     }, LOBBY_POLL_INTERVAL_MS);
@@ -253,6 +266,21 @@ Page({
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
+    }
+  },
+
+  markInitialSnapshotSettled(shouldStartRefresh) {
+    this.initialSnapshotSettled = true;
+    const canStartRefresh =
+      shouldStartRefresh &&
+      this.shouldStartRefreshAfterInitial &&
+      this.isPageVisible &&
+      !this.isPageUnloaded &&
+      this.data.roomId &&
+      !this.data.isLeaving;
+    this.shouldStartRefreshAfterInitial = false;
+    if (canStartRefresh) {
+      this.startRefreshTimer();
     }
   },
 
@@ -378,7 +406,7 @@ Page({
       this.setData({
         isLoading: false,
       });
-      return;
+      return false;
     }
 
     try {
@@ -404,6 +432,7 @@ Page({
       this.setData({
         isLoading: false,
       });
+      return true;
     } catch (err) {
       console.error("获取大厅失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
@@ -411,12 +440,12 @@ Page({
           reasonCode: err.code,
           beforeRedirect: () => this.stopRefreshTimer(),
         });
-        return;
+        return false;
       }
 
       if (err.code === "GAME_ALREADY_STARTED") {
         this.redirectToBoard();
-        return;
+        return false;
       }
 
       if (!options.silent) {
@@ -428,6 +457,7 @@ Page({
       this.setData({
         isLoading: false,
       });
+      return true;
     }
   },
 
@@ -493,7 +523,8 @@ Page({
       return;
     }
 
-    if (!getCachedUserProfile()) {
+    const profile = await userProfileStore.getCachedProfileAsync();
+    if (!profile) {
       wx.redirectTo({
         url: buildProfileRedirectUrl(`/packageRoom/pages/lobby/index?roomCode=${encodeURIComponent(roomCode)}`),
       });
@@ -518,7 +549,6 @@ Page({
 
     let uploadedAvatarFileId = "";
     try {
-      const profile = getCachedUserProfile();
       const commandId = createCommandId("join_room");
       uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
       const room = await this.callRoomService("joinRoom", {
