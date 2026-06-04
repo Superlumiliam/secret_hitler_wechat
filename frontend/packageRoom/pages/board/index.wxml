@@ -147,7 +147,6 @@
 
     <view wx:if="{{canPickPolicy && !voteResultModalVisible}}" class="policy-modal-mask" catchtap="onStopTap">
       <view class="policy-modal" catchtap="onStopTap" role="dialog" aria-label="{{policyPickerTitle}}">
-        <image wx:if="{{policyAssets.modalFrameMobile}}" class="policy-modal-frame" src="{{policyAssets.modalFrameMobile}}" mode="scaleToFill" webp="{{true}}"></image>
         <view class="policy-modal-content">
           <view class="policy-modal-title">{{policyPickerTitle}}</view>
           <view wx:if="{{policyPickerHint}}" class="policy-modal-hint">{{policyPickerHint}}</view>
@@ -155,7 +154,7 @@
             <view
               wx:for="{{policyCards}}"
               wx:key="index"
-              class="policy-choice-item {{item.policy === 'LIBERAL' ? 'is-liberal' : 'is-fascist'}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
+              class="policy-choice-item is-order-{{index + 1}} {{item.policy === 'LIBERAL' ? 'is-liberal' : 'is-fascist'}} {{isSubmittingCommand ? 'is-disabled' : ''}}"
               catchtap="onTapPolicyCard"
               hover-class="policy-choice-hover"
               data-index="{{item.index}}"
