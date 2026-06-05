@@ -107,6 +107,27 @@ async function assertResultSnapshotUsesEndedPublicProjection() {
   const updatedMember = db.dump().room_members.mem_1;
   assert.strictEqual(updatedMember.memberStatus, "active", "successful cloud function call should touch last seen member");
   assert(updatedMember.lastSeenAt, "successful cloud function call should update lastSeenAt");
+
+  const statsAfterFirstRead = db.stats();
+  const secondResponse = await service.main({
+    action: "getResultSnapshot",
+    payload: {
+      roomId: "room_2",
+    },
+  });
+  const statsAfterSecondRead = db.stats();
+
+  assert.strictEqual(secondResponse.success, true);
+  assert.strictEqual(
+    statsAfterSecondRead.queryGets.room_members,
+    statsAfterFirstRead.queryGets.room_members + 1,
+    "throttled read should skip the extra lastSeen member query",
+  );
+  assert.strictEqual(
+    statsAfterSecondRead.docUpdates.room_members,
+    statsAfterFirstRead.docUpdates.room_members,
+    "throttled read should skip the lastSeen member write",
+  );
 }
 
 (async () => {

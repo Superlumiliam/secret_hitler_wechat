@@ -43,7 +43,11 @@ function getMemberOpenId(member) {
 
 function isDocumentNotFoundError(err) {
   const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
+  const errCode = err && (err.errCode || err.code);
+  const normalizedErrCode = String(errCode || "").toLowerCase();
   return (
+    normalizedErrCode === "-502005" ||
+    normalizedErrCode.includes("document_not_exist") ||
     errMessage.includes("document not exist") ||
     errMessage.includes("document_not_exist") ||
     errMessage.includes("database_document_not_exist") ||
@@ -274,6 +278,9 @@ async function recoverActiveRoom(openid) {
     await touchActiveMember(openid, activeRoom);
   }
   return ok({
+    user: {
+      sessionReady: true,
+    },
     activeRoom,
   });
 }

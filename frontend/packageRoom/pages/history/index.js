@@ -26,6 +26,7 @@ const {
   setupPageTimeout,
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
+const { getGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
@@ -77,7 +78,16 @@ Page({
   },
 
   async loadHistorySnapshot() {
-    if (!this.data.roomId || !wx.cloud) {
+    if (!this.data.roomId) {
+      this.setData({
+        isLoading: false,
+        errorText: "房间信息缺失",
+      });
+      return;
+    }
+
+    const cachedSnapshot = getGameSnapshotCache(this.data.roomId, this.data.controlledMemberId || "");
+    if (!cachedSnapshot && !wx.cloud) {
       this.setData({
         isLoading: false,
         errorText: "房间信息缺失",
@@ -91,22 +101,26 @@ Page({
     });
 
     try {
-      const res = await wx.cloud.callFunction({
-        name: "gameService",
-        data: {
-          action: "getGameSnapshot",
-          payload: {
-            roomId: this.data.roomId,
-            controlledMemberId: this.data.controlledMemberId || "",
+      let snapshot = cachedSnapshot;
+      if (!snapshot) {
+        const res = await wx.cloud.callFunction({
+          name: "gameService",
+          data: {
+            action: "getGameSnapshot",
+            payload: {
+              roomId: this.data.roomId,
+              controlledMemberId: this.data.controlledMemberId || "",
+            },
           },
-        },
-      });
-      const result = res.result || {};
-      if (!result.success) {
-        throw this.createServiceError(result, "获取历史记录失败");
+        });
+        const result = res.result || {};
+        if (!result.success) {
+          throw this.createServiceError(result, "获取历史记录失败");
+        }
+        snapshot = result.data;
       }
-      syncPageTimeoutDeadline(this, result.data && result.data.expireAt);
-      await this.hydrateHistory(result.data);
+      syncPageTimeoutDeadline(this, snapshot && snapshot.expireAt);
+      await this.hydrateHistory(snapshot);
     } catch (err) {
       console.error("获取历史记录失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {

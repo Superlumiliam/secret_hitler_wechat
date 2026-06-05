@@ -8,7 +8,7 @@ const LOBBY_ASSET_FILE_IDS = {
   logoRoomAdjust: `${CLOUD_ASSET_ROOT}logo-room-adjust.webp`,
   logoRule: `${CLOUD_ASSET_ROOT}logo-rule.webp`,
 };
-const LOBBY_POLL_INTERVAL_MS = 2000;
+const LOBBY_POLL_INTERVAL_MS = 3000;
 const {
   LOBBY_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -17,7 +17,9 @@ const {
   setupPageTimeout,
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
+const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
+const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
 const userProfileStore = require("../../../utils/userProfileStore");
 const REFRESH_AFTER_ERROR_CODES = [
   "VERSION_CONFLICT",
@@ -142,6 +144,7 @@ Page({
   shouldStartRefreshAfterInitial: false,
   isPageVisible: false,
   isPageUnloaded: false,
+  snapshotRequestInFlight: null,
 
   data: {
     roomId: "",
@@ -166,6 +169,7 @@ Page({
     this.shouldStartRefreshAfterInitial = false;
     this.isPageVisible = false;
     this.isPageUnloaded = false;
+    this.snapshotRequestInFlight = null;
     const roomId = options.roomId || "";
     const shareRoomCode = parseRoomCode(options.roomCode);
     const initialLobby = takeInitialLobbySnapshot(roomId);
@@ -213,8 +217,11 @@ Page({
         this.shouldStartRefreshAfterInitial = true;
         return;
       }
-      this.loadLobbySnapshot({ silent: true });
-      this.startRefreshTimer();
+      this.loadLobbySnapshot({ silent: true }).then((shouldContinuePolling) => {
+        if (shouldContinuePolling) {
+          this.startRefreshTimer();
+        }
+      });
     }
   },
 
@@ -257,14 +264,18 @@ Page({
     if (!this.isPageVisible || this.isPageUnloaded) {
       return;
     }
-    this.refreshTimer = setInterval(() => {
-      this.loadLobbySnapshot({ silent: true });
+    this.refreshTimer = setTimeout(async () => {
+      this.refreshTimer = null;
+      const shouldContinuePolling = await this.loadLobbySnapshot({ silent: true });
+      if (shouldContinuePolling) {
+        this.startRefreshTimer();
+      }
     }, LOBBY_POLL_INTERVAL_MS);
   },
 
   stopRefreshTimer() {
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
   },
@@ -323,18 +334,8 @@ Page({
     }
 
     const lobbyAssetFileIds = Object.keys(LOBBY_ASSET_FILE_IDS).map((key) => LOBBY_ASSET_FILE_IDS[key]);
-    wx.cloud.getTempFileURL({
-      fileList: [DEFAULT_AVATAR_FILE_ID, LOBBY_BACKGROUND_FILE_ID].concat(lobbyAssetFileIds),
-      success: (res) => {
-        const urlByFileId = {};
-        (res.fileList || []).forEach((file) => {
-          if (file.status === 0 && file.tempFileURL) {
-            urlByFileId[file.fileID] = file.tempFileURL;
-          } else {
-            console.error("房间大厅云存储资源临时链接获取失败", file);
-          }
-        });
-
+    resolveTempFileUrls([DEFAULT_AVATAR_FILE_ID, LOBBY_BACKGROUND_FILE_ID].concat(lobbyAssetFileIds))
+      .then((urlByFileId) => {
         this.setData({
           defaultAvatarSrc: urlByFileId[DEFAULT_AVATAR_FILE_ID] || "",
           backgroundSrc: urlByFileId[LOBBY_BACKGROUND_FILE_ID] || "",
@@ -353,11 +354,10 @@ Page({
             readyPlayerCount: this.countReadyPlayers(this.data.lobby),
           });
         }
-      },
-      fail: (err) => {
+      })
+      .catch((err) => {
         console.error("房间大厅云存储资源临时链接获取失败", err);
-      },
-    });
+      });
   },
 
   async hydrateLobby(lobby) {
@@ -376,15 +376,7 @@ Page({
     }
 
     try {
-      const tempRes = await wx.cloud.getTempFileURL({
-        fileList: Array.from(new Set(cloudFileIds)),
-      });
-      const avatarUrlByFileId = {};
-      (tempRes.fileList || []).forEach((file) => {
-        if (file.status === 0 && file.tempFileURL) {
-          avatarUrlByFileId[file.fileID] = file.tempFileURL;
-        }
-      });
+      const avatarUrlByFileId = await resolveTempFileUrls(cloudFileIds);
 
       this.setData({
         lobby: lobbyView,
@@ -402,6 +394,19 @@ Page({
   },
 
   async loadLobbySnapshot(options = {}) {
+    if (this.snapshotRequestInFlight) {
+      return await this.snapshotRequestInFlight;
+    }
+
+    this.snapshotRequestInFlight = this.fetchLobbySnapshot(options);
+    try {
+      return await this.snapshotRequestInFlight;
+    } finally {
+      this.snapshotRequestInFlight = null;
+    }
+  },
+
+  async fetchLobbySnapshot(options = {}) {
     if (!this.data.roomId || !wx.cloud) {
       this.setData({
         isLoading: false,
@@ -428,7 +433,13 @@ Page({
       syncPageTimeoutDeadline(this, result.data && result.data.expireAt, {
         beforeRedirect: () => this.stopRefreshTimer(),
       });
-      await this.hydrateLobby(result.data);
+      if (result.data && result.data.roomStatus && result.data.roomStatus !== "lobby") {
+        this.redirectToBoard();
+        return false;
+      }
+      if (this.shouldHydrateLobby(result.data, options)) {
+        await this.hydrateLobby(result.data);
+      }
       this.setData({
         isLoading: false,
       });
@@ -459,6 +470,21 @@ Page({
       });
       return true;
     }
+  },
+
+  shouldHydrateLobby(lobby, options = {}) {
+    const current = this.data.lobby;
+    const currentViewer = (current && current.viewerState) || {};
+    const nextViewer = (lobby && lobby.viewerState) || {};
+    return !(
+      options.silent &&
+      current &&
+      lobby &&
+      current.version !== undefined &&
+      lobby.version !== undefined &&
+      current.version === lobby.version &&
+      currentViewer.myMemberId === nextViewer.myMemberId
+    );
   },
 
   cacheInitialLobbySnapshot(room) {
@@ -585,6 +611,7 @@ Page({
     }
 
     if (!this.data.roomId || !wx.cloud) {
+      clearGameSnapshotCache(this.data.roomId);
       wx.reLaunch({
         url: "/pages/home/index",
       });
@@ -602,6 +629,7 @@ Page({
         roomId: this.data.roomId,
       });
 
+      clearGameSnapshotCache(this.data.roomId);
       wx.reLaunch({
         url: "/pages/home/index",
       });
@@ -725,7 +753,6 @@ Page({
       });
 
       await this.hydrateLobby(snapshot);
-      await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("准备状态更新失败", err);
       if (this.handleRoomUnavailable(err)) {
@@ -760,7 +787,6 @@ Page({
         roomId: this.data.roomId,
       });
       await this.hydrateLobby(snapshot);
-      await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("补齐虚拟玩家失败", err);
       if (this.handleRoomUnavailable(err)) {
@@ -795,7 +821,6 @@ Page({
         roomId: this.data.roomId,
       });
       await this.hydrateLobby(snapshot);
-      await this.loadLobbySnapshot({ silent: true });
     } catch (err) {
       console.error("虚拟玩家准备失败", err);
       if (this.handleRoomUnavailable(err)) {

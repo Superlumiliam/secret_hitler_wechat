@@ -68,7 +68,12 @@
   "compileType": "miniprogram",
   "srcMiniprogramRoot": "frontend/",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      {
+        "type": "suffix",
+        "value": ".DS_Store"
+      }
+    ],
     "include": []
   },
   "editorSetting": {

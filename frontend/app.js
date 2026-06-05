@@ -77,9 +77,10 @@ App({
 
     this.globalData.isRecoveringActiveRoom = true;
     try {
-      const session = await bootstrapService.ensureSession();
-      const recovered = options.skipRecoverRoute ? session : await bootstrapService.recoverActiveRoom();
-      const activeRoom = recovered.activeRoom || session.activeRoom || null;
+      const recovered = options.skipRecoverRoute
+        ? await bootstrapService.ensureSession()
+        : await bootstrapService.recoverActiveRoom();
+      const activeRoom = recovered.activeRoom || null;
       this.globalData.activeRoom = activeRoom;
 
       if (!options.skipRecoverRoute) {

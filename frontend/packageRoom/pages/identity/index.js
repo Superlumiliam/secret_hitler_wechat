@@ -22,6 +22,7 @@ const {
   setupPageTimeout,
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
+const { getGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 
 const ROLE_META = {
   LIBERAL: {
@@ -112,7 +113,17 @@ Page({
   },
 
   async loadIdentitySnapshot() {
-    if (!this.data.roomId || !wx.cloud) {
+    if (!this.data.roomId) {
+      this.setData({
+        isLoading: false,
+        errorText: "房间信息缺失",
+        backgroundVisible: false,
+      });
+      return;
+    }
+
+    const cachedSnapshot = getGameSnapshotCache(this.data.roomId, this.data.controlledMemberId || "");
+    if (!cachedSnapshot && !wx.cloud) {
       this.setData({
         isLoading: false,
         errorText: "房间信息缺失",
@@ -127,23 +138,27 @@ Page({
     });
 
     try {
-      const res = await wx.cloud.callFunction({
-        name: "gameService",
-        data: {
-          action: "getGameSnapshot",
-          payload: {
-            roomId: this.data.roomId,
-            controlledMemberId: this.data.controlledMemberId || "",
+      let snapshot = cachedSnapshot;
+      if (!snapshot) {
+        const res = await wx.cloud.callFunction({
+          name: "gameService",
+          data: {
+            action: "getGameSnapshot",
+            payload: {
+              roomId: this.data.roomId,
+              controlledMemberId: this.data.controlledMemberId || "",
+            },
           },
-        },
-      });
-      const result = res.result || {};
-      if (!result.success) {
-        throw this.createServiceError(result, "获取身份信息失败");
+        });
+        const result = res.result || {};
+        if (!result.success) {
+          throw this.createServiceError(result, "获取身份信息失败");
+        }
+        snapshot = result.data;
       }
 
-      syncPageTimeoutDeadline(this, result.data && result.data.expireAt);
-      await this.hydrateIdentity(result.data);
+      syncPageTimeoutDeadline(this, snapshot && snapshot.expireAt);
+      await this.hydrateIdentity(snapshot);
     } catch (err) {
       console.error("获取身份信息失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {

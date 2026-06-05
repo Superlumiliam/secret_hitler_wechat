@@ -25,6 +25,31 @@ const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 const MAINTENANCE_STATE_COLLECTION = "maintenance_state";
 const COLLECTION_INIT_STATE_DOC_ID = "collection_init_daily";
 const CHINA_TIMEZONE_OFFSET_MS = 8 * 60 * 60 * 1000;
+const ROOM_CLEANUP_CONCURRENCY = 3;
+const ROOM_DATA_CLEANUP_CONCURRENCY = 3;
+const COMMAND_RECORD_CLEANUP_CONCURRENCY = 5;
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  const list = Array.from(items || []);
+  if (!list.length) {
+    return [];
+  }
+
+  const limit = Math.max(1, Math.min(Math.floor(concurrency) || 1, list.length));
+  const results = new Array(list.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < list.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(list[index], index);
+    }
+  }
+
+  await Promise.all(Array.from({ length: limit }, () => runWorker()));
+  return results;
+}
 
 function getChinaDateKey(date) {
   return new Date(date.getTime() + CHINA_TIMEZONE_OFFSET_MS).toISOString().slice(0, 10);
@@ -360,54 +385,62 @@ async function removeRoomData(room) {
     };
   }
 
-  const memberRes = await db
-    .collection("room_members")
-    .where({
-      roomId,
-    })
-    .remove();
-
-  const snapshotRes = await db
-    .collection("room_public_snapshots")
-    .where({
-      roomId,
-    })
-    .remove();
-
-  const privateSnapshotRes = await db
-    .collection("player_private_snapshots")
-    .where({
-      roomId,
-    })
-    .remove();
-
-  const eventRes = await db
-    .collection("game_events")
-    .where({
-      roomId,
-    })
-    .remove();
-
-  const gameCoreRes = await db
-    .collection("game_core")
-    .where({
-      roomId,
-    })
-    .remove();
-
-  const profileRes = await db
-    .collection("user_profiles")
-    .where({
-      activeRoomId: roomId,
-    })
-    .update({
-      data: {
-        activeRoomId: null,
-        activeMemberId: null,
-        activeRoomStatus: null,
-        updatedAt: new Date(),
-      },
-    });
+  const cleanupOperations = [
+    async () =>
+      await db
+        .collection("room_members")
+        .where({
+          roomId,
+        })
+        .remove(),
+    async () =>
+      await db
+        .collection("room_public_snapshots")
+        .where({
+          roomId,
+        })
+        .remove(),
+    async () =>
+      await db
+        .collection("player_private_snapshots")
+        .where({
+          roomId,
+        })
+        .remove(),
+    async () =>
+      await db
+        .collection("game_events")
+        .where({
+          roomId,
+        })
+        .remove(),
+    async () =>
+      await db
+        .collection("game_core")
+        .where({
+          roomId,
+        })
+        .remove(),
+    async () =>
+      await db
+        .collection("user_profiles")
+        .where({
+          activeRoomId: roomId,
+        })
+        .update({
+          data: {
+            activeRoomId: null,
+            activeMemberId: null,
+            activeRoomStatus: null,
+            updatedAt: new Date(),
+          },
+        }),
+  ];
+  const [memberRes, snapshotRes, privateSnapshotRes, eventRes, gameCoreRes, profileRes] = await mapWithConcurrency(
+    cleanupOperations,
+    ROOM_DATA_CLEANUP_CONCURRENCY,
+    async (operation) => await operation(),
+  );
 
   const roomRes = await db.collection("rooms").doc(roomId).remove();
 
@@ -428,29 +461,25 @@ async function removeRoomData(room) {
 async function cleanupRooms(now) {
   const candidateRooms = await getCandidateRooms(now);
   const expiredRooms = candidateRooms.filter((room) => isRoomExpired(room, now));
-  let markedExpired = 0;
-  const removedRooms = [];
-
-  for (const room of expiredRooms) {
+  const cleanupResults = await mapWithConcurrency(expiredRooms, ROOM_CLEANUP_CONCURRENCY, async (room) => {
     const didMark = await markRoomExpired(room, now);
-    if (didMark) {
-      markedExpired += 1;
-    }
-
     const cleanupResult = await removeRoomData({
       ...room,
       status: "expired",
     });
-    if (cleanupResult.removed) {
-      removedRooms.push(cleanupResult);
-    }
-  }
+    return {
+      didMark,
+      cleanupResult,
+    };
+  });
 
   return {
     scannedRooms: candidateRooms.length,
     expiredRooms: expiredRooms.length,
-    markedExpired,
-    removedRooms,
+    markedExpired: cleanupResults.filter((result) => result.didMark).length,
+    removedRooms: cleanupResults
+      .map((result) => result.cleanupResult)
+      .filter((cleanupResult) => cleanupResult.removed),
   };
 }
 
@@ -464,12 +493,10 @@ async function cleanupCommandRecords(now) {
     .get();
 
   const records = res.data || [];
-  const removedRecordIds = [];
-
-  for (const record of records) {
+  const removedRecordIds = await mapWithConcurrency(records, COMMAND_RECORD_CLEANUP_CONCURRENCY, async (record) => {
     await db.collection("command_records").doc(record._id).remove();
-    removedRecordIds.push(record._id);
-  }
+    return record._id;
+  });
 
   return {
     scannedCommandRecords: records.length,
@@ -492,4 +519,13 @@ exports.main = async () => {
     ...commandRecordResult,
     pendingWork: [],
   };
+};
+
+exports.__testHooks = {
+  COMMAND_RECORD_CLEANUP_CONCURRENCY,
+  ROOM_CLEANUP_CONCURRENCY,
+  ROOM_DATA_CLEANUP_CONCURRENCY,
+  cleanupCommandRecords,
+  mapWithConcurrency,
+  removeRoomData,
 };

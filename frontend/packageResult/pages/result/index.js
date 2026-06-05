@@ -10,6 +10,7 @@ const {
   setupPageTimeout,
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
+const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 
 const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
@@ -31,6 +32,7 @@ function isCloudFileId(fileId) {
 }
 
 function clearRuntimeActiveRoomState() {
+  clearGameSnapshotCache();
   const app = typeof getApp === "function" ? getApp() : null;
   if (!app || !app.globalData) {
     return;

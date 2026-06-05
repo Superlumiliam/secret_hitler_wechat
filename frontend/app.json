@@ -22,6 +22,20 @@
       ]
     }
   ],
+  "preloadRule": {
+    "pages/home/index": {
+      "network": "all",
+      "packages": [
+        "packageRoom"
+      ]
+    },
+    "packageRoom/pages/board/index": {
+      "network": "all",
+      "packages": [
+        "packageResult"
+      ]
+    }
+  },
   "window": {
     "backgroundColor": "#061016",
     "backgroundTextStyle": "light",

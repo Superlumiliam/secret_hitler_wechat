@@ -3,6 +3,17 @@ const path = require("path");
 
 function createMemoryDb(initialData = {}) {
   const collections = {};
+  const stats = {
+    docGets: {},
+    docSets: {},
+    docUpdates: {},
+    adds: {},
+    queryGets: {},
+  };
+
+  function incrementStat(group, name) {
+    group[name] = (group[name] || 0) + 1;
+  }
 
   function ensureCollection(name) {
     if (!collections[name]) {
@@ -27,6 +38,7 @@ function createMemoryDb(initialData = {}) {
         return queryApi(name, query);
       },
       async add({ data }) {
+        incrementStat(stats.adds, name);
         const id = data._id || `${name}_${ensureCollection(name).size + 1}`;
         ensureCollection(name).set(id, clone({ ...data, _id: id }));
         return { _id: id };
@@ -37,13 +49,16 @@ function createMemoryDb(initialData = {}) {
   function docApi(name, id) {
     return {
       async get() {
+        incrementStat(stats.docGets, name);
         return { data: clone(ensureCollection(name).get(id)) };
       },
       async set({ data }) {
+        incrementStat(stats.docSets, name);
         ensureCollection(name).set(id, clone({ ...data, _id: id }));
         return {};
       },
       async update({ data }) {
+        incrementStat(stats.docUpdates, name);
         const collection = ensureCollection(name);
         const existing = collection.get(id) || { _id: id };
         collection.set(id, clone({ ...existing, ...data }));
@@ -61,6 +76,7 @@ function createMemoryDb(initialData = {}) {
         return queryApi(name, query, limitCount, { field, direction });
       },
       async get() {
+        incrementStat(stats.queryGets, name);
         let rows = Array.from(ensureCollection(name).values()).filter((row) => matchesQuery(row, query));
         if (order) {
           rows = rows.slice().sort((a, b) => {
@@ -102,6 +118,9 @@ function createMemoryDb(initialData = {}) {
       });
       return clone(result);
     },
+    stats() {
+      return clone(stats);
+    },
   };
 }
 
@@ -111,6 +130,10 @@ function loadGameService(options = {}) {
 
 function loadRoomService(options = {}) {
   return loadCloudFunction("roomService", options);
+}
+
+function loadBootstrapService(options = {}) {
+  return loadCloudFunction("bootstrapService", options);
 }
 
 function loadCloudFunction(functionName, options = {}) {
@@ -176,6 +199,7 @@ function clone(value) {
 
 module.exports = {
   createMemoryDb,
+  loadBootstrapService,
   loadGameService,
   loadRoomService,
 };

@@ -1,8 +1,10 @@
 const HOME_TIMEOUT_QUERY = "pageTimedOut=1";
 const HOME_ROOM_EXPIRED_QUERY = "pageTimedOut=roomExpired";
 const PAGE_TIMEOUT_MAX_TIMER_MS = 30 * 1000;
+const { clearGameSnapshotCache } = require("./gameSnapshotCache");
 
 function clearRuntimeRoomState() {
+  clearGameSnapshotCache();
   const app = typeof getApp === "function" ? getApp() : null;
   if (!app || !app.globalData) {
     return;

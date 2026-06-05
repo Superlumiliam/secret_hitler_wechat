@@ -341,6 +341,52 @@ async function assertRoomSettingsRejectsTargetBelowSeatedPlayers() {
   assert.strictEqual(db.dump().rooms.room_settings.targetPlayerCount, 8, "target count should stay unchanged");
 }
 
+async function assertLobbyReadThrottlesLastSeenTouch() {
+  const db = createMemoryDb({
+    rooms: {
+      room_polling: makeRoom({
+        roomId: "room_polling",
+        roomCode: "500004",
+      }),
+    },
+    room_members: {
+      mem_host: makeMember({
+        memberId: "mem_host",
+        roomId: "room_polling",
+        openId: "host_openid",
+        isHost: true,
+      }),
+    },
+  });
+  const { service } = loadRoomService({ db, openId: "host_openid" });
+  const event = {
+    action: "getLobbySnapshot",
+    payload: {
+      roomId: "room_polling",
+    },
+  };
+
+  const firstResponse = await service.main(event);
+  const statsAfterFirstRead = db.stats();
+  const secondResponse = await service.main(event);
+  const statsAfterSecondRead = db.stats();
+
+  assert.strictEqual(firstResponse.success, true);
+  assert.strictEqual(secondResponse.success, true);
+  assert.strictEqual(statsAfterFirstRead.docGets.rooms, 1, "lobby snapshot should read the room only once");
+  assert.strictEqual(statsAfterSecondRead.docGets.rooms, 2, "each lobby snapshot should add only one room read");
+  assert.strictEqual(
+    statsAfterSecondRead.queryGets.room_members,
+    statsAfterFirstRead.queryGets.room_members + 1,
+    "throttled lobby read should skip the extra lastSeen member query",
+  );
+  assert.strictEqual(
+    statsAfterSecondRead.docUpdates.room_members,
+    statsAfterFirstRead.docUpdates.room_members,
+    "throttled lobby read should skip the lastSeen member write",
+  );
+}
+
 (async () => {
   await assertNormalRoomRejectsSoloActions();
   await assertSoloRoomRejectsRealGuestJoin();
@@ -348,6 +394,7 @@ async function assertRoomSettingsRejectsTargetBelowSeatedPlayers() {
   await assertHostCanUpdateRoomSettingsWithoutChangingSeats();
   await assertNonHostCannotUpdateRoomSettings();
   await assertRoomSettingsRejectsTargetBelowSeatedPlayers();
+  await assertLobbyReadThrottlesLastSeenTouch();
   console.log("roomService isolation tests passed");
 })().catch((err) => {
   console.error(err);

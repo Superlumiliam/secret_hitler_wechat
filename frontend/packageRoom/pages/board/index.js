@@ -6,8 +6,10 @@ const {
   POLICY_PICK_TASK_TYPES,
   REFRESH_AFTER_COMMAND_ERROR_CODES,
 } = require("../../types/task");
+const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
+const { clearGameSnapshotCache, setGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 
-const GAME_POLL_INTERVAL_MS = 1500;
+const GAME_POLL_INTERVAL_MS = 4000;
 const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
 const GAME_POLL_AFTER_COMMAND_INTERVAL_MS = 800;
 const COMMAND_REFRESH_WINDOW_MS = 5000;
@@ -57,6 +59,8 @@ Page({
   lastCommandSettledAt: 0,
   pendingInvestigationRevealActorId: "",
   consecutiveSnapshotFailures: 0,
+  snapshotRequestInFlight: null,
+  snapshotRequestQueue: [],
 
   data: {
     roomId: "",
@@ -122,6 +126,8 @@ Page({
     this.shouldStartRefreshAfterInitial = false;
     this.isPageVisible = false;
     this.isPageUnloaded = false;
+    this.snapshotRequestInFlight = null;
+    this.snapshotRequestQueue = [];
     this.identityJudgmentCacheByKey = {};
     this.identityIntroRevealShownByKey = {};
     this.policyPeekRevealShownByKey = {};
@@ -149,8 +155,11 @@ Page({
         this.shouldStartRefreshAfterInitial = true;
         return;
       }
-      this.loadGameSnapshot({ silent: true });
-      this.startRefreshTimer();
+      this.loadGameSnapshot({ silent: true }).then((shouldContinuePolling) => {
+        if (shouldContinuePolling) {
+          this.startRefreshTimer();
+        }
+      });
     }
   },
 
@@ -181,14 +190,18 @@ Page({
     if (!this.isPageVisible || this.isPageUnloaded) {
       return;
     }
-    this.refreshTimer = setInterval(() => {
-      this.loadGameSnapshot({ silent: true });
+    this.refreshTimer = setTimeout(async () => {
+      this.refreshTimer = null;
+      const shouldContinuePolling = await this.loadGameSnapshot({ silent: true });
+      if (shouldContinuePolling) {
+        this.startRefreshTimer();
+      }
     }, this.getPollIntervalMs());
   },
 
   stopRefreshTimer() {
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
   },
@@ -209,7 +222,74 @@ Page({
   },
 
   async loadGameSnapshot(options = {}) {
-    if (!this.data.roomId || !wx.cloud) {
+    const requestContext = this.getSnapshotRequestContext();
+    const requestKey = this.getSnapshotRequestKey(requestContext);
+    if (this.snapshotRequestInFlight && this.snapshotRequestInFlight.key === requestKey) {
+      return await this.snapshotRequestInFlight.promise;
+    }
+
+    const queued = this.snapshotRequestQueue.find((entry) => entry.key === requestKey);
+    if (queued) {
+      if (!options.silent) {
+        queued.options.silent = false;
+      }
+      return await queued.promise;
+    }
+
+    let resolveRequest;
+    let rejectRequest;
+    const entry = {
+      key: requestKey,
+      requestContext,
+      options: { ...options },
+      promise: new Promise((resolve, reject) => {
+        resolveRequest = resolve;
+        rejectRequest = reject;
+      }),
+      resolve: resolveRequest,
+      reject: rejectRequest,
+    };
+
+    if (this.snapshotRequestInFlight) {
+      this.snapshotRequestQueue.push(entry);
+    } else {
+      this.startSnapshotRequest(entry);
+    }
+    return await entry.promise;
+  },
+
+  getSnapshotRequestContext() {
+    return {
+      roomId: this.data.roomId || "",
+      controlledMemberId: this.data.controlledMemberId || "",
+    };
+  },
+
+  getSnapshotRequestKey(requestContext) {
+    return `${requestContext.roomId}\0${requestContext.controlledMemberId}`;
+  },
+
+  isCurrentSnapshotRequestContext(requestContext) {
+    return this.getSnapshotRequestKey(requestContext) === this.getSnapshotRequestKey(this.getSnapshotRequestContext());
+  },
+
+  startSnapshotRequest(entry) {
+    this.snapshotRequestInFlight = entry;
+    Promise.resolve(this.fetchGameSnapshot(entry.options, entry.requestContext))
+      .then(entry.resolve, entry.reject)
+      .finally(() => {
+        if (this.snapshotRequestInFlight === entry) {
+          this.snapshotRequestInFlight = null;
+        }
+        const nextEntry = this.snapshotRequestQueue.shift();
+        if (nextEntry) {
+          this.startSnapshotRequest(nextEntry);
+        }
+      });
+  },
+
+  async fetchGameSnapshot(options = {}, requestContext = this.getSnapshotRequestContext()) {
+    if (!requestContext.roomId || !wx.cloud) {
       this.setData({
         isLoading: false,
       });
@@ -229,8 +309,8 @@ Page({
         data: {
           action: "getGameSnapshot",
           payload: {
-            roomId: this.data.roomId,
-            controlledMemberId: this.data.controlledMemberId || "",
+            roomId: requestContext.roomId,
+            controlledMemberId: requestContext.controlledMemberId,
           },
         },
       });
@@ -238,6 +318,10 @@ Page({
       if (!result.success) {
         throw this.createServiceError(result, "获取对局数据失败");
       }
+      if (!this.isCurrentSnapshotRequestContext(requestContext)) {
+        return true;
+      }
+      setGameSnapshotCache(requestContext.roomId, requestContext.controlledMemberId, result.data);
       if (this.redirectToResultIfNeeded(result.data)) {
         return false;
       }
@@ -246,12 +330,14 @@ Page({
       syncPageTimeoutDeadline(this, result.data && result.data.expireAt, {
         beforeRedirect: () => this.stopRefreshTimer(),
       });
-      await this.hydrateSnapshot(result.data);
-      if (this.refreshTimer) {
-        this.startRefreshTimer();
+      if (this.shouldHydrateSnapshot(result.data, options)) {
+        await this.hydrateSnapshot(result.data);
       }
       return true;
     } catch (err) {
+      if (!this.isCurrentSnapshotRequestContext(requestContext)) {
+        return true;
+      }
       console.error("获取对局数据失败", err);
       if (err.code === "ROOM_EXPIRED" || err.code === "ROOM_NOT_FOUND" || err.code === "NOT_ROOM_MEMBER") {
         handlePageTimeout(this, {
@@ -266,9 +352,6 @@ Page({
         return false;
       }
       this.consecutiveSnapshotFailures += 1;
-      if (this.refreshTimer) {
-        this.startRefreshTimer();
-      }
       if (!options.silent) {
         this.setData({
           board: null,
@@ -285,6 +368,20 @@ Page({
         isLoading: false,
       });
     }
+  },
+
+  shouldHydrateSnapshot(snapshot, options = {}) {
+    const current = this.data.snapshot;
+    return !(
+      options.silent &&
+      current &&
+      snapshot &&
+      current.version !== undefined &&
+      snapshot.version !== undefined &&
+      current.version === snapshot.version &&
+      current.myMemberId === snapshot.myMemberId &&
+      current.realMemberId === snapshot.realMemberId
+    );
   },
 
   async hydrateSnapshot(snapshot) {
@@ -306,14 +403,7 @@ Page({
 
     if (cloudFileIds.length && wx.cloud) {
       try {
-        const tempRes = await wx.cloud.getTempFileURL({
-          fileList: Array.from(new Set(cloudFileIds)),
-        });
-        (tempRes.fileList || []).forEach((file) => {
-          if (file.status === 0 && file.tempFileURL) {
-            avatarUrlByFileId[file.fileID] = file.tempFileURL;
-          }
-        });
+        Object.assign(avatarUrlByFileId, await resolveTempFileUrls(cloudFileIds));
         if (!hasCachedPolicyAssets) {
           Object.keys(POLICY_TRACK_ASSET_FILE_IDS).forEach((key) => {
             const fileId = POLICY_TRACK_ASSET_FILE_IDS[key];
@@ -824,6 +914,7 @@ Page({
 
   markCommandSettled() {
     this.lastCommandSettledAt = Date.now();
+    this.startRefreshTimer();
   },
 
   createCommandFailureToast(err, fallbackMessage) {
@@ -1754,6 +1845,7 @@ Page({
     }
 
     if (!this.data.roomId || !wx.cloud) {
+      clearGameSnapshotCache(this.data.roomId);
       wx.reLaunch({
         url: "/pages/home/index",
       });
@@ -1783,6 +1875,7 @@ Page({
       console.error("离开对局失败", err);
     }
 
+    clearGameSnapshotCache(this.data.roomId);
     wx.reLaunch({
       url: "/pages/home/index",
     });

@@ -14,10 +14,13 @@ const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_RETRY_LIMIT = 10;
 const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
 const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
+const LAST_SEEN_THROTTLE_MS = 20 * 1000;
 const MIN_DISPLAY_NAME_LENGTH = 2;
 const MAX_DISPLAY_NAME_LENGTH = 12;
 const ROOM_MODE_NORMAL = "normal";
 const ROOM_MODE_SOLO = "solo";
+const COMMAND_RECORD_DIRECT_ID_ENABLED_AT = Date.now();
+const lastSeenTouchedAtByMember = new Map();
 
 function nowIso() {
   return new Date().toISOString();
@@ -102,7 +105,11 @@ function payloadHash(payload) {
 
 function isDocumentNotFoundError(err) {
   const errMessage = String((err && (err.errMsg || err.message)) || "").toLowerCase();
+  const errCode = err && (err.errCode || err.code);
+  const normalizedErrCode = String(errCode || "").toLowerCase();
   return (
+    normalizedErrCode === "-502005" ||
+    normalizedErrCode.includes("document_not_exist") ||
     errMessage.includes("document not exist") ||
     errMessage.includes("document_not_exist") ||
     errMessage.includes("database_document_not_exist") ||
@@ -111,33 +118,45 @@ function isDocumentNotFoundError(err) {
   );
 }
 
-async function touchRoomMemberLastSeen(openid, roomId) {
+async function touchRoomMemberLastSeen(openid, roomId, options = {}) {
   if (!openid || !roomId) {
     return;
   }
 
-  const membersRes = await db
-    .collection("room_members")
-    .where({
-      roomId,
-      openId: openid,
-      memberStatus: _.in(["active", "offline"]),
-    })
-    .limit(1)
-    .get();
-  const member = membersRes.data[0];
-  if (!member) {
+  const throttleKey = `${roomId}:${openid}`;
+  const now = Date.now();
+  if (options.throttle && now - (lastSeenTouchedAtByMember.get(throttleKey) || 0) < LAST_SEEN_THROTTLE_MS) {
     return;
   }
+  lastSeenTouchedAtByMember.set(throttleKey, now);
 
-  const updatedAt = new Date();
-  await db.collection("room_members").doc(getMemberId(member)).update({
-    data: {
-      memberStatus: "active",
-      lastSeenAt: updatedAt,
-      updatedAt,
-    },
-  });
+  try {
+    const membersRes = await db
+      .collection("room_members")
+      .where({
+        roomId,
+        openId: openid,
+        memberStatus: _.in(["active", "offline"]),
+      })
+      .limit(1)
+      .get();
+    const member = membersRes.data[0];
+    if (!member) {
+      return;
+    }
+
+    const updatedAt = new Date();
+    await db.collection("room_members").doc(getMemberId(member)).update({
+      data: {
+        memberStatus: "active",
+        lastSeenAt: updatedAt,
+        updatedAt,
+      },
+    });
+  } catch (err) {
+    lastSeenTouchedAtByMember.delete(throttleKey);
+    throw err;
+  }
 }
 
 function normalizeProfilePayload(payload) {
@@ -229,20 +248,41 @@ async function deleteRoomAssets(room) {
   }
 }
 
+function getCommandRecordId(scopeKey, commandId) {
+  return `cmd_${crypto.createHash("sha256").update(`${scopeKey}\0${commandId}`).digest("hex")}`;
+}
+
+function getCommandTimestamp(commandId) {
+  const matched = String(commandId || "").match(/^cmd_.+_(\d{13})_[^_]+$/);
+  return matched ? Number(matched[1]) : null;
+}
+
+function shouldQueryLegacyCommandRecord(commandId) {
+  const commandTimestamp = getCommandTimestamp(commandId);
+  return commandTimestamp === null || commandTimestamp <= COMMAND_RECORD_DIRECT_ID_ENABLED_AT;
+}
+
 async function getCommandRecord(scopeKey, commandId) {
-  const res = await db
-    .collection("command_records")
-    .where({
-      scopeKey,
-      commandId,
-    })
-    .limit(1)
-    .get();
-  return res.data[0] || null;
+  try {
+    const directRes = await db.collection("command_records").doc(getCommandRecordId(scopeKey, commandId)).get();
+    if (directRes.data) {
+      return directRes.data;
+    }
+  } catch (err) {
+    if (!isDocumentNotFoundError(err)) {
+      throw err;
+    }
+  }
+
+  if (!shouldQueryLegacyCommandRecord(commandId)) {
+    return null;
+  }
+  const legacyRes = await db.collection("command_records").where({ scopeKey, commandId }).limit(1).get();
+  return legacyRes.data[0] || null;
 }
 
 async function saveCommandRecord(scopeKey, commandId, hash, response) {
-  await db.collection("command_records").add({
+  await db.collection("command_records").doc(getCommandRecordId(scopeKey, commandId)).set({
     data: {
       scopeKey,
       commandId,
@@ -527,9 +567,8 @@ function buildLobbySnapshotFromData(room, members, openid) {
   };
 }
 
-async function buildLobbySnapshot(roomId, openid) {
-  const roomRes = await db.collection("rooms").doc(roomId).get();
-  const room = roomRes.data;
+async function buildLobbySnapshot(roomId, openid, existingRoom = null) {
+  const room = existingRoom || (await db.collection("rooms").doc(roomId).get()).data;
   if (!room) {
     return null;
   }
@@ -815,7 +854,7 @@ async function getLobbySnapshot(payload, openid) {
     return fail("ROOM_EXPIRED", "房间已过期");
   }
 
-  const snapshot = await buildLobbySnapshot(roomId, openid);
+  const snapshot = await buildLobbySnapshot(roomId, openid, room);
   if (!snapshot) {
     return fail("ROOM_NOT_FOUND", "房间不存在");
   }
@@ -1357,6 +1396,17 @@ async function dispatchAction(action, payload, openid) {
   }
 }
 
+exports.__testHooks = {
+  COMMAND_RECORD_DIRECT_ID_ENABLED_AT,
+  LAST_SEEN_THROTTLE_MS,
+  getCommandRecord,
+  getCommandRecordId,
+  getCommandTimestamp,
+  isDocumentNotFoundError,
+  saveCommandRecord,
+  shouldQueryLegacyCommandRecord,
+};
+
 exports.main = async (event) => {
   try {
     const wxContext = cloud.getWXContext();
@@ -1371,7 +1421,9 @@ exports.main = async (event) => {
     const response = await dispatchAction(action, payload, openid);
     const touchedRoomId = (payload && payload.roomId) || (response && response.data && response.data.roomId);
     if (response && response.success && touchedRoomId && action !== "leaveRoom") {
-      await touchRoomMemberLastSeen(openid, touchedRoomId);
+      await touchRoomMemberLastSeen(openid, touchedRoomId, {
+        throttle: action === "getLobbySnapshot",
+      });
     }
     return response;
   } catch (err) {
