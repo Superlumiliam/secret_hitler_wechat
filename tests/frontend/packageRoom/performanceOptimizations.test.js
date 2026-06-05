@@ -1,7 +1,7 @@
 const assert = require("assert");
 const path = require("path");
 
-const cachePath = path.resolve(__dirname, "../../../frontend/utils/tempFileUrlCache.js");
+const cachePath = path.resolve(__dirname, "../../../frontend/packageRoom/utils/tempFileUrlCache.js");
 
 async function assertTempFileUrlCache() {
   delete require.cache[cachePath];

@@ -6,7 +6,7 @@ const {
   POLICY_PICK_TASK_TYPES,
   REFRESH_AFTER_COMMAND_ERROR_CODES,
 } = require("../../types/task");
-const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
+const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const { clearGameSnapshotCache, setGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 
 const GAME_POLL_INTERVAL_MS = 4000;

@@ -19,7 +19,7 @@ const {
 } = require("../../../utils/pageTimeout");
 const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
-const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
+const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const userProfileStore = require("../../../utils/userProfileStore");
 const REFRESH_AFTER_ERROR_CODES = [
   "VERSION_CONFLICT",
