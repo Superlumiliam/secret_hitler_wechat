@@ -307,19 +307,19 @@ frontend/
 - `create-room -> lobby`：`wx.redirectTo`
 - `home -> lobby`：加入房间或恢复房间成功后 `wx.redirectTo`
 - `lobby -> create-room(roomSettings)`：房主点击“房间设置”后 `wx.navigateTo`，完成后 `wx.navigateBack` 回大厅；该路径不代表离开房间
-- `lobby -> board`：开局成功后 `wx.redirectTo`
+- `lobby -> board`：开局成功后 `wx.reLaunch`，将对局桌面置为栈底，避免系统侧滑误退回大厅
 - `board -> identity`：点击底部“我的身份 / 查看身份”入口，或点击当前用户自己的席位头像后 `wx.navigateTo`
 - `identity -> board`：点击“我知道了”后 `wx.navigateBack`
 - `board -> history`：点击“历史记录”后 `wx.navigateTo`
 - `history -> board`：点击左上角回退按钮或系统返回后 `wx.navigateBack`
-- `board -> result`：`wx.redirectTo`
+- `board -> result`：`wx.reLaunch`，将结果页置为栈底，避免系统侧滑误退回对局桌面
 - `rules`：统一 `wx.navigateTo`
 - 退出房间 / 房间失效 / 页面超时：`wx.reLaunch({ url: '/pages/home/index' })`
 
 原因：
 
 1. 游戏是明确状态机，不需要保留深页面回退链。
-2. `redirectTo` 可减少页面栈和私密页面残留。
+2. `redirectTo` 用于普通阶段跳转，`reLaunch` 用于对局桌面和结果页这类受保护页面，避免原生侧滑造成误退出或私密页面残留。
 3. `rules` 是临时查看页，保留回退符合预期。
 
 ## 6. 应用生命周期设计
@@ -1241,6 +1241,7 @@ interface ResultPageData {
 - 支持“返回首页”
 - 支持“查看规则”
 - 不支持重新加入已失效旧局
+- 点击“返回首页”才清理活跃房间恢复锚点；用户直接侧滑退出或关闭小程序后，在结果页 TTL 内再次打开仍可自动恢复到结果页
 
 ## 12.9 规则页 `rules`
 
