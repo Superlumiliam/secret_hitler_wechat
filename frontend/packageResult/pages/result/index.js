@@ -11,6 +11,7 @@ const {
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
 const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
+const { buildPageUrl, reLaunchIfPageStacked } = require("../../../utils/protectedPageRoute");
 
 const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
@@ -58,6 +59,10 @@ Page({
   },
 
   onLoad(options = {}) {
+    if (reLaunchIfPageStacked(buildPageUrl("/packageResult/pages/result/index", options), this)) {
+      return;
+    }
+
     this.setData({
       roomId: options.roomId || "",
       roomCode: options.roomCode || "",
@@ -81,6 +86,9 @@ Page({
 
   onUnload() {
     clearPageTimeout(this);
+    if (this.__isResettingPageStack) {
+      return;
+    }
     this.clearResultActiveRoom({ silent: true });
   },
 

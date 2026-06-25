@@ -18,6 +18,7 @@ const {
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
 const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
+const { reLaunchPage } = require("../../../utils/protectedPageRoute");
 const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
 const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const userProfileStore = require("../../../utils/userProfileStore");
@@ -254,9 +255,7 @@ Page({
 
   redirectToBoard() {
     this.stopRefreshTimer();
-    wx.redirectTo({
-      url: `/packageRoom/pages/board/index?roomId=${encodeURIComponent(this.data.roomId)}`,
-    });
+    reLaunchPage(`/packageRoom/pages/board/index?roomId=${encodeURIComponent(this.data.roomId)}`);
   },
 
   startRefreshTimer() {
@@ -857,9 +856,7 @@ Page({
         roomId: this.data.roomId,
       });
       const boardPath = result.boardPath || `/packageRoom/pages/board/index?roomId=${encodeURIComponent(this.data.roomId)}`;
-      wx.redirectTo({
-        url: boardPath,
-      });
+      reLaunchPage(boardPath);
     } catch (err) {
       console.error("开始游戏失败", err);
       if (this.handleRoomUnavailable(err)) {

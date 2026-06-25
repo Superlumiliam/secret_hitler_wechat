@@ -8,6 +8,7 @@ const {
 } = require("../../types/task");
 const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const { clearGameSnapshotCache, setGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
+const { buildPageUrl, reLaunchIfPageStacked, reLaunchPage } = require("../../../utils/protectedPageRoute");
 
 const GAME_POLL_INTERVAL_MS = 4000;
 const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
@@ -121,7 +122,11 @@ Page({
     isSubmittingCommand: false,
   },
 
-  onLoad(options) {
+  onLoad(options = {}) {
+    if (reLaunchIfPageStacked(buildPageUrl("/packageRoom/pages/board/index", options), this)) {
+      return;
+    }
+
     this.initialSnapshotSettled = false;
     this.shouldStartRefreshAfterInitial = false;
     this.isPageVisible = false;
@@ -942,9 +947,7 @@ Page({
     this.stopRefreshTimer();
     clearPageTimeout(this);
     const query = `roomId=${encodeURIComponent(this.data.roomId)}&roomCode=${encodeURIComponent(roomCode || "")}`;
-    wx.redirectTo({
-      url: `/packageResult/pages/result/index?${query}`,
-    });
+    reLaunchPage(`/packageResult/pages/result/index?${query}`);
   },
 
   onTogglePowerTip(event) {

@@ -4,6 +4,8 @@ const path = require("path");
 
 const repoRoot = path.resolve(__dirname, "../../..");
 const cachePath = path.join(repoRoot, "frontend/utils/gameSnapshotCache.js");
+const pageTimeoutPath = path.join(repoRoot, "frontend/utils/pageTimeout.js");
+const protectedPageRoutePath = path.join(repoRoot, "frontend/utils/protectedPageRoute.js");
 
 function loadPageDefinition(relativePath) {
   const absolutePath = path.join(repoRoot, relativePath);
@@ -30,6 +32,112 @@ function createPageContext(definition, data, hydrateMethod) {
       this.data = { ...this.data, ...update };
     },
   };
+}
+
+function assertProtectedPageRouteHelpers() {
+  delete require.cache[protectedPageRoutePath];
+  const { buildPageUrl, reLaunchIfPageStacked, reLaunchPage } = require(protectedPageRoutePath);
+  const originalGetCurrentPages = global.getCurrentPages;
+  const originalWx = global.wx;
+  const launches = [];
+  try {
+    global.wx = {
+      reLaunch({ url }) {
+        launches.push(url);
+      },
+    };
+    global.getCurrentPages = () => [{ route: "pages/home/index" }];
+    assert.strictEqual(
+      buildPageUrl("packageRoom/pages/board/index", {
+        roomId: "room 1",
+        controlledMemberId: "virtual&1",
+        empty: "",
+      }),
+      "/packageRoom/pages/board/index?roomId=room%201&controlledMemberId=virtual%261",
+    );
+    assert.strictEqual(reLaunchIfPageStacked("/packageRoom/pages/board/index", {}), false);
+    assert.strictEqual(launches.length, 0);
+
+    global.getCurrentPages = () => [{ route: "pages/home/index" }, { route: "packageRoom/pages/board/index" }];
+    const page = {};
+    assert.strictEqual(reLaunchIfPageStacked("packageRoom/pages/board/index?roomId=room_1", page), true);
+    assert.strictEqual(page.__isResettingPageStack, true);
+    assert.strictEqual(launches[0], "/packageRoom/pages/board/index?roomId=room_1");
+
+    assert.strictEqual(reLaunchPage("packageResult/pages/result/index?roomId=room_1"), true);
+    assert.strictEqual(launches[1], "/packageResult/pages/result/index?roomId=room_1");
+  } finally {
+    global.getCurrentPages = originalGetCurrentPages;
+    global.wx = originalWx;
+  }
+}
+
+function assertProtectedPagesResetStackBeforeLoading() {
+  const originalGetCurrentPages = global.getCurrentPages;
+  const originalWx = global.wx;
+  const launches = [];
+  try {
+    global.wx = {
+      reLaunch({ url }) {
+        launches.push(url);
+      },
+    };
+    global.getCurrentPages = () => [{ route: "pages/home/index" }, { route: "packageRoom/pages/board/index" }];
+
+    const board = loadPageDefinition("frontend/packageRoom/pages/board/index.js");
+    let boardLoaded = false;
+    const boardContext = {
+      ...board,
+      data: { ...board.data },
+      loadGameSnapshot() {
+        boardLoaded = true;
+        return Promise.resolve(false);
+      },
+      setData(update) {
+        this.data = { ...this.data, ...update };
+      },
+    };
+    board.onLoad.call(boardContext, {
+      roomId: "room 1",
+      controlledMemberId: "virtual&1",
+    });
+    assert.strictEqual(boardLoaded, false, "stacked board load should stop before fetching snapshots");
+    assert.strictEqual(boardContext.__isResettingPageStack, true);
+    assert.strictEqual(
+      launches[0],
+      "/packageRoom/pages/board/index?roomId=room%201&controlledMemberId=virtual%261",
+    );
+
+    const result = loadPageDefinition("frontend/packageResult/pages/result/index.js");
+    let resultLoaded = false;
+    let activeRoomCleared = false;
+    const resultContext = {
+      ...result,
+      data: { ...result.data },
+      loadResult() {
+        resultLoaded = true;
+      },
+      clearResultActiveRoom() {
+        activeRoomCleared = true;
+      },
+      setData(update) {
+        this.data = { ...this.data, ...update };
+      },
+    };
+    result.onLoad.call(resultContext, {
+      roomId: "room 1",
+      roomCode: "123 456",
+    });
+    assert.strictEqual(resultLoaded, false, "stacked result load should stop before fetching result data");
+    assert.strictEqual(resultContext.__isResettingPageStack, true);
+    assert.strictEqual(launches[1], "/packageResult/pages/result/index?roomId=room%201&roomCode=123%20456");
+
+    result.onUnload.call(resultContext);
+    assert.strictEqual(activeRoomCleared, false, "self relaunching result page must not clear active room");
+  } finally {
+    global.getCurrentPages = originalGetCurrentPages;
+    global.wx = originalWx;
+  }
 }
 
 async function assertCacheKeyTtlAndClear() {
@@ -224,7 +332,8 @@ async function assertBoardCachesStableSilentSnapshot() {
 
 async function assertPageTimeoutClearsSnapshotCache() {
   const cache = require(cachePath);
-  const pageTimeout = require(path.join(repoRoot, "frontend/utils/pageTimeout.js"));
+  delete require.cache[pageTimeoutPath];
+  const pageTimeout = require(pageTimeoutPath);
   cache.setGameSnapshotCache("room_timeout", "", { roomId: "room_timeout" });
   global.getApp = () => ({
     globalData: {
@@ -254,6 +363,8 @@ function assertPackageConfiguration() {
 }
 
 (async () => {
+  assertProtectedPageRouteHelpers();
+  assertProtectedPagesResetStackBeforeLoading();
   await assertCacheKeyTtlAndClear();
   await assertSnapshotPagesUseExactCacheKey();
   await assertCachedHydrateFailureIsHandled();

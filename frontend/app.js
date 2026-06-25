@@ -1,4 +1,5 @@
 const bootstrapService = require("./services/bootstrapService");
+const { reLaunchPage } = require("./utils/protectedPageRoute");
 
 function getCurrentPageRouteInfo() {
   const pages = typeof getCurrentPages === "function" ? getCurrentPages() : [];
@@ -103,6 +104,11 @@ App({
     const targetRoute = getRoutePathForHint(activeRoom.routeHint);
     const currentRoomId = current.options.roomId || "";
     if (current.route === targetRoute && currentRoomId === activeRoom.roomId) {
+      return;
+    }
+
+    if (activeRoom.routeHint === "board" || activeRoom.routeHint === "result") {
+      reLaunchPage(url);
       return;
     }
 

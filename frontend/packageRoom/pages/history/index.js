@@ -27,6 +27,7 @@ const {
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
 const { getGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
+const { reLaunchPage } = require("../../../utils/protectedPageRoute");
 
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
@@ -315,11 +316,11 @@ Page({
         if (!this.data.roomId) {
           return;
         }
-        wx.redirectTo({
-          url: `/packageRoom/pages/board/index?roomId=${encodeURIComponent(
+        reLaunchPage(
+          `/packageRoom/pages/board/index?roomId=${encodeURIComponent(
             this.data.roomId,
           )}&controlledMemberId=${encodeURIComponent(this.data.controlledMemberId || "")}`,
-        });
+        );
       },
     });
   },

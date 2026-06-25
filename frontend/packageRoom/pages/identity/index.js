@@ -23,6 +23,7 @@ const {
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
 const { getGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
+const { reLaunchPage } = require("../../../utils/protectedPageRoute");
 
 const ROLE_META = {
   LIBERAL: {
@@ -351,9 +352,7 @@ Page({
       return;
     }
 
-    wx.redirectTo({
-      url: `/packageRoom/pages/board/index?roomId=${encodeURIComponent(this.data.roomId)}`,
-    });
+    reLaunchPage(`/packageRoom/pages/board/index?roomId=${encodeURIComponent(this.data.roomId)}`);
   },
 
   onTapRules() {

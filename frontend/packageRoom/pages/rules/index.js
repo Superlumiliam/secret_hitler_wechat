@@ -14,6 +14,7 @@ const {
   schedulePageTimeout,
   setupPageTimeout,
 } = require("../../../utils/pageTimeout");
+const { reLaunchPage } = require("../../../utils/protectedPageRoute");
 
 function normalizeTimeoutMs(value) {
   const timeoutMs = Number(value);
@@ -107,11 +108,11 @@ Page({
       return;
     }
 
-    wx.redirectTo({
-      url: `/packageRoom/pages/board/index?roomId=${encodeURIComponent(
+    reLaunchPage(
+      `/packageRoom/pages/board/index?roomId=${encodeURIComponent(
         this.data.roomId,
       )}&controlledMemberId=${encodeURIComponent(this.data.controlledMemberId || "")}`,
-    });
+    );
   },
 
   onTapSection(event) {
