@@ -62,6 +62,7 @@ Page({
   consecutiveSnapshotFailures: 0,
   snapshotRequestInFlight: null,
   snapshotRequestQueue: [],
+  isLeaveConfirming: false,
 
   data: {
     roomId: "",
@@ -131,6 +132,7 @@ Page({
     this.shouldStartRefreshAfterInitial = false;
     this.isPageVisible = false;
     this.isPageUnloaded = false;
+    this.isLeaveConfirming = false;
     this.snapshotRequestInFlight = null;
     this.snapshotRequestQueue = [];
     this.identityJudgmentCacheByKey = {};
@@ -1843,7 +1845,24 @@ Page({
   },
 
   async onBackHome() {
-    if (this.data.isLeaving) {
+    if (this.data.isLeaving || this.isLeaveConfirming) {
+      return;
+    }
+
+    this.isLeaveConfirming = true;
+    const confirmRes = await new Promise((resolve) => {
+      wx.showModal({
+        title: "确认离开",
+        content: "离开后无法回到当前对局",
+        confirmText: "确认",
+        cancelText: "取消",
+        success: resolve,
+        fail: () => resolve({ confirm: false }),
+      });
+    });
+    this.isLeaveConfirming = false;
+
+    if (!confirmRes.confirm) {
       return;
     }
 
