@@ -686,7 +686,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 
 轮询间隔建议：
 
-- 页面可见：`2000ms`
+- 页面可见：`3000ms`
 - 页面隐藏：停止轮询
 
 ### 10.4 对局同步流程
@@ -700,7 +700,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 轮询间隔建议：
 
 - 当前页可见且本人有待办：`1000ms`
-- 当前页可见但本人无待办：`1500ms`
+- 当前页可见但本人无待办：`4000ms`
 - 刚提交命令后的 5 秒内：`800ms`
 - 页面隐藏：停止轮询
 

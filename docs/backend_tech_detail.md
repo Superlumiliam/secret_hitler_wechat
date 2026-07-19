@@ -218,7 +218,10 @@ export const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
 export const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
 export const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 export const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
-export const GAME_POLL_INTERVAL_MS = 1500;
+export const GAME_POLL_INTERVAL_MS = 4000;
+export const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
+export const GAME_POLL_AFTER_COMMAND_INTERVAL_MS = 800;
+export const COMMAND_REFRESH_WINDOW_MS = 5 * 1000;
 export const LOBBY_POLL_INTERVAL_MS = 3000;
 ```
 
