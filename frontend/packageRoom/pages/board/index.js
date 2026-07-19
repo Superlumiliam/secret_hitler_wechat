@@ -7,6 +7,7 @@ const {
   REFRESH_AFTER_COMMAND_ERROR_CODES,
 } = require("../../types/task");
 const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
+const { createRoomSyncSignalWatcher } = require("../../utils/roomSyncSignal");
 const { clearGameSnapshotCache, setGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { buildPageUrl, reLaunchIfPageStacked, reLaunchPage } = require("../../../utils/protectedPageRoute");
 
@@ -15,6 +16,8 @@ const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
 const GAME_POLL_AFTER_COMMAND_INTERVAL_MS = 800;
 const COMMAND_REFRESH_WINDOW_MS = 5000;
 const GAME_POLL_FAILURE_BACKOFF_MS = [3000, 5000, 10000, 15000, 30000];
+const GAME_RECONCILE_INTERVAL_MS = 60 * 1000;
+const PRESENCE_TOUCH_INTERVAL_MS = 60 * 1000;
 const INVESTIGATION_REVEAL_EXIT_MS = 260;
 const IDENTITY_INTRO_REVEAL_EXIT_MS = 320;
 const POLICY_PEEK_REVEAL_READY_MS = 1050;
@@ -47,6 +50,7 @@ function isCloudFileId(fileId) {
 
 Page({
   refreshTimer: null,
+  syncSignalWatcher: null,
   initialSnapshotSettled: false,
   shouldStartRefreshAfterInitial: false,
   isPageVisible: false,
@@ -62,7 +66,12 @@ Page({
   consecutiveSnapshotFailures: 0,
   snapshotRequestInFlight: null,
   snapshotRequestQueue: [],
+  pendingSyncVersion: 0,
+  pendingSyncRoomStatus: "",
+  pendingSyncSequence: 0,
+  syncSignalCatchUpPromise: null,
   isLeaveConfirming: false,
+  lastPresenceTouchAt: 0,
 
   data: {
     roomId: "",
@@ -135,6 +144,12 @@ Page({
     this.isLeaveConfirming = false;
     this.snapshotRequestInFlight = null;
     this.snapshotRequestQueue = [];
+    this.pendingSyncVersion = 0;
+    this.pendingSyncRoomStatus = "";
+    this.pendingSyncSequence = 0;
+    this.syncSignalCatchUpPromise = null;
+    this.syncSignalWatcher = null;
+    this.lastPresenceTouchAt = 0;
     this.identityJudgmentCacheByKey = {};
     this.identityIntroRevealShownByKey = {};
     this.policyPeekRevealShownByKey = {};
@@ -164,6 +179,7 @@ Page({
       }
       this.loadGameSnapshot({ silent: true }).then((shouldContinuePolling) => {
         if (shouldContinuePolling) {
+          this.startRealtimeSync();
           this.startRefreshTimer();
         }
       });
@@ -173,6 +189,7 @@ Page({
   onHide() {
     this.isPageVisible = false;
     this.shouldStartRefreshAfterInitial = false;
+    this.stopRealtimeSync();
     this.stopRefreshTimer();
     this.clearPolicyPeekRevealTimers();
     if (this.data.policyPeekReveal) {
@@ -187,6 +204,7 @@ Page({
     this.isPageVisible = false;
     this.isPageUnloaded = true;
     this.shouldStartRefreshAfterInitial = false;
+    this.stopRealtimeSync();
     this.stopRefreshTimer();
     this.clearPolicyPeekRevealTimers();
     clearPageTimeout(this);
@@ -213,6 +231,122 @@ Page({
     }
   },
 
+  isRealtimeSyncHealthy() {
+    return Boolean(this.syncSignalWatcher && this.syncSignalWatcher.isHealthy());
+  },
+
+  startRealtimeSync() {
+    this.stopRealtimeSync();
+    if (!this.isPageVisible || this.isPageUnloaded || !this.data.roomId) {
+      return;
+    }
+
+    this.syncSignalWatcher = createRoomSyncSignalWatcher({
+      roomId: this.data.roomId,
+      onHealthy: () => {
+        this.startRefreshTimer();
+      },
+      onUnavailable: (err) => {
+        console.warn("对局实时同步不可用，已降级为轮询", err);
+        this.startRefreshTimer();
+      },
+      onSignal: (signal) => {
+        this.handleRealtimeSignal(signal);
+      },
+    });
+    this.syncSignalWatcher.start();
+  },
+
+  stopRealtimeSync() {
+    if (this.syncSignalWatcher) {
+      this.syncSignalWatcher.stop();
+      this.syncSignalWatcher = null;
+    }
+    this.pendingSyncVersion = 0;
+    this.pendingSyncRoomStatus = "";
+    this.pendingSyncSequence += 1;
+  },
+
+  handleRealtimeSignal(signal = {}) {
+    const nextVersion = Number(signal.version) || 0;
+    if (nextVersion >= this.pendingSyncVersion) {
+      this.pendingSyncVersion = nextVersion;
+      this.pendingSyncRoomStatus = signal.roomStatus || this.pendingSyncRoomStatus;
+    }
+    this.pendingSyncSequence += 1;
+    this.drainRealtimeSignals();
+  },
+
+  hasPendingRealtimeSignal() {
+    const snapshot = this.data.snapshot || {};
+    const currentVersion = Number(snapshot.version) || 0;
+    return (
+      this.pendingSyncVersion > currentVersion ||
+      Boolean(this.pendingSyncRoomStatus && this.pendingSyncRoomStatus !== snapshot.roomStatus)
+    );
+  },
+
+  drainRealtimeSignals() {
+    if (this.syncSignalCatchUpPromise) {
+      return this.syncSignalCatchUpPromise;
+    }
+
+    let lastObservedSyncSequence = this.pendingSyncSequence;
+    const catchUpPromise = (async () => {
+      let noProgressRetryCount = 0;
+      while (this.isPageVisible && !this.isPageUnloaded && this.hasPendingRealtimeSignal()) {
+        const sequenceBeforeRequest = this.pendingSyncSequence;
+        lastObservedSyncSequence = sequenceBeforeRequest;
+        const snapshotBeforeRequest = this.data.snapshot || {};
+        const versionBeforeRequest = Number(snapshotBeforeRequest.version) || 0;
+        const statusBeforeRequest = snapshotBeforeRequest.roomStatus || "";
+        const shouldContinue = await this.loadGameSnapshot({ silent: true });
+        if (!shouldContinue || !this.isPageVisible || this.isPageUnloaded) {
+          return;
+        }
+        if (!this.hasPendingRealtimeSignal()) {
+          this.pendingSyncVersion = 0;
+          this.pendingSyncRoomStatus = "";
+          return;
+        }
+
+        const snapshotAfterRequest = this.data.snapshot || {};
+        const versionAfterRequest = Number(snapshotAfterRequest.version) || 0;
+        const statusAfterRequest = snapshotAfterRequest.roomStatus || "";
+        const madeProgress = versionAfterRequest > versionBeforeRequest || statusAfterRequest !== statusBeforeRequest;
+        if (madeProgress || this.pendingSyncSequence !== sequenceBeforeRequest) {
+          noProgressRetryCount = 0;
+          continue;
+        }
+        if (noProgressRetryCount < 1) {
+          noProgressRetryCount += 1;
+          continue;
+        }
+        return;
+      }
+    })();
+
+    this.syncSignalCatchUpPromise = catchUpPromise;
+    catchUpPromise
+      .catch((err) => {
+        console.warn("对局同步信号追赶失败", err);
+      })
+      .finally(() => {
+        if (this.syncSignalCatchUpPromise === catchUpPromise) {
+          this.syncSignalCatchUpPromise = null;
+          if (
+            this.isPageVisible &&
+            !this.isPageUnloaded &&
+            this.hasPendingRealtimeSignal() &&
+            this.pendingSyncSequence !== lastObservedSyncSequence
+          ) {
+            this.drainRealtimeSignals();
+          }
+        }
+      });
+    return catchUpPromise;
+  },
+
   markInitialSnapshotSettled(shouldStartRefresh) {
     this.initialSnapshotSettled = true;
     const canStartRefresh =
@@ -224,6 +358,7 @@ Page({
       !this.data.isLeaving;
     this.shouldStartRefreshAfterInitial = false;
     if (canStartRefresh) {
+      this.startRealtimeSync();
       this.startRefreshTimer();
     }
   },
@@ -283,16 +418,26 @@ Page({
   startSnapshotRequest(entry) {
     this.snapshotRequestInFlight = entry;
     Promise.resolve(this.fetchGameSnapshot(entry.options, entry.requestContext))
-      .then(entry.resolve, entry.reject)
-      .finally(() => {
-        if (this.snapshotRequestInFlight === entry) {
-          this.snapshotRequestInFlight = null;
-        }
-        const nextEntry = this.snapshotRequestQueue.shift();
-        if (nextEntry) {
-          this.startSnapshotRequest(nextEntry);
-        }
-      });
+      .then(
+        (value) => {
+          this.finishSnapshotRequest(entry);
+          entry.resolve(value);
+        },
+        (err) => {
+          this.finishSnapshotRequest(entry);
+          entry.reject(err);
+        },
+      );
+  },
+
+  finishSnapshotRequest(entry) {
+    if (this.snapshotRequestInFlight === entry) {
+      this.snapshotRequestInFlight = null;
+    }
+    const nextEntry = this.snapshotRequestQueue.shift();
+    if (nextEntry) {
+      this.startSnapshotRequest(nextEntry);
+    }
   },
 
   async fetchGameSnapshot(options = {}, requestContext = this.getSnapshotRequestContext()) {
@@ -310,6 +455,9 @@ Page({
       });
     }
 
+    const touchPresence =
+      options.touchPresence === true || Date.now() - (Number(this.lastPresenceTouchAt) || 0) >= PRESENCE_TOUCH_INTERVAL_MS;
+
     try {
       const res = await wx.cloud.callFunction({
         name: "gameService",
@@ -318,6 +466,7 @@ Page({
           payload: {
             roomId: requestContext.roomId,
             controlledMemberId: requestContext.controlledMemberId,
+            touchPresence,
           },
         },
       });
@@ -327,6 +476,9 @@ Page({
       }
       if (!this.isCurrentSnapshotRequestContext(requestContext)) {
         return true;
+      }
+      if (touchPresence) {
+        this.lastPresenceTouchAt = Date.now();
       }
       setGameSnapshotCache(requestContext.roomId, requestContext.controlledMemberId, result.data);
       if (this.redirectToResultIfNeeded(result.data)) {
@@ -909,6 +1061,9 @@ Page({
     if (this.consecutiveSnapshotFailures > 0) {
       const backoffIndex = Math.min(this.consecutiveSnapshotFailures, GAME_POLL_FAILURE_BACKOFF_MS.length) - 1;
       return GAME_POLL_FAILURE_BACKOFF_MS[backoffIndex];
+    }
+    if (this.isRealtimeSyncHealthy()) {
+      return GAME_RECONCILE_INTERVAL_MS;
     }
     if (Date.now() - this.lastCommandSettledAt <= COMMAND_REFRESH_WINDOW_MS) {
       return GAME_POLL_AFTER_COMMAND_INTERVAL_MS;

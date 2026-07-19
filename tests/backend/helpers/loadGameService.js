@@ -9,6 +9,8 @@ function createMemoryDb(initialData = {}) {
     docUpdates: {},
     adds: {},
     queryGets: {},
+    queryUpdates: {},
+    transactions: 0,
   };
 
   function incrementStat(group, name) {
@@ -92,6 +94,20 @@ function createMemoryDb(initialData = {}) {
         }
         return { data: clone(rows) };
       },
+      async update({ data }) {
+        incrementStat(stats.queryUpdates, name);
+        let updated = 0;
+        const collection = ensureCollection(name);
+        for (const [id, row] of collection.entries()) {
+          if (!matchesQuery(row, query)) {
+            continue;
+          }
+          collection.set(id, clone({ ...row, ...data }));
+          incrementStat(stats.docUpdates, name);
+          updated += 1;
+        }
+        return { stats: { updated } };
+      },
     };
   }
 
@@ -99,6 +115,9 @@ function createMemoryDb(initialData = {}) {
     command: {
       in(values) {
         return { $in: values };
+      },
+      lte(value) {
+        return { $lte: value };
       },
       inc(value) {
         return { $inc: value };
@@ -109,6 +128,7 @@ function createMemoryDb(initialData = {}) {
     },
     collection: collectionApi,
     async runTransaction(handler) {
+      stats.transactions += 1;
       return await handler({ collection: collectionApi });
     },
     dump() {
@@ -185,6 +205,11 @@ function matchesQuery(row, query) {
     const expected = query[key];
     if (expected && typeof expected === "object" && Array.isArray(expected.$in)) {
       return expected.$in.includes(row[key]);
+    }
+    if (expected && typeof expected === "object" && Object.prototype.hasOwnProperty.call(expected, "$lte")) {
+      const expectedValue = expected.$lte instanceof Date ? expected.$lte.getTime() : expected.$lte;
+      const rowValue = expected.$lte instanceof Date ? new Date(row[key]).getTime() : row[key];
+      return rowValue <= expectedValue;
     }
     return row[key] === expected;
   });

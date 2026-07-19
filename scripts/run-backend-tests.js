@@ -12,6 +12,7 @@ const testFiles = [
   "tests/backend/commandRecords.performance.test.js",
   "tests/backend/bootstrapService/recovery.test.js",
   "tests/backend/maintenanceService/concurrency.test.js",
+  "tests/backend/syncOptimization.test.js",
 ];
 
 let failed = 0;

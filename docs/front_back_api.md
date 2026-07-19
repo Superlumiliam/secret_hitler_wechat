@@ -8,7 +8,7 @@
 - 请求与响应 envelope
 - 大厅视图响应、对局 / 结果快照 DTO
 - 游戏命令结构与幂等规则
-- 轮询读取方式
+- 实时信号、快照读取与轮询降级方式
 - 错误码与联调边界
 
 后续所有前后端实现都必须以本文档为准；若请求字段、响应字段、命令类型、错误码发生变化，必须先更新本文档，再更新实现。
@@ -19,7 +19,7 @@
 
 ## 2.1 统一交互通道
 
-前后端交互只允许统一云函数通道。
+业务命令与视图数据只允许统一云函数通道；`room_sync_signals` 仅作为不含业务数据的只读版本通知通道。
 
 统一使用 `wx.cloud.callFunction`，用于：
 
@@ -29,7 +29,7 @@
 - 发起游戏命令
 - 主动拉取大厅视图或对局快照
 
-MVP 阶段前端不直接读取或监听任何数据库集合，包括已裁剪的投影视图集合。大厅视图与对局快照都必须通过云函数 action 获取。
+前端只允许监听当前活跃房间的 `room_sync_signals`，不能直接读取任何业务投影或核心集合。大厅视图与对局快照都必须通过云函数 action 获取。
 
 ## 2.2 命令与读取视图分离
 
@@ -78,7 +78,7 @@ MVP 阶段固定为以下三类对外云函数：
 
 - 游戏开局走 `gameService.startGame`，游戏内所有可变更状态操作统一走 `gameService.submitCommand`
 - 不为每个游戏动作拆分独立云函数
-- `maintenanceService` 仅供定时任务使用，不对前端暴露
+- `maintenanceService` 仅供定时任务和发布人员执行资源初始化使用，不对前端暴露
 
 ## 3.2 统一请求结构
 
@@ -947,10 +947,13 @@ interface PublicHistoryProjection {
 {
   "action": "getLobbySnapshot",
   "payload": {
-    "roomId": "room_xxx"
+    "roomId": "room_xxx",
+    "touchPresence": true
   }
 }
 ```
+
+`touchPresence` 与 `getGameSnapshot` 含义相同，为可选字段；服务端必须复用大厅成员查询结果直接更新心跳。
 
 成功响应：
 
@@ -1187,10 +1190,13 @@ interface PublicHistoryProjection {
 {
   "action": "getGameSnapshot",
   "payload": {
-    "roomId": "room_xxx"
+    "roomId": "room_xxx",
+    "touchPresence": true
   }
 }
 ```
+
+`touchPresence` 可选且仅接受布尔值 `true` 作为刷新在线心跳的请求；不传时只读取快照。服务端必须复用本次身份校验结果，不能再次查询成员。
 
 成功响应中的 `data` 必须完整符合 `GameSnapshot` 结构。
 
@@ -1394,24 +1400,26 @@ interface PublicHistoryProjection {
 3. 若存在且 `payloadHash` 完全一致，返回幂等成功，`deduplicated = true`
 4. 若存在但 `payloadHash` 不一致，返回 `DUPLICATE_COMMAND`
 
-## 9. 轮询读取与投影文档约束
+## 9. 实时信号、轮询降级与投影文档约束
 
 ## 9.1 读取准则
 
-MVP 阶段前端只能通过云函数读取大厅视图或对局快照：
+前端只能通过云函数读取大厅视图或对局快照：
 
-- 大厅页轮询 `roomService.getLobbySnapshot`
-- 对局页轮询 `gameService.getGameSnapshot`
+- 大厅页和对局页监听 `room_sync_signals`，变化后分别调用 `roomService.getLobbySnapshot`、`gameService.getGameSnapshot`
+- 实时监听异常时恢复原有轮询；监听健康时分别以 `10s`、`60s` 做一致性校准
 - 结果页读取 `gameService.getResultSnapshot`
 
-前端禁止直接读取或监听：
+除 `room_sync_signals` 外，前端禁止直接读取或监听：
 
 - `room_public_snapshots`
 - `player_private_snapshots`
 - `game_core`
 - `game_events`
 - `command_records`
-- 任何后端数据库集合
+- 任何其他后端数据库集合
+
+`room_sync_signals` 只允许当前 openid 对应 `user_profiles.activeRoomId` 的房间读取，客户端禁止写入；该权限直接在微信云开发助手中配置和发布，不由仓库文件或云函数代码应用。文档只含房间状态、版本和更新时间，不得包含游戏真相或玩家资料。
 
 ## 9.2 大厅视图不落投影文档
 
@@ -1424,6 +1432,21 @@ MVP 阶段前端只能通过云函数读取大厅视图或对局快照：
 - `viewerState` 依赖当前 openid，是 API 响应时的派生结果，不是公共房间事实。
 
 `getLobbySnapshot` 每次读取 `rooms` 与 `room_members`，校验当前 openid 的有效成员身份后，返回 `LobbyView`。
+
+### `room_sync_signals` 文档结构
+
+```json
+{
+  "_id": "room_xxx",
+  "roomId": "room_xxx",
+  "roomStatus": "in_game",
+  "version": 18,
+  "signalType": "room_version",
+  "updatedAt": "2026-04-12T12:20:00.000Z"
+}
+```
+
+游戏状态迁移必须在原事务内写信号；大厅信号在命令成功后通过独立事务重新读取房间并写入，避免旧大厅读结果覆盖并发开局信号。大厅信号仍是非关键派生投影，写入失败不得改变已完成的大厅业务命令结果。
 
 ## 9.3 `room_public_snapshots` 文档结构
 
@@ -1484,25 +1507,32 @@ MVP 阶段前端只能通过云函数读取大厅视图或对局快照：
 - `_id` 直接使用 `memberId`
 - `payload.privateState` 与 `payload.pendingTask` 共同构成私密视图
 
-## 9.5 轮询读取策略
+## 9.5 实时监听与轮询降级策略
 
-前端进入相关页面后必须按页面状态对应的频率轮询后端视图：
+前端进入相关页面后先建立 `room_sync_signals` 监听，信号版本变化时读取后端视图：
 
-- 大厅页轮询 `getLobbySnapshot`
-- 对局页轮询 `getGameSnapshot`
+- 大厅页调用 `getLobbySnapshot`
+- 对局页调用 `getGameSnapshot`
 
-当前频率基线：
+监听健康时的一致性校准频率：
+
+- 大厅页：`10000ms`
+- 对局页：`60000ms`
+
+监听异常时恢复原频率：
 
 - 大厅页可见：`3000ms`
 - 对局页可见且本人有待办：`1000ms`
 - 对局页可见但本人无待办：`4000ms`
 - 对局页刚提交命令后的 5 秒内：`800ms`
 
-轮询要求：
+同步要求：
 
 - 返回结构不得变化
 - 前端 mapper 不得绕开 API DTO 直接消费投影文档结构
 - 页面隐藏时应停止轮询，回到前台后立即补拉一次
+- 连续信号到达时在同一房间状态内记录最高待处理版本；房间状态变化独立触发快照，不能因大厅版本高于重新从 `1` 开始的对局版本而忽略；当前快照请求完成后若仍落后则继续补拉，同一页面不得并发快照请求
+- `touchPresence: true` 仅表达客户端需要刷新在线状态，服务端必须复用已鉴权成员，并以成员 ID 和持久化 `lastSeenAt` 截止时间作为条件执行原子更新；并发实例最多一个实际写入，不得依赖云函数实例内存
 
 ## 9.6 版本消费规则
 

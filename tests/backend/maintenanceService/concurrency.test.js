@@ -68,6 +68,87 @@ async function assertAssetFailurePreservesRoomData() {
   assert.strictEqual(collectionAccessCount, 0);
 }
 
+async function assertNewCollectionIsInitializedWithinSameDay() {
+  const createdCollections = [];
+  let savedState = null;
+  const now = new Date("2026-07-19T04:00:00.000Z");
+  const db = {
+    command: {},
+    async createCollection(name) {
+      createdCollections.push(name);
+    },
+    collection(name) {
+      assert.strictEqual(name, "maintenance_state");
+      return {
+        doc() {
+          return {
+            async get() {
+              return {
+                data: {
+                  lastCheckedDate: "2026-07-19",
+                  checkedCollections: [
+                    "rooms",
+                    "room_members",
+                    "room_public_snapshots",
+                    "user_profiles",
+                    "command_records",
+                    "game_core",
+                    "player_private_snapshots",
+                    "game_events",
+                    "maintenance_state",
+                  ],
+                },
+              };
+            },
+            async set({ data }) {
+              savedState = data;
+            },
+          };
+        },
+      };
+    },
+  };
+  const service = loadMaintenanceService({
+    db,
+    deleteFile: async () => ({ fileList: [] }),
+  });
+  const result = await service.__testHooks.ensureCollectionsDaily(now);
+
+  assert.deepStrictEqual(createdCollections, ["room_sync_signals"]);
+  assert.strictEqual(result.collectionInitSkipped, false);
+  assert(savedState.checkedCollections.includes("room_sync_signals"));
+}
+
+async function assertExplicitSyncSignalReleasePreparation() {
+  const createdCollections = [];
+  const db = {
+    command: {},
+    async createCollection(name) {
+      createdCollections.push(name);
+    },
+    collection() {
+      throw new Error("release preparation must not run cleanup queries");
+    },
+  };
+  const service = loadMaintenanceService({
+    db,
+    deleteFile: async () => ({ fileList: [] }),
+  });
+
+  const result = await service.main({
+    action: service.__testHooks.PREPARE_ROOM_SYNC_SIGNALS_ACTION,
+  });
+
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(result.action, "prepareRoomSyncSignals");
+  assert.deepStrictEqual(createdCollections, ["room_sync_signals"]);
+  assert.deepStrictEqual(result.collectionResult, {
+    name: "room_sync_signals",
+    created: true,
+    alreadyExists: false,
+  });
+}
+
 async function assertIndependentRoomDataCleanupIsBounded() {
   let active = 0;
   let maxActive = 0;
@@ -100,7 +181,7 @@ async function assertIndependentRoomDataCleanupIsBounded() {
         doc() {
           return {
             async remove() {
-              assert.strictEqual(completedIndependentOperations, 6);
+              assert.strictEqual(completedIndependentOperations, 7);
               roomRemoved = true;
               return { stats: { removed: 1 } };
             },
@@ -115,6 +196,7 @@ async function assertIndependentRoomDataCleanupIsBounded() {
   });
   const result = await service.__testHooks.removeRoomData({ roomId: "room_success" });
   assert.strictEqual(result.removed, true);
+  assert.deepStrictEqual(result.syncSignalStats, { removed: 1 });
   assert.strictEqual(roomRemoved, true);
   assert.strictEqual(maxActive, service.__testHooks.ROOM_DATA_CLEANUP_CONCURRENCY);
 }
@@ -169,6 +251,8 @@ async function assertCommandRecordCleanupIsBoundedAndOrdered() {
 (async () => {
   await assertConcurrencyLimit();
   await assertAssetFailurePreservesRoomData();
+  await assertNewCollectionIsInitializedWithinSameDay();
+  await assertExplicitSyncSignalReleasePreparation();
   await assertIndependentRoomDataCleanupIsBounded();
   await assertCommandRecordCleanupIsBoundedAndOrdered();
   console.log("maintenance concurrency tests passed");

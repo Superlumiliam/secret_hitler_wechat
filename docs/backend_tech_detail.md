@@ -23,36 +23,36 @@
 - 微信云数据库
 - TypeScript 编写后端核心逻辑
 - `命令处理 + 纯领域状态机 + 对局快照投影 + 事件日志` 架构
-- `云函数读取大厅视图 / 对局快照` 作为 MVP 默认读取方式
+- `实时信号通知 + 云函数读取大厅视图 / 对局快照` 作为默认读取方式
 
 ### 2.2 明确取舍
 
 本方案做出以下明确取舍：
 
-1. MVP 不开放前端直接读取或监听数据库集合，统一通过云函数轮询读取大厅视图或对局快照。
+1. 仅开放不含游戏真相的 `room_sync_signals` 只读监听；大厅视图和对局快照仍统一通过云函数读取。
 2. 核心真相只保存在后端内部集合，前端永远不拿完整真相。
 3. 大厅阶段不维护公共 / 私密快照，直接由 `rooms + room_members` 实时组装大厅视图响应；对局阶段每次成功写入后同步重建公共快照和全部私密快照，优先保证一致性，暂不优先优化写放大。
 4. 游戏开局与游戏内所有写操作统一走 `gameService`；大厅阶段写操作统一走 `roomService`。
 
-### 2.3 为什么不用数据库直读或监听
+### 2.3 为什么只开放实时信号监听
 
 本项目存在两类高敏信息：
 
 - 仅当前玩家可见的私密快照
 - 仅系统可见的完整真相
 
-MVP 阶段为了降低泄露风险和权限配置复杂度，固定采用：
+为了降低泄露风险并减少空轮询调用，固定采用：
 
 - 大厅阶段不写投影快照，`getLobbySnapshot` 实时读取 `rooms` 与 `room_members` 后返回大厅视图
 - 对局阶段后端持续维护 `room_public_snapshots` 与 `player_private_snapshots`
 - 前端通过 `getLobbySnapshot`、`getGameSnapshot`、`getResultSnapshot` 等云函数 action 读取后端视图
-- 前端页面按固定间隔轮询，命令成功后立即补拉一次
+- 前端监听 `room_sync_signals` 后按版本变化补拉；监听异常时恢复原轮询
 
 这样可以同时满足：
 
 - 对局快照模型不变
 - 前后端接口稳定
-- 前端无需任何数据库集合读权限或监听权限
+- 前端只有当前活跃房间同步信号的只读权限，其他集合继续完全关闭
 
 ## 3. 与当前仓库的衔接方式
 
@@ -64,7 +64,7 @@ MVP 阶段为了降低泄露风险和权限配置复杂度，固定采用：
 其中：
 
 - 前三个对前端开放
-- `maintenanceService` 仅用于定时清理和过期处理，不对前端开放
+- `maintenanceService` 仅用于定时清理、过期处理和上线前资源初始化，不对前端开放
 
 ## 4. 推荐目录结构
 
@@ -223,6 +223,9 @@ export const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
 export const GAME_POLL_AFTER_COMMAND_INTERVAL_MS = 800;
 export const COMMAND_REFRESH_WINDOW_MS = 5 * 1000;
 export const LOBBY_POLL_INTERVAL_MS = 3000;
+export const LOBBY_RECONCILE_INTERVAL_MS = 10 * 1000;
+export const GAME_RECONCILE_INTERVAL_MS = 60 * 1000;
+export const PRESENCE_TOUCH_INTERVAL_MS = 60 * 1000;
 ```
 
 说明：
@@ -300,6 +303,7 @@ export type WinReason =
 | `game_core` | 游戏完整真相 | 否 | 否 |
 | `room_public_snapshots` | 对局 / 结果公共快照缓存 | 否，MVP 通过云函数读 | 否 |
 | `player_private_snapshots` | 对局玩家私密快照缓存 | 否，MVP 通过云函数读 | 否 |
+| `room_sync_signals` | 仅包含房间状态与版本的实时同步信号 | 仅当前活跃房间可读 | 否 |
 | `game_events` | 事件日志与复盘依据 | 否 | 否 |
 | `command_records` | 幂等记录与请求审计 | 否 | 否 |
 
@@ -540,6 +544,10 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - 一名成员只对应一份私密快照文档
 - 写入时全量覆盖，不做局部 patch
 - 游戏结束后仍保留到结果过期时间，便于复盘
+
+### `room_sync_signals`
+
+每个房间一条文档，`_id = roomId`，仅保存 `roomId / roomStatus / version / signalType / updatedAt`。游戏状态迁移在原事务内同步写入；大厅写操作完成后，在独立事务内重新读取 `rooms` 并写信号，使其与并发开局事务按房间文档冲突重试，避免旧大厅投影覆盖开局信号。客户端只能在 `user_profiles/{openid}.activeRoomId` 等于信号 `roomId` 时读取，且无写权限；该集合不得保存身份、任务、牌堆、玩家资料或房间号。
 
 ## 7.8 `game_events`
 
@@ -888,6 +896,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 2. 读取 `room_public_snapshots`
 3. 读取 `player_private_snapshots`
 4. 将 `room_public_snapshots.payload` 与 `player_private_snapshots.payload` 合并为 API 文档要求的 `GameSnapshot`
+5. 仅当请求显式携带 `touchPresence: true` 时，复用已鉴权成员更新 `lastSeenAt`，不重复查询成员；服务端先用已解析时间快速跳过，再以 `_id + lastSeenAt <= 截止时间` 条件原子更新，确保并发实例最多一个实际写入，不依赖云函数实例内存，也不信任客户端触发频率
 
 不允许：
 
@@ -942,7 +951,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 
 ## 8.4 `maintenanceService`
 
-这是内部定时函数，不对前端暴露。
+这是内部维护函数，不对前端暴露。除定时清理外，发布人员可显式调用 `prepareRoomSyncSignals`，幂等创建 `room_sync_signals`；该动作只做资源初始化，不执行清理。
 
 职责：
 
@@ -954,7 +963,13 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - 清理已失效房间关联的 `room_members` 状态
 - 删除已过期或已销毁房间登记的临时头像云存储文件
 
-建议每 10 分钟执行一次。
+每小时执行一次。页面与业务云函数仍按 `expireAt` 即时拒绝过期房间，定时任务只负责最终资源清理。
+
+首次发布实时同步功能必须遵守以下硬门禁：
+
+1. 先部署 `maintenanceService`，在云开发控制台调用 `{ "action": "prepareRoomSyncSignals" }`，确认返回的 `collectionResult` 为已创建或已存在。
+2. 在微信云开发助手中直接把 `room_sync_signals` 配置为自定义安全规则：仅允许当前 openid 对应 `user_profiles.activeRoomId` 等于文档 `roomId` 时读取，禁止客户端写入；随后验证当前房间成员可读、非成员与已离开成员不可读、客户端写入失败。该权限属于云环境配置，不由仓库文件或云函数代码自动应用。
+3. 只有前两项都通过后，才能部署会生产信号的 `roomService` 与 `gameService`；禁止依赖每小时定时任务碰巧完成初始化。
 
 ## 9. 房间与游戏状态机设计
 

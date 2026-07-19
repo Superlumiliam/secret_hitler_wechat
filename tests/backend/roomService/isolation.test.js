@@ -341,7 +341,7 @@ async function assertRoomSettingsRejectsTargetBelowSeatedPlayers() {
   assert.strictEqual(db.dump().rooms.room_settings.targetPlayerCount, 8, "target count should stay unchanged");
 }
 
-async function assertLobbyReadThrottlesLastSeenTouch() {
+async function assertLobbyReadTouchesPresenceOnlyWhenRequested() {
   const db = createMemoryDb({
     rooms: {
       room_polling: makeRoom({
@@ -378,12 +378,32 @@ async function assertLobbyReadThrottlesLastSeenTouch() {
   assert.strictEqual(
     statsAfterSecondRead.queryGets.room_members,
     statsAfterFirstRead.queryGets.room_members + 1,
-    "throttled lobby read should skip the extra lastSeen member query",
+    "each lobby snapshot should only query members once",
   );
   assert.strictEqual(
     statsAfterSecondRead.docUpdates.room_members,
     statsAfterFirstRead.docUpdates.room_members,
-    "throttled lobby read should skip the lastSeen member write",
+    "ordinary snapshot reads should not write presence",
+  );
+
+  const touchResponse = await service.main({
+    ...event,
+    payload: {
+      ...event.payload,
+      touchPresence: true,
+    },
+  });
+  const statsAfterTouch = db.stats();
+  assert.strictEqual(touchResponse.success, true);
+  assert.strictEqual(
+    statsAfterTouch.queryGets.room_members,
+    statsAfterSecondRead.queryGets.room_members + 1,
+    "presence touch should reuse the lobby member query",
+  );
+  assert.strictEqual(
+    statsAfterTouch.docUpdates.room_members,
+    (statsAfterSecondRead.docUpdates.room_members || 0) + 1,
+    "explicit presence touch should write the resolved member once",
   );
 }
 
@@ -394,7 +414,7 @@ async function assertLobbyReadThrottlesLastSeenTouch() {
   await assertHostCanUpdateRoomSettingsWithoutChangingSeats();
   await assertNonHostCannotUpdateRoomSettings();
   await assertRoomSettingsRejectsTargetBelowSeatedPlayers();
-  await assertLobbyReadThrottlesLastSeenTouch();
+  await assertLobbyReadTouchesPresenceOnlyWhenRequested();
   console.log("roomService isolation tests passed");
 })().catch((err) => {
   console.error(err);

@@ -11,6 +11,7 @@ const COLLECTIONS = [
   "rooms",
   "room_members",
   "room_public_snapshots",
+  "room_sync_signals",
   "user_profiles",
   "command_records",
   "game_core",
@@ -24,6 +25,7 @@ const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
 const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 const MAINTENANCE_STATE_COLLECTION = "maintenance_state";
 const COLLECTION_INIT_STATE_DOC_ID = "collection_init_daily";
+const PREPARE_ROOM_SYNC_SIGNALS_ACTION = "prepareRoomSyncSignals";
 const CHINA_TIMEZONE_OFFSET_MS = 8 * 60 * 60 * 1000;
 const ROOM_CLEANUP_CONCURRENCY = 3;
 const ROOM_DATA_CLEANUP_CONCURRENCY = 3;
@@ -148,16 +150,21 @@ async function saveCollectionInitState(data) {
 async function ensureCollectionsDaily(now) {
   const todayKey = getChinaDateKey(now);
   const state = await readCollectionInitState();
-  if (state && state.lastCheckedDate === todayKey) {
+  const previouslyCheckedCollections = (state && state.checkedCollections) || [];
+  const collectionsToCheck =
+    state && state.lastCheckedDate === todayKey
+      ? COLLECTIONS.filter((name) => !previouslyCheckedCollections.includes(name))
+      : COLLECTIONS;
+  if (!collectionsToCheck.length) {
     return {
       collectionInitSkipped: true,
       collectionInitDate: todayKey,
-      checkedCollections: state.checkedCollections || [],
+      checkedCollections: previouslyCheckedCollections,
     };
   }
 
   const collectionResults = [];
-  for (const name of COLLECTIONS) {
+  for (const name of collectionsToCheck) {
     collectionResults.push(await ensureCollection(name));
   }
 
@@ -361,6 +368,7 @@ async function removeRoomData(room) {
       assetStats: null,
       memberStats: null,
       snapshotStats: null,
+      syncSignalStats: null,
       privateSnapshotStats: null,
       eventStats: null,
       gameCoreStats: null,
@@ -377,6 +385,7 @@ async function removeRoomData(room) {
       assetStats,
       memberStats: null,
       snapshotStats: null,
+      syncSignalStats: null,
       privateSnapshotStats: null,
       eventStats: null,
       gameCoreStats: null,
@@ -396,6 +405,13 @@ async function removeRoomData(room) {
     async () =>
       await db
         .collection("room_public_snapshots")
+        .where({
+          roomId,
+        })
+        .remove(),
+    async () =>
+      await db
+        .collection("room_sync_signals")
         .where({
           roomId,
         })
@@ -436,7 +452,7 @@ async function removeRoomData(room) {
           },
         }),
   ];
-  const [memberRes, snapshotRes, privateSnapshotRes, eventRes, gameCoreRes, profileRes] = await mapWithConcurrency(
+  const [memberRes, snapshotRes, syncSignalRes, privateSnapshotRes, eventRes, gameCoreRes, profileRes] = await mapWithConcurrency(
     cleanupOperations,
     ROOM_DATA_CLEANUP_CONCURRENCY,
     async (operation) => await operation(),
@@ -450,6 +466,7 @@ async function removeRoomData(room) {
     assetStats,
     memberStats: memberRes.stats || null,
     snapshotStats: snapshotRes.stats || null,
+    syncSignalStats: syncSignalRes.stats || null,
     privateSnapshotStats: privateSnapshotRes.stats || null,
     eventStats: eventRes.stats || null,
     gameCoreStats: gameCoreRes.stats || null,
@@ -505,8 +522,18 @@ async function cleanupCommandRecords(now) {
   };
 }
 
-exports.main = async () => {
+exports.main = async (event = {}) => {
   const startedAt = new Date();
+  if (event.action === PREPARE_ROOM_SYNC_SIGNALS_ACTION) {
+    const collectionResult = await ensureCollection("room_sync_signals");
+    return {
+      success: true,
+      serverTime: new Date().toISOString(),
+      action: PREPARE_ROOM_SYNC_SIGNALS_ACTION,
+      collectionResult,
+    };
+  }
+
   const collectionInitResult = await ensureCollectionsDaily(startedAt);
   const roomResult = await cleanupRooms(startedAt);
   const commandRecordResult = await cleanupCommandRecords(startedAt);
@@ -523,9 +550,11 @@ exports.main = async () => {
 
 exports.__testHooks = {
   COMMAND_RECORD_CLEANUP_CONCURRENCY,
+  PREPARE_ROOM_SYNC_SIGNALS_ACTION,
   ROOM_CLEANUP_CONCURRENCY,
   ROOM_DATA_CLEANUP_CONCURRENCY,
   cleanupCommandRecords,
+  ensureCollectionsDaily,
   mapWithConcurrency,
   removeRoomData,
 };

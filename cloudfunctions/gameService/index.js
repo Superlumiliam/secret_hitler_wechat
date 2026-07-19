@@ -14,6 +14,7 @@ const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
 const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const LAST_SEEN_THROTTLE_MS = 20 * 1000;
+const ROOM_SYNC_SIGNAL_COLLECTION = "room_sync_signals";
 const ROOM_MODE_NORMAL = "normal";
 const ROOM_MODE_SOLO = "solo";
 const COMMAND_RECORD_DIRECT_ID_ENABLED_AT = Date.now();
@@ -64,8 +65,6 @@ const EXECUTIVE_POWER_TRACK = {
   9: { 1: "INVESTIGATE", 2: "INVESTIGATE", 3: "SPECIAL_ELECTION", 4: "EXECUTION", 5: "EXECUTION" },
   10: { 1: "INVESTIGATE", 2: "INVESTIGATE", 3: "SPECIAL_ELECTION", 4: "EXECUTION", 5: "EXECUTION" },
 };
-const lastSeenTouchedAtByMember = new Map();
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -226,14 +225,8 @@ async function touchRoomMemberLastSeen(openid, roomId, options = {}) {
     return;
   }
 
-  const throttleKey = `${roomId}:${openid}`;
-  const now = Date.now();
-  if (options.throttle && now - (lastSeenTouchedAtByMember.get(throttleKey) || 0) < LAST_SEEN_THROTTLE_MS) {
-    return;
-  }
-  lastSeenTouchedAtByMember.set(throttleKey, now);
-
-  try {
+  let member = options.member || null;
+  if (!member) {
     const membersRes = await db
       .collection("room_members")
       .where({
@@ -243,23 +236,68 @@ async function touchRoomMemberLastSeen(openid, roomId, options = {}) {
       })
       .limit(1)
       .get();
-    const member = membersRes.data[0];
-    if (!member) {
-      return;
-    }
-
-    const updatedAt = new Date();
-    await db.collection("room_members").doc(getMemberId(member)).update({
-      data: {
-        memberStatus: "active",
-        lastSeenAt: updatedAt,
-        updatedAt,
-      },
-    });
-  } catch (err) {
-    lastSeenTouchedAtByMember.delete(throttleKey);
-    throw err;
+    member = membersRes.data[0];
   }
+  if (!member) {
+    return;
+  }
+
+  const updatedAt = new Date();
+  const lastSeenAt = toDate(member.lastSeenAt);
+  if (options.throttle && lastSeenAt && updatedAt.getTime() - lastSeenAt.getTime() < LAST_SEEN_THROTTLE_MS) {
+    return;
+  }
+
+  const presenceData = {
+    memberStatus: "active",
+    lastSeenAt: updatedAt,
+    updatedAt,
+  };
+  if (options.throttle && lastSeenAt) {
+    await db
+      .collection("room_members")
+      .where({
+        _id: getMemberId(member),
+        lastSeenAt: _.lte(new Date(updatedAt.getTime() - LAST_SEEN_THROTTLE_MS)),
+      })
+      .update({
+        data: presenceData,
+      });
+    return;
+  }
+  if (options.throttle) {
+    await db.runTransaction(async (transaction) => {
+      const memberRef = transaction.collection("room_members").doc(getMemberId(member));
+      const latestMember = (await memberRef.get()).data;
+      if (!latestMember || latestMember.roomId !== roomId || getMemberOpenId(latestMember) !== openid) {
+        return;
+      }
+      const latestLastSeenAt = toDate(latestMember.lastSeenAt);
+      if (latestLastSeenAt && updatedAt.getTime() - latestLastSeenAt.getTime() < LAST_SEEN_THROTTLE_MS) {
+        return;
+      }
+      await memberRef.update({
+        data: presenceData,
+      });
+    });
+    return;
+  }
+
+  await db.collection("room_members").doc(getMemberId(member)).update({
+    data: presenceData,
+  });
+}
+
+async function writeRoomSyncSignal(target, roomId, roomStatus, version, updatedAt) {
+  await target.collection(ROOM_SYNC_SIGNAL_COLLECTION).doc(roomId).set({
+    data: {
+      roomId,
+      roomStatus,
+      version,
+      signalType: "room_version",
+      updatedAt,
+    },
+  });
 }
 
 function getCommandRecordId(scopeKey, commandId) {
@@ -1726,6 +1764,7 @@ async function startGame(payload, openid) {
           expireAt,
         },
       });
+      await writeRoomSyncSignal(transaction, roomId, "in_game", gameCore.version, updatedAt);
 
       for (const snapshot of privateSnapshotPayloads) {
         await transaction
@@ -1837,6 +1876,13 @@ async function getGameSnapshot(payload, openid) {
   const privateSnapshot = privateRes.data;
   if (!privateSnapshot || privateSnapshot.roomId !== roomId) {
     return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+  }
+
+  if (payload.touchPresence === true) {
+    await touchRoomMemberLastSeen(openid, roomId, {
+      member: acting.realMember,
+      throttle: true,
+    });
   }
 
   const publicPayload = publicSnapshot.payload || {};
@@ -2311,6 +2357,13 @@ async function submitCommand(payload, openid) {
             updatedAt,
           },
         });
+        await writeRoomSyncSignal(
+          transaction,
+          roomId,
+          getRoomStatusForGameCore(nextGameCore),
+          nextGameCore.version,
+          updatedAt,
+        );
 
         for (const snapshot of privateSnapshotPayloads) {
           await transaction
@@ -2432,6 +2485,13 @@ async function submitCommand(payload, openid) {
             updatedAt,
           },
         });
+        await writeRoomSyncSignal(
+          transaction,
+          roomId,
+          getRoomStatusForGameCore(nextGameCore),
+          nextGameCore.version,
+          updatedAt,
+        );
 
         for (const snapshot of privateSnapshotPayloads) {
           await transaction
@@ -2658,6 +2718,13 @@ async function submitCommand(payload, openid) {
             updatedAt,
           },
         });
+        await writeRoomSyncSignal(
+          transaction,
+          roomId,
+          getRoomStatusForGameCore(nextGameCore),
+          nextGameCore.version,
+          updatedAt,
+        );
 
         for (const snapshot of privateSnapshotPayloads) {
           await transaction
@@ -2771,6 +2838,13 @@ async function submitCommand(payload, openid) {
             updatedAt,
           },
         });
+        await writeRoomSyncSignal(
+          transaction,
+          roomId,
+          getRoomStatusForGameCore(nextGameCore),
+          nextGameCore.version,
+          updatedAt,
+        );
 
         for (const snapshot of privateSnapshotPayloads) {
           await transaction
@@ -3024,6 +3098,13 @@ async function submitCommand(payload, openid) {
             updatedAt,
           },
         });
+        await writeRoomSyncSignal(
+          transaction,
+          roomId,
+          getRoomStatusForGameCore(nextGameCore),
+          nextGameCore.version,
+          updatedAt,
+        );
 
         for (const snapshot of privateSnapshotPayloads) {
           await transaction
@@ -3284,6 +3365,13 @@ async function submitCommand(payload, openid) {
             updatedAt,
           },
         });
+        await writeRoomSyncSignal(
+          transaction,
+          roomId,
+          getRoomStatusForGameCore(nextGameCore),
+          nextGameCore.version,
+          updatedAt,
+        );
 
         for (const snapshot of privateSnapshotPayloads) {
           await transaction
@@ -3405,6 +3493,13 @@ async function submitCommand(payload, openid) {
           updatedAt,
         },
       });
+      await writeRoomSyncSignal(
+        transaction,
+        roomId,
+        getRoomStatusForGameCore(nextGameCore),
+        nextGameCore.version,
+        updatedAt,
+      );
 
       for (const snapshot of privateSnapshotPayloads) {
         await transaction
@@ -3472,6 +3567,10 @@ async function getResultSnapshot(payload, openid) {
   if (!member) {
     return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
   }
+  await touchRoomMemberLastSeen(openid, roomId, {
+    member,
+    throttle: true,
+  });
 
   const publicRes = await db.collection("room_public_snapshots").doc(roomId).get();
   const publicSnapshot = publicRes.data;
@@ -3560,9 +3659,9 @@ exports.main = async (event) => {
 
     const response = await dispatchAction(action, payload, openid, wxContext);
     const touchedRoomId = (payload && payload.roomId) || (response && response.data && response.data.roomId);
-    if (response && response.success && touchedRoomId) {
+    if (response && response.success && touchedRoomId && !["getGameSnapshot", "getResultSnapshot"].includes(action)) {
       await touchRoomMemberLastSeen(openid, touchedRoomId, {
-        throttle: action === "getGameSnapshot" || action === "getResultSnapshot",
+        throttle: false,
       });
     }
     return response;

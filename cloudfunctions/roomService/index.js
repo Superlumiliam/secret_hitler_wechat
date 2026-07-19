@@ -15,13 +15,23 @@ const ROOM_CODE_RETRY_LIMIT = 10;
 const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
 const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const LAST_SEEN_THROTTLE_MS = 20 * 1000;
+const ROOM_SYNC_SIGNAL_COLLECTION = "room_sync_signals";
+const ROOM_SYNC_WRITE_ACTIONS = new Set([
+  "createRoom",
+  "joinRoom",
+  "leaveRoom",
+  "updateRoomSettings",
+  "setReady",
+  "soloCreateRoom",
+  "soloFillVirtualPlayers",
+  "soloSetVirtualReady",
+  "soloReadyAllVirtualPlayers",
+]);
 const MIN_DISPLAY_NAME_LENGTH = 2;
 const MAX_DISPLAY_NAME_LENGTH = 12;
 const ROOM_MODE_NORMAL = "normal";
 const ROOM_MODE_SOLO = "solo";
 const COMMAND_RECORD_DIRECT_ID_ENABLED_AT = Date.now();
-const lastSeenTouchedAtByMember = new Map();
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -123,14 +133,8 @@ async function touchRoomMemberLastSeen(openid, roomId, options = {}) {
     return;
   }
 
-  const throttleKey = `${roomId}:${openid}`;
-  const now = Date.now();
-  if (options.throttle && now - (lastSeenTouchedAtByMember.get(throttleKey) || 0) < LAST_SEEN_THROTTLE_MS) {
-    return;
-  }
-  lastSeenTouchedAtByMember.set(throttleKey, now);
-
-  try {
+  let member = options.member || null;
+  if (!member) {
     const membersRes = await db
       .collection("room_members")
       .where({
@@ -140,23 +144,76 @@ async function touchRoomMemberLastSeen(openid, roomId, options = {}) {
       })
       .limit(1)
       .get();
-    const member = membersRes.data[0];
-    if (!member) {
+    member = membersRes.data[0];
+  }
+  if (!member) {
+    return;
+  }
+
+  const updatedAt = new Date();
+  const lastSeenAt = toDate(member.lastSeenAt);
+  if (options.throttle && lastSeenAt && updatedAt.getTime() - lastSeenAt.getTime() < LAST_SEEN_THROTTLE_MS) {
+    return;
+  }
+
+  const presenceData = {
+    memberStatus: "active",
+    lastSeenAt: updatedAt,
+    updatedAt,
+  };
+  if (options.throttle && lastSeenAt) {
+    await db
+      .collection("room_members")
+      .where({
+        _id: getMemberId(member),
+        lastSeenAt: _.lte(new Date(updatedAt.getTime() - LAST_SEEN_THROTTLE_MS)),
+      })
+      .update({
+        data: presenceData,
+      });
+    return;
+  }
+  if (options.throttle) {
+    await db.runTransaction(async (transaction) => {
+      const memberRef = transaction.collection("room_members").doc(getMemberId(member));
+      const latestMember = (await memberRef.get()).data;
+      if (!latestMember || latestMember.roomId !== roomId || getMemberOpenId(latestMember) !== openid) {
+        return;
+      }
+      const latestLastSeenAt = toDate(latestMember.lastSeenAt);
+      if (latestLastSeenAt && updatedAt.getTime() - latestLastSeenAt.getTime() < LAST_SEEN_THROTTLE_MS) {
+        return;
+      }
+      await memberRef.update({
+        data: presenceData,
+      });
+    });
+    return;
+  }
+
+  await db.collection("room_members").doc(getMemberId(member)).update({
+    data: presenceData,
+  });
+}
+
+async function refreshRoomSyncSignal(roomId) {
+  await db.runTransaction(async (transaction) => {
+    const roomRes = await transaction.collection("rooms").doc(roomId).get();
+    const room = roomRes.data;
+    if (!room) {
       return;
     }
 
-    const updatedAt = new Date();
-    await db.collection("room_members").doc(getMemberId(member)).update({
+    await transaction.collection(ROOM_SYNC_SIGNAL_COLLECTION).doc(roomId).set({
       data: {
-        memberStatus: "active",
-        lastSeenAt: updatedAt,
-        updatedAt,
+        roomId,
+        roomStatus: room.status,
+        version: room.version || 1,
+        signalType: "room_version",
+        updatedAt: room.updatedAt || new Date(),
       },
     });
-  } catch (err) {
-    lastSeenTouchedAtByMember.delete(throttleKey);
-    throw err;
-  }
+  });
 }
 
 function normalizeProfilePayload(payload) {
@@ -520,7 +577,7 @@ async function assertNoActiveRoom(profile, openid) {
   return null;
 }
 
-function buildLobbySnapshotFromData(room, members, openid) {
+function buildLobbySnapshotFromData(room, members, openid, context = null) {
   if (!room) {
     return null;
   }
@@ -529,6 +586,9 @@ function buildLobbySnapshotFromData(room, members, openid) {
   const roomMode = room.mode || ROOM_MODE_NORMAL;
   const activeMembers = members.filter(isActiveMember);
   const myMember = activeMembers.find((member) => getMemberOpenId(member) === openid) || null;
+  if (context) {
+    context.viewerMember = myMember;
+  }
   const isHost = Boolean(myMember && getMemberId(myMember) === room.hostMemberId);
   const isLobby = room.status === "lobby";
   const isFull = activeMembers.length === room.targetPlayerCount;
@@ -567,7 +627,7 @@ function buildLobbySnapshotFromData(room, members, openid) {
   };
 }
 
-async function buildLobbySnapshot(roomId, openid, existingRoom = null) {
+async function buildLobbySnapshot(roomId, openid, existingRoom = null, context = null) {
   const room = existingRoom || (await db.collection("rooms").doc(roomId).get()).data;
   if (!room) {
     return null;
@@ -580,7 +640,7 @@ async function buildLobbySnapshot(roomId, openid, existingRoom = null) {
     })
     .orderBy("seatIndex", "asc")
     .get();
-  return buildLobbySnapshotFromData(room, membersRes.data, openid);
+  return buildLobbySnapshotFromData(room, membersRes.data, openid, context);
 }
 
 async function createRoom(payload, openid, options = {}) {
@@ -854,7 +914,8 @@ async function getLobbySnapshot(payload, openid) {
     return fail("ROOM_EXPIRED", "房间已过期");
   }
 
-  const snapshot = await buildLobbySnapshot(roomId, openid, room);
+  const snapshotContext = {};
+  const snapshot = await buildLobbySnapshot(roomId, openid, room, snapshotContext);
   if (!snapshot) {
     return fail("ROOM_NOT_FOUND", "房间不存在");
   }
@@ -865,6 +926,13 @@ async function getLobbySnapshot(payload, openid) {
 
   if (snapshot.roomStatus !== "lobby") {
     return fail("GAME_ALREADY_STARTED", "房间已开局");
+  }
+
+  if (payload.touchPresence === true) {
+    await touchRoomMemberLastSeen(openid, roomId, {
+      member: snapshotContext.viewerMember,
+      throttle: true,
+    });
   }
 
   return ok(snapshot);
@@ -1420,9 +1488,20 @@ exports.main = async (event) => {
 
     const response = await dispatchAction(action, payload, openid);
     const touchedRoomId = (payload && payload.roomId) || (response && response.data && response.data.roomId);
-    if (response && response.success && touchedRoomId && action !== "leaveRoom") {
+    if (response && response.success && touchedRoomId && ROOM_SYNC_WRITE_ACTIONS.has(action)) {
+      try {
+        await refreshRoomSyncSignal(touchedRoomId);
+      } catch (signalErr) {
+        console.error("refresh room sync signal failed", {
+          roomId: touchedRoomId,
+          action,
+          err: signalErr,
+        });
+      }
+    }
+    if (response && response.success && touchedRoomId && action !== "leaveRoom" && action !== "getLobbySnapshot") {
       await touchRoomMemberLastSeen(openid, touchedRoomId, {
-        throttle: action === "getLobbySnapshot",
+        throttle: false,
       });
     }
     return response;

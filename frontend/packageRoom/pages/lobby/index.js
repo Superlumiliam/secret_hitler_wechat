@@ -9,6 +9,8 @@ const LOBBY_ASSET_FILE_IDS = {
   logoRule: `${CLOUD_ASSET_ROOT}logo-rule.webp`,
 };
 const LOBBY_POLL_INTERVAL_MS = 3000;
+const LOBBY_RECONCILE_INTERVAL_MS = 10 * 1000;
+const PRESENCE_TOUCH_INTERVAL_MS = 60 * 1000;
 const {
   LOBBY_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -21,6 +23,7 @@ const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { reLaunchPage } = require("../../../utils/protectedPageRoute");
 const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
 const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
+const { createRoomSyncSignalWatcher } = require("../../utils/roomSyncSignal");
 const userProfileStore = require("../../../utils/userProfileStore");
 const REFRESH_AFTER_ERROR_CODES = [
   "VERSION_CONFLICT",
@@ -141,11 +144,17 @@ function parseRoomCode(value) {
 
 Page({
   refreshTimer: null,
+  syncSignalWatcher: null,
   initialSnapshotSettled: false,
   shouldStartRefreshAfterInitial: false,
   isPageVisible: false,
   isPageUnloaded: false,
   snapshotRequestInFlight: null,
+  pendingSyncVersion: 0,
+  pendingSyncRoomStatus: "",
+  pendingSyncSequence: 0,
+  syncSignalCatchUpPromise: null,
+  lastPresenceTouchAt: 0,
 
   data: {
     roomId: "",
@@ -171,6 +180,12 @@ Page({
     this.isPageVisible = false;
     this.isPageUnloaded = false;
     this.snapshotRequestInFlight = null;
+    this.pendingSyncVersion = 0;
+    this.pendingSyncRoomStatus = "";
+    this.pendingSyncSequence = 0;
+    this.syncSignalCatchUpPromise = null;
+    this.syncSignalWatcher = null;
+    this.lastPresenceTouchAt = 0;
     const roomId = options.roomId || "";
     const shareRoomCode = parseRoomCode(options.roomCode);
     const initialLobby = takeInitialLobbySnapshot(roomId);
@@ -220,6 +235,7 @@ Page({
       }
       this.loadLobbySnapshot({ silent: true }).then((shouldContinuePolling) => {
         if (shouldContinuePolling) {
+          this.startRealtimeSync();
           this.startRefreshTimer();
         }
       });
@@ -229,6 +245,7 @@ Page({
   onHide() {
     this.isPageVisible = false;
     this.shouldStartRefreshAfterInitial = false;
+    this.stopRealtimeSync();
     this.stopRefreshTimer();
     clearPageTimeout(this);
   },
@@ -237,6 +254,7 @@ Page({
     this.isPageVisible = false;
     this.isPageUnloaded = true;
     this.shouldStartRefreshAfterInitial = false;
+    this.stopRealtimeSync();
     this.stopRefreshTimer();
     clearPageTimeout(this);
   },
@@ -254,6 +272,7 @@ Page({
   },
 
   redirectToBoard() {
+    this.stopRealtimeSync();
     this.stopRefreshTimer();
     reLaunchPage(`/packageRoom/pages/board/index?roomId=${encodeURIComponent(this.data.roomId)}`);
   },
@@ -269,7 +288,7 @@ Page({
       if (shouldContinuePolling) {
         this.startRefreshTimer();
       }
-    }, LOBBY_POLL_INTERVAL_MS);
+    }, this.isRealtimeSyncHealthy() ? LOBBY_RECONCILE_INTERVAL_MS : LOBBY_POLL_INTERVAL_MS);
   },
 
   stopRefreshTimer() {
@@ -277,6 +296,131 @@ Page({
       clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
+  },
+
+  isRealtimeSyncHealthy() {
+    return Boolean(this.syncSignalWatcher && this.syncSignalWatcher.isHealthy());
+  },
+
+  startRealtimeSync() {
+    this.stopRealtimeSync();
+    if (!this.isPageVisible || this.isPageUnloaded || !this.data.roomId) {
+      return;
+    }
+
+    this.syncSignalWatcher = createRoomSyncSignalWatcher({
+      roomId: this.data.roomId,
+      onHealthy: () => {
+        this.startRefreshTimer();
+      },
+      onUnavailable: (err) => {
+        console.warn("大厅实时同步不可用，已降级为轮询", err);
+        this.startRefreshTimer();
+      },
+      onSignal: (signal) => {
+        this.handleRealtimeSignal(signal);
+      },
+    });
+    this.syncSignalWatcher.start();
+  },
+
+  stopRealtimeSync() {
+    if (this.syncSignalWatcher) {
+      this.syncSignalWatcher.stop();
+      this.syncSignalWatcher = null;
+    }
+    this.pendingSyncVersion = 0;
+    this.pendingSyncRoomStatus = "";
+    this.pendingSyncSequence += 1;
+  },
+
+  handleRealtimeSignal(signal = {}) {
+    const nextVersion = Number(signal.version) || 0;
+    const nextRoomStatus = signal.roomStatus || "";
+    const currentRoomStatus = (this.data.lobby && this.data.lobby.roomStatus) || "";
+    if (nextRoomStatus && nextRoomStatus !== currentRoomStatus) {
+      this.pendingSyncVersion = nextVersion;
+      this.pendingSyncRoomStatus = nextRoomStatus;
+    } else if (nextVersion >= this.pendingSyncVersion) {
+      this.pendingSyncVersion = nextVersion;
+      this.pendingSyncRoomStatus = nextRoomStatus || this.pendingSyncRoomStatus;
+    }
+    this.pendingSyncSequence += 1;
+    this.drainRealtimeSignals();
+  },
+
+  hasPendingRealtimeSignal() {
+    const lobby = this.data.lobby || {};
+    const currentVersion = Number(lobby.version) || 0;
+    return (
+      this.pendingSyncVersion > currentVersion ||
+      Boolean(this.pendingSyncRoomStatus && this.pendingSyncRoomStatus !== lobby.roomStatus)
+    );
+  },
+
+  drainRealtimeSignals() {
+    if (this.syncSignalCatchUpPromise) {
+      return this.syncSignalCatchUpPromise;
+    }
+
+    let lastObservedSyncSequence = this.pendingSyncSequence;
+    const catchUpPromise = (async () => {
+      let noProgressRetryCount = 0;
+      while (this.isPageVisible && !this.isPageUnloaded && this.hasPendingRealtimeSignal()) {
+        const sequenceBeforeRequest = this.pendingSyncSequence;
+        lastObservedSyncSequence = sequenceBeforeRequest;
+        const lobbyBeforeRequest = this.data.lobby || {};
+        const versionBeforeRequest = Number(lobbyBeforeRequest.version) || 0;
+        const statusBeforeRequest = lobbyBeforeRequest.roomStatus || "";
+        const shouldContinue = await this.loadLobbySnapshot({ silent: true });
+        if (!shouldContinue || !this.isPageVisible || this.isPageUnloaded) {
+          return;
+        }
+        if (!this.hasPendingRealtimeSignal()) {
+          this.pendingSyncVersion = 0;
+          this.pendingSyncRoomStatus = "";
+          return;
+        }
+
+        const lobbyAfterRequest = this.data.lobby || {};
+        const versionAfterRequest = Number(lobbyAfterRequest.version) || 0;
+        const statusAfterRequest = lobbyAfterRequest.roomStatus || "";
+        const madeProgress = versionAfterRequest > versionBeforeRequest || statusAfterRequest !== statusBeforeRequest;
+        if (madeProgress || this.pendingSyncSequence !== sequenceBeforeRequest) {
+          noProgressRetryCount = 0;
+          continue;
+        }
+        if (noProgressRetryCount < 1) {
+          noProgressRetryCount += 1;
+          continue;
+        }
+        return;
+      }
+      if (!this.hasPendingRealtimeSignal()) {
+        this.pendingSyncVersion = 0;
+        this.pendingSyncRoomStatus = "";
+      }
+    })();
+
+    this.syncSignalCatchUpPromise = catchUpPromise;
+    catchUpPromise
+      .catch((err) => {
+        console.warn("大厅同步信号追赶失败", err);
+      })
+      .finally(() => {
+        if (this.syncSignalCatchUpPromise === catchUpPromise) {
+          this.syncSignalCatchUpPromise = null;
+          if (
+            this.isPageVisible &&
+            !this.isPageUnloaded &&
+            this.hasPendingRealtimeSignal() &&
+            this.pendingSyncSequence !== lastObservedSyncSequence
+          ) {
+            this.drainRealtimeSignals();
+          }
+        }
+      });
+    return catchUpPromise;
   },
 
   markInitialSnapshotSettled(shouldStartRefresh) {
@@ -290,6 +434,7 @@ Page({
       !this.data.isLeaving;
     this.shouldStartRefreshAfterInitial = false;
     if (canStartRefresh) {
+      this.startRealtimeSync();
       this.startRefreshTimer();
     }
   },
@@ -413,6 +558,9 @@ Page({
       return false;
     }
 
+    const touchPresence =
+      options.touchPresence === true || Date.now() - (Number(this.lastPresenceTouchAt) || 0) >= PRESENCE_TOUCH_INTERVAL_MS;
+
     try {
       const res = await wx.cloud.callFunction({
         name: "roomService",
@@ -420,6 +568,7 @@ Page({
           action: "getLobbySnapshot",
           payload: {
             roomId: this.data.roomId,
+            touchPresence,
           },
         },
       });
@@ -427,6 +576,9 @@ Page({
 
       if (!result.success) {
         throw createServiceError(result, "获取大厅失败");
+      }
+      if (touchPresence) {
+        this.lastPresenceTouchAt = Date.now();
       }
 
       syncPageTimeoutDeadline(this, result.data && result.data.expireAt, {
