@@ -428,6 +428,28 @@ async function upsertProfile(openid, data) {
   return openid;
 }
 
+async function upsertProfileInTransaction(transaction, openid, profile, data, createdAt) {
+  const profileRef = transaction.collection("user_profiles").doc(openid);
+  if (profile) {
+    await profileRef.update({
+      data: {
+        openid,
+        ...data,
+      },
+    });
+    return;
+  }
+
+  await profileRef.set({
+    data: {
+      openid,
+      defaultDisplayName: `玩家${openid.slice(-4)}`,
+      ...data,
+      createdAt,
+    },
+  });
+}
+
 async function clearActiveRoomForProfile(openid, updatedAt) {
   if (!openid) {
     return;
@@ -783,71 +805,144 @@ async function joinRoom(payload, openid) {
     }
 
     const resolvedRoomId = room.roomId || room._id;
-    if (isRoomExpired(room)) {
-      return fail("ROOM_EXPIRED", "房间已过期");
-    }
-
-    if (room.status !== "lobby") {
-      return fail("ROOM_NOT_JOINABLE", "房间不可加入");
-    }
-
-    const existingMember = await getRoomMember(resolvedRoomId, openid);
-    if (existingMember) {
-      const lobbySnapshot = await buildLobbySnapshot(resolvedRoomId, openid);
-      return ok({
-        roomId: resolvedRoomId,
-        roomCode: room.roomCode,
-        roomStatus: "lobby",
-        memberId: getMemberId(existingMember),
-        lobbySnapshot,
-      });
-    }
-
-    if ((room.mode || ROOM_MODE_NORMAL) === ROOM_MODE_SOLO) {
-      return fail("ROOM_NOT_JOINABLE", "单人模式房间不可加入");
-    }
-
-    const profile = await getProfile(openid);
-    const activeRoomError = await assertNoActiveRoom(profile, openid);
-    if (activeRoomError) {
-      return activeRoomError;
+    const profileBeforeTransaction = await getProfile(openid);
+    if (
+      profileBeforeTransaction &&
+      profileBeforeTransaction.activeRoomId &&
+      profileBeforeTransaction.activeRoomId !== resolvedRoomId
+    ) {
+      const activeRoomError = await assertNoActiveRoom(profileBeforeTransaction, openid);
+      if (activeRoomError) {
+        return activeRoomError;
+      }
     }
 
     const requestProfile = normalizeProfilePayload(payload);
-    if (requestProfile.error && !(profile && profile.profileCompleted)) {
-      return fail("PROFILE_REQUIRED", "请先创建用户资料");
-    }
+    const transactionResult = await db.runTransaction(async (transaction) => {
+      const roomRef = transaction.collection("rooms").doc(resolvedRoomId);
+      const currentRoom = (await roomRef.get()).data;
+      if (!currentRoom) {
+        return { response: fail("ROOM_NOT_FOUND", "房间不存在") };
+      }
+      if (isRoomExpired(currentRoom)) {
+        return { response: fail("ROOM_EXPIRED", "房间已过期") };
+      }
+      if (currentRoom.status !== "lobby") {
+        return { response: fail("ROOM_NOT_JOINABLE", "房间不可加入") };
+      }
 
-    const membersRes = await db
-      .collection("room_members")
-      .where({
-        roomId: resolvedRoomId,
-      })
-      .orderBy("seatIndex", "asc")
-      .get();
-    const members = membersRes.data.filter(isActiveMember);
-    if (members.length >= room.targetPlayerCount) {
-      return fail("ROOM_FULL", "房间已满");
-    }
+      const membersRes = await transaction
+        .collection("room_members")
+        .where({
+          roomId: resolvedRoomId,
+        })
+        .orderBy("seatIndex", "asc")
+        .get();
+      const activeMembers = membersRes.data.filter(isActiveMember);
+      const profileRef = transaction.collection("user_profiles").doc(openid);
+      let profile = null;
+      try {
+        profile = (await profileRef.get()).data || null;
+      } catch (err) {
+        if (!isDocumentNotFoundError(err)) {
+          throw err;
+        }
+      }
+      const matchingMembers = activeMembers.filter((member) => getMemberOpenId(member) === openid);
 
-    const occupiedSeats = members.map((member) => member.seatIndex);
-    let seatIndex = 1;
-    while (occupiedSeats.includes(seatIndex) && seatIndex <= room.targetPlayerCount) {
-      seatIndex += 1;
-    }
+      if (matchingMembers.length) {
+        const existingMember =
+          matchingMembers.find((member) => getMemberId(member) === (profile && profile.activeMemberId)) ||
+          matchingMembers[0];
+        const duplicateMembers = matchingMembers.filter(
+          (member) => getMemberId(member) !== getMemberId(existingMember),
+        );
+        const updatedAt = new Date();
 
-    const profileData = requestProfile.error ? null : requestProfile.data;
-    const displayName =
-      (profileData && profileData.defaultDisplayName) ||
-      (profile && (profile.defaultDisplayName || profile.displayName)) ||
-      `玩家${openid.slice(-4)}`;
-    const avatarUrl = (profileData && profileData.avatarUrl) || "";
-    const assetFileIds = mergeRoomAssetFileIds(room.assetFileIds, avatarUrl);
-    const memberId = createId("mem");
-    const joinedAt = new Date();
+        for (const duplicateMember of duplicateMembers) {
+          await transaction.collection("room_members").doc(getMemberId(duplicateMember)).update({
+            data: {
+              memberStatus: "left",
+              isReady: false,
+              leftAt: updatedAt,
+              lastSeenAt: updatedAt,
+              updatedAt,
+            },
+          });
+        }
 
-    await db.collection("room_members").doc(memberId).set({
-      data: {
+        const remainingMembers = activeMembers.filter(
+          (member) => !duplicateMembers.some((duplicate) => getMemberId(duplicate) === getMemberId(member)),
+        );
+        let nextRoom = currentRoom;
+        if (duplicateMembers.length) {
+          nextRoom = {
+            ...currentRoom,
+            playerCount: remainingMembers.length,
+            version: (currentRoom.version || 1) + 1,
+            updatedAt,
+          };
+          await roomRef.update({
+            data: {
+              playerCount: nextRoom.playerCount,
+              version: nextRoom.version,
+              updatedAt,
+            },
+          });
+        }
+
+        await upsertProfileInTransaction(
+          transaction,
+          openid,
+          profile,
+          {
+            defaultDisplayName:
+              (profile && (profile.defaultDisplayName || profile.displayName)) || existingMember.displayName,
+            profileCompleted: true,
+            activeRoomId: resolvedRoomId,
+            activeMemberId: getMemberId(existingMember),
+            activeRoomStatus: "lobby",
+            updatedAt,
+          },
+          updatedAt,
+        );
+
+        return {
+          room: nextRoom,
+          members: remainingMembers,
+          member: existingMember,
+        };
+      }
+
+      if (profile && profile.activeRoomId && profile.activeRoomId !== resolvedRoomId) {
+        return { response: fail("ACTION_NOT_ALLOWED", "当前账号已有进行中的房间") };
+      }
+      if ((currentRoom.mode || ROOM_MODE_NORMAL) === ROOM_MODE_SOLO) {
+        return { response: fail("ROOM_NOT_JOINABLE", "单人模式房间不可加入") };
+      }
+      if (requestProfile.error && !(profile && profile.profileCompleted)) {
+        return { response: fail("PROFILE_REQUIRED", "请先创建用户资料") };
+      }
+      if (activeMembers.length >= currentRoom.targetPlayerCount) {
+        return { response: fail("ROOM_FULL", "房间已满") };
+      }
+
+      const occupiedSeats = activeMembers.map((member) => member.seatIndex);
+      let seatIndex = 1;
+      while (occupiedSeats.includes(seatIndex) && seatIndex <= currentRoom.targetPlayerCount) {
+        seatIndex += 1;
+      }
+
+      const profileData = requestProfile.error ? null : requestProfile.data;
+      const displayName =
+        (profileData && profileData.defaultDisplayName) ||
+        (profile && (profile.defaultDisplayName || profile.displayName)) ||
+        `玩家${openid.slice(-4)}`;
+      const avatarUrl = (profileData && profileData.avatarUrl) || "";
+      const assetFileIds = mergeRoomAssetFileIds(currentRoom.assetFileIds, avatarUrl);
+      const memberId = createId("mem");
+      const joinedAt = new Date();
+      const memberData = {
         memberId,
         roomId: resolvedRoomId,
         openId: openid,
@@ -862,38 +957,68 @@ async function joinRoom(payload, openid) {
         lastSeenAt: joinedAt,
         createdAt: joinedAt,
         updatedAt: joinedAt,
-      },
-    });
-
-    await db.collection("rooms").doc(resolvedRoomId).update({
-      data: {
-        playerCount: members.length + 1,
+      };
+      const nextRoom = {
+        ...currentRoom,
+        playerCount: activeMembers.length + 1,
         assetFileIds,
-        version: _.inc(1),
+        version: (currentRoom.version || 1) + 1,
         updatedAt: joinedAt,
-      },
+      };
+
+      await transaction.collection("room_members").doc(memberId).set({
+        data: memberData,
+      });
+      await roomRef.update({
+        data: {
+          playerCount: nextRoom.playerCount,
+          assetFileIds,
+          version: nextRoom.version,
+          updatedAt: joinedAt,
+        },
+      });
+      await upsertProfileInTransaction(
+        transaction,
+        openid,
+        profile,
+        {
+          ...(profileData
+            ? {
+                defaultDisplayName: profileData.defaultDisplayName,
+                profileCompleted: profileData.profileCompleted,
+              }
+            : {}),
+          activeRoomId: resolvedRoomId,
+          activeMemberId: memberId,
+          activeRoomStatus: "lobby",
+          updatedAt: joinedAt,
+        },
+        joinedAt,
+      );
+
+      return {
+        room: nextRoom,
+        members: activeMembers.concat(memberData),
+        member: memberData,
+      };
     });
 
-    await upsertProfile(openid, {
-      ...(profileData
-        ? {
-            defaultDisplayName: profileData.defaultDisplayName,
-            profileCompleted: profileData.profileCompleted,
-          }
-        : {}),
-      activeRoomId: resolvedRoomId,
-      activeMemberId: memberId,
-      activeRoomStatus: "lobby",
-      updatedAt: joinedAt,
-    });
+    if (transactionResult.response) {
+      return transactionResult.response;
+    }
 
-    const lobbySnapshot = await buildLobbySnapshot(resolvedRoomId, openid);
+    const joinedMember = transactionResult.member;
+    const lobbySnapshot = buildLobbySnapshotFromData(
+      transactionResult.room,
+      transactionResult.members,
+      openid,
+    );
 
     return ok({
       roomId: resolvedRoomId,
-      roomCode: room.roomCode,
+      roomCode: transactionResult.room.roomCode,
       roomStatus: "lobby",
-      memberId,
+      memberId: getMemberId(joinedMember),
       lobbySnapshot,
     });
   });
@@ -956,7 +1081,6 @@ async function getRoomMember(roomId, openid) {
       roomId,
       openId: openid,
     })
-    .limit(1)
     .get();
   return membersRes.data.find(isActiveMember) || null;
 }
@@ -1499,7 +1623,16 @@ exports.main = async (event) => {
         });
       }
     }
-    if (response && response.success && touchedRoomId && action !== "leaveRoom" && action !== "getLobbySnapshot") {
+    if (
+      response &&
+      response.success &&
+      touchedRoomId &&
+      action !== "leaveRoom" &&
+      action !== "getLobbySnapshot" &&
+      action !== "createRoom" &&
+      action !== "joinRoom" &&
+      action !== "soloCreateRoom"
+    ) {
       await touchRoomMemberLastSeen(openid, touchedRoomId, {
         throttle: false,
       });

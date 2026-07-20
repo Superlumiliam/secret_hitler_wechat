@@ -3,6 +3,7 @@ const path = require("path");
 
 function createMemoryDb(initialData = {}) {
   const collections = {};
+  let transactionQueue = Promise.resolve();
   const stats = {
     docGets: {},
     docSets: {},
@@ -127,9 +128,17 @@ function createMemoryDb(initialData = {}) {
       },
     },
     collection: collectionApi,
-    async runTransaction(handler) {
-      stats.transactions += 1;
-      return await handler({ collection: collectionApi });
+    runTransaction(handler) {
+      const execute = async () => {
+        stats.transactions += 1;
+        return await handler({ collection: collectionApi });
+      };
+      const result = transactionQueue.then(execute, execute);
+      transactionQueue = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return result;
     },
     dump() {
       const result = {};

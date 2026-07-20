@@ -381,7 +381,6 @@ async function getRoomMember(roomId, openid) {
       roomId,
       openId: openid,
     })
-    .limit(1)
     .get();
   return membersRes.data.find(isActiveMember) || null;
 }
@@ -1981,7 +1980,6 @@ async function submitCommand(payload, openid) {
           roomId,
           openId: openid,
         })
-        .limit(1)
         .get();
       const realMember = realMemberRes.data.find(isActiveMember) || null;
       if (!realMember) {
@@ -3641,6 +3639,7 @@ exports.__testHooks = {
   getCommandRecord,
   getCommandRecordId,
   getCommandTimestamp,
+  getRoomMember,
   isDocumentNotFoundError,
   saveCommandRecord,
   shouldQueryLegacyCommandRecord,
