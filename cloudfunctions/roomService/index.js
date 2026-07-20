@@ -305,6 +305,26 @@ async function deleteRoomAssets(room) {
   }
 }
 
+async function cleanupExpiredRoomAssets(room) {
+  if (!room) {
+    return;
+  }
+  const roomId = room.roomId || room._id;
+  const assetStats = await deleteRoomAssets(room);
+  try {
+    await db.collection("rooms").doc(roomId).update({
+      data: {
+        assetFileIds: assetStats.remainingFileIds,
+      },
+    });
+  } catch (assetUpdateErr) {
+    console.error("update expired room asset list failed", {
+      roomId,
+      err: assetUpdateErr,
+    });
+  }
+}
+
 function getCommandRecordId(scopeKey, commandId) {
   return `cmd_${crypto.createHash("sha256").update(`${scopeKey}\0${commandId}`).digest("hex")}`;
 }
@@ -375,6 +395,87 @@ async function withCommandIdempotency(openid, payload, handler) {
   return response;
 }
 
+async function getTransactionDocument(documentRef) {
+  try {
+    return (await documentRef.get()).data || null;
+  } catch (err) {
+    if (isDocumentNotFoundError(err)) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+async function clearActiveRoomForProfileInTransaction(transaction, openid, updatedAt) {
+  const profileRef = transaction.collection("user_profiles").doc(openid);
+  const profile = await getTransactionDocument(profileRef);
+  if (!profile) {
+    return;
+  }
+  await profileRef.update({
+    data: {
+      openid,
+      activeRoomId: null,
+      activeMemberId: null,
+      activeRoomStatus: null,
+      updatedAt,
+    },
+  });
+}
+
+async function withCommandTransaction(openid, payload, handler, options = {}) {
+  const commandId = payload && payload.commandId;
+  if (!commandId || typeof commandId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 commandId");
+  }
+
+  const scopeKey = `user:${openid}`;
+  const hash = payloadHash(payload);
+  const existing = await getCommandRecord(scopeKey, commandId);
+  if (existing) {
+    if (existing.payloadHash !== hash) {
+      return fail("DUPLICATE_COMMAND", "commandId 已被不同请求使用");
+    }
+    return existing.response;
+  }
+
+  let preparedContext = null;
+  if (options.prepare) {
+    const prepared = await options.prepare();
+    if (prepared && prepared.response) {
+      return prepared.response;
+    }
+    preparedContext = prepared && prepared.context;
+  }
+
+  return await db.runTransaction(async (transaction) => {
+    const commandRef = transaction.collection("command_records").doc(getCommandRecordId(scopeKey, commandId));
+    const currentRecord = await getTransactionDocument(commandRef);
+    if (currentRecord) {
+      if (currentRecord.payloadHash !== hash) {
+        return fail("DUPLICATE_COMMAND", "commandId 已被不同请求使用");
+      }
+      return currentRecord.response;
+    }
+
+    const response = await handler(transaction, preparedContext);
+    if (response.success) {
+      const createdAt = new Date();
+      await commandRef.set({
+        data: {
+          scopeKey,
+          commandId,
+          payloadHash: hash,
+          response,
+          createdAt,
+          expiresAt: new Date(createdAt.getTime() + COMMAND_RECORD_TTL_MS),
+        },
+      });
+    }
+    return response;
+  });
+}
+
 async function generateRoomCode() {
   for (let i = 0; i < ROOM_CODE_RETRY_LIMIT; i += 1) {
     const code = String(Math.floor(Math.random() * 1000000)).padStart(ROOM_CODE_LENGTH, "0");
@@ -403,29 +504,6 @@ async function getProfile(openid) {
     }
     throw err;
   }
-}
-
-async function upsertProfile(openid, data) {
-  const profile = await getProfile(openid);
-  if (profile) {
-    await db.collection("user_profiles").doc(openid).update({
-      data: {
-        openid,
-        ...data,
-      },
-    });
-    return openid;
-  }
-
-  await db.collection("user_profiles").doc(openid).set({
-    data: {
-      openid,
-      defaultDisplayName: `玩家${openid.slice(-4)}`,
-      ...data,
-      createdAt: new Date(),
-    },
-  });
-  return openid;
 }
 
 async function upsertProfileInTransaction(transaction, openid, profile, data, createdAt) {
@@ -676,98 +754,133 @@ async function createRoom(payload, openid, options = {}) {
     return fail("INVALID_PAYLOAD", "人数必须是 5-10 的整数");
   }
 
-  return withCommandIdempotency(openid, payload, async () => {
-    const profile = await getProfile(openid);
-    const activeRoomError = await assertNoActiveRoom(profile, openid);
-    if (activeRoomError) {
-      return activeRoomError;
-    }
-
-    const requestProfile = normalizeProfilePayload(payload);
-    if (requestProfile.error && !(profile && profile.profileCompleted)) {
-      return requestProfile.error;
-    }
-
-    const roomId = createId("room");
-    const memberId = createId("mem");
-    const roomCode = await generateRoomCode();
-    const profileData = requestProfile.error ? null : requestProfile.data;
-    const displayName =
-      (profileData && profileData.defaultDisplayName) ||
-      (profile && (profile.defaultDisplayName || profile.displayName)) ||
-      `玩家${openid.slice(-4)}`;
-    const avatarUrl = (profileData && profileData.avatarUrl) || "";
-    const assetFileIds = mergeRoomAssetFileIds([], avatarUrl);
-    const createdAt = new Date();
-    const expireAt = createExpireAt(createdAt, ROOM_TTL_LOBBY_MS);
-
-    const roomData = {
-      roomId,
-      roomCode,
-      mode: roomMode,
-      status: "lobby",
-      hostMemberId: memberId,
-      currentGameId: null,
-      targetPlayerCount,
-      playerCount: 1,
-      version: 1,
-      createdByOpenId: openid,
-      createdAt,
-      updatedAt: createdAt,
-      startedAt: null,
-      endedAt: null,
-      expireAt,
-      assetFileIds,
-    };
-    const memberData = {
-      memberId,
-      roomId,
-      openId: openid,
-      displayName,
-      avatarUrl,
-      seatIndex: 1,
-      isHost: true,
-      isReady: false,
-      isVirtual: false,
-      memberStatus: "active",
-      joinedAt: createdAt,
-      leftAt: null,
-      lastSeenAt: createdAt,
-      createdAt,
-      updatedAt: createdAt,
-    };
-
-    await db.collection("rooms").doc(roomId).set({
-      data: roomData,
-    });
-
-    await db.collection("room_members").doc(memberId).set({
-      data: memberData,
-    });
-
-    await upsertProfile(openid, {
-      ...(profileData
-        ? {
-            defaultDisplayName: profileData.defaultDisplayName,
-            profileCompleted: profileData.profileCompleted,
+  const requestProfile = normalizeProfilePayload(payload);
+  return withCommandTransaction(
+    openid,
+    payload,
+    async (transaction, preparedContext) => {
+      const profileRef = transaction.collection("user_profiles").doc(openid);
+      const profile = await getTransactionDocument(profileRef);
+      if (profile && profile.activeRoomId) {
+        const activeRoom = await getTransactionDocument(
+          transaction.collection("rooms").doc(profile.activeRoomId),
+        );
+        if (activeRoom && ["lobby", "in_game"].includes(activeRoom.status) && !isRoomExpired(activeRoom)) {
+          if (activeRoom.status === "in_game") {
+            return fail("ACTION_NOT_ALLOWED", "当前账号已有进行中的房间");
           }
-        : {}),
-      activeRoomId: roomId,
-      activeMemberId: memberId,
-      activeRoomStatus: "lobby",
-      updatedAt: createdAt,
-    });
+          const activeMembersRes = await transaction
+            .collection("room_members")
+            .where({
+              roomId: profile.activeRoomId,
+            })
+            .get();
+          const hasActiveMembership = activeMembersRes.data.some(
+            (member) => isActiveMember(member) && getMemberOpenId(member) === openid,
+          );
+          if (hasActiveMembership) {
+            return fail("ACTION_NOT_ALLOWED", "当前账号已有进行中的房间");
+          }
+        }
+      }
 
-    const lobbySnapshot = buildLobbySnapshotFromData(roomData, [memberData], openid);
+      if (requestProfile.error && !(profile && profile.profileCompleted)) {
+        return requestProfile.error;
+      }
 
-    return ok({
-      roomId,
-      roomCode,
-      roomStatus: "lobby",
-      memberId,
-      lobbySnapshot,
-    });
-  });
+      const roomId = createId("room");
+      const memberId = createId("mem");
+      const roomCode = preparedContext.roomCode;
+      const profileData = requestProfile.error ? null : requestProfile.data;
+      const displayName =
+        (profileData && profileData.defaultDisplayName) ||
+        (profile && (profile.defaultDisplayName || profile.displayName)) ||
+        `玩家${openid.slice(-4)}`;
+      const avatarUrl = (profileData && profileData.avatarUrl) || "";
+      const assetFileIds = mergeRoomAssetFileIds([], avatarUrl);
+      const createdAt = new Date();
+      const expireAt = createExpireAt(createdAt, ROOM_TTL_LOBBY_MS);
+
+      const roomData = {
+        roomId,
+        roomCode,
+        mode: roomMode,
+        status: "lobby",
+        hostMemberId: memberId,
+        currentGameId: null,
+        targetPlayerCount,
+        playerCount: 1,
+        version: 1,
+        createdByOpenId: openid,
+        createdAt,
+        updatedAt: createdAt,
+        startedAt: null,
+        endedAt: null,
+        expireAt,
+        assetFileIds,
+      };
+      const memberData = {
+        memberId,
+        roomId,
+        openId: openid,
+        displayName,
+        avatarUrl,
+        seatIndex: 1,
+        isHost: true,
+        isReady: false,
+        isVirtual: false,
+        memberStatus: "active",
+        joinedAt: createdAt,
+        leftAt: null,
+        lastSeenAt: createdAt,
+        createdAt,
+        updatedAt: createdAt,
+      };
+
+      await transaction.collection("rooms").doc(roomId).set({
+        data: roomData,
+      });
+      await transaction.collection("room_members").doc(memberId).set({
+        data: memberData,
+      });
+      await upsertProfileInTransaction(
+        transaction,
+        openid,
+        profile,
+        {
+          ...(profileData
+            ? {
+                defaultDisplayName: profileData.defaultDisplayName,
+                profileCompleted: profileData.profileCompleted,
+              }
+            : {}),
+          activeRoomId: roomId,
+          activeMemberId: memberId,
+          activeRoomStatus: "lobby",
+          updatedAt: createdAt,
+        },
+        createdAt,
+      );
+
+      const lobbySnapshot = buildLobbySnapshotFromData(roomData, [memberData], openid);
+      return ok({
+        roomId,
+        roomCode,
+        roomStatus: "lobby",
+        memberId,
+        lobbySnapshot,
+      });
+    },
+    {
+      prepare: async () => {
+        return {
+          context: {
+            roomCode: await generateRoomCode(),
+          },
+        };
+      },
+    },
+  );
 }
 
 async function joinRoom(payload, openid) {
@@ -1091,9 +1204,11 @@ async function leaveRoom(payload, openid) {
     return fail("INVALID_PAYLOAD", "缺少 roomId");
   }
 
-  return withCommandIdempotency(openid, payload, async () => {
-    const roomRes = await db.collection("rooms").doc(roomId).get();
-    const room = roomRes.data;
+  let expiredRoomForCleanup = null;
+  const response = await withCommandTransaction(openid, payload, async (transaction) => {
+    expiredRoomForCleanup = null;
+    const roomRef = transaction.collection("rooms").doc(roomId);
+    const room = await getTransactionDocument(roomRef);
     if (!room) {
       return fail("ROOM_NOT_FOUND", "房间不存在");
     }
@@ -1102,7 +1217,15 @@ async function leaveRoom(payload, openid) {
       return fail("ACTION_NOT_ALLOWED", "当前房间已失效");
     }
 
-    const member = await getRoomMember(roomId, openid);
+    const membersRes = await transaction
+      .collection("room_members")
+      .where({
+        roomId,
+      })
+      .orderBy("seatIndex", "asc")
+      .get();
+    const activeMembers = membersRes.data.filter(isActiveMember);
+    const member = activeMembers.find((item) => getMemberOpenId(item) === openid) || null;
     if (!member) {
       return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
     }
@@ -1115,11 +1238,34 @@ async function leaveRoom(payload, openid) {
       const leavingSoloHost = isSoloRoom && (memberId === room.hostMemberId || room.createdByOpenId === openid);
 
       if (leavingSoloHost) {
-        const activeMembers = await getActiveRoomMembers(roomId);
-        const expiredSoloRoom = await expireSoloRoomWithVirtualMembers(room, activeMembers, openid, updatedAt);
-
-        if (expiredSoloRoom) {
-          await clearActiveRoomForProfile(openid, updatedAt);
+        const canExpireSoloRoom =
+          activeMembers.length > 0 &&
+          activeMembers.every((item) => getMemberOpenId(item) === openid || item.isVirtual);
+        if (canExpireSoloRoom) {
+          for (const activeMember of activeMembers) {
+            await transaction.collection("room_members").doc(getMemberId(activeMember)).update({
+              data: {
+                memberStatus: "left",
+                isHost: false,
+                isReady: false,
+                leftAt: updatedAt,
+                updatedAt,
+                lastSeenAt: updatedAt,
+              },
+            });
+          }
+          await roomRef.update({
+            data: {
+              status: "expired",
+              playerCount: 0,
+              hostMemberId: null,
+              expireAt: updatedAt,
+              updatedAt,
+              version: (room.version || 1) + 1,
+            },
+          });
+          await clearActiveRoomForProfileInTransaction(transaction, openid, updatedAt);
+          expiredRoomForCleanup = room;
 
           return ok({
             roomId,
@@ -1133,7 +1279,7 @@ async function leaveRoom(payload, openid) {
         }
       }
 
-      await db.collection("room_members").doc(memberId).update({
+      await transaction.collection("room_members").doc(memberId).update({
         data: {
           memberStatus: "offline",
           updatedAt,
@@ -1141,7 +1287,7 @@ async function leaveRoom(payload, openid) {
         },
       });
 
-      await clearActiveRoomForProfile(openid, updatedAt);
+      await clearActiveRoomForProfileInTransaction(transaction, openid, updatedAt);
 
       return ok({
         roomId,
@@ -1154,9 +1300,10 @@ async function leaveRoom(payload, openid) {
       });
     }
 
-    await db.collection("room_members").doc(memberId).update({
+    await transaction.collection("room_members").doc(memberId).update({
       data: {
         memberStatus: "left",
+        isHost: false,
         isReady: false,
         leftAt: updatedAt,
         updatedAt,
@@ -1164,24 +1311,21 @@ async function leaveRoom(payload, openid) {
       },
     });
 
-    await clearActiveRoomForProfile(openid, updatedAt);
-
-    const remainingMembers = (await getActiveRoomMembers(roomId)).filter((item) => getMemberId(item) !== memberId);
+    await clearActiveRoomForProfileInTransaction(transaction, openid, updatedAt);
+    const remainingMembers = activeMembers.filter((item) => getMemberId(item) !== memberId);
 
     if (!remainingMembers.length) {
-      const assetStats = await deleteRoomAssets(room);
-
-      await db.collection("rooms").doc(roomId).update({
+      await roomRef.update({
         data: {
           status: "expired",
           playerCount: 0,
           hostMemberId: null,
           expireAt: updatedAt,
-          assetFileIds: assetStats.remainingFileIds,
           updatedAt,
-          version: _.inc(1),
+          version: (room.version || 1) + 1,
         },
       });
+      expiredRoomForCleanup = room;
 
       return ok({
         roomId,
@@ -1194,32 +1338,27 @@ async function leaveRoom(payload, openid) {
       });
     }
 
-    let newHostMemberId = room.hostMemberId;
-    const leavingWasHost = memberId === room.hostMemberId || member.isHost;
-    if (leavingWasHost) {
-      newHostMemberId = getMemberId(remainingMembers[0]);
+    const currentHostStillActive = remainingMembers.some(
+      (remainingMember) => getMemberId(remainingMember) === room.hostMemberId,
+    );
+    const newHostMemberId = currentHostStillActive ? room.hostMemberId : getMemberId(remainingMembers[0]);
+    const hostChanged = newHostMemberId !== room.hostMemberId;
+    for (let index = 0; index < remainingMembers.length; index += 1) {
+      const remainingMember = remainingMembers[index];
+      await transaction.collection("room_members").doc(getMemberId(remainingMember)).update({
+        data: {
+          seatIndex: index + 1,
+          isHost: getMemberId(remainingMember) === newHostMemberId,
+          updatedAt,
+        },
+      });
     }
 
-    await Promise.all(
-      remainingMembers.map((remainingMember, index) =>
-        db
-          .collection("room_members")
-          .doc(getMemberId(remainingMember))
-          .update({
-            data: {
-              seatIndex: index + 1,
-              isHost: getMemberId(remainingMember) === newHostMemberId,
-              updatedAt,
-            },
-          }),
-      ),
-    );
-
-    await db.collection("rooms").doc(roomId).update({
+    await roomRef.update({
       data: {
         hostMemberId: newHostMemberId,
         playerCount: remainingMembers.length,
-        version: _.inc(1),
+        version: (room.version || 1) + 1,
         updatedAt,
       },
     });
@@ -1229,11 +1368,17 @@ async function leaveRoom(payload, openid) {
       roomStatus: "lobby",
       memberId,
       leaveMode: "removed_from_lobby",
-      newHostMemberId: leavingWasHost ? newHostMemberId : null,
+      newHostMemberId: hostChanged ? newHostMemberId : null,
       roomExpired: false,
       routeHint: "home",
     });
   });
+
+  if (response.success && expiredRoomForCleanup) {
+    await cleanupExpiredRoomAssets(expiredRoomForCleanup);
+  }
+
+  return response;
 }
 
 async function setReady(payload, openid) {
