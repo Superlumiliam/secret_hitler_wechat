@@ -1338,6 +1338,13 @@ function buildResultTimeline(publicHistory) {
       type: item.type || "",
       title: item.title || "",
       summary: item.summary || "",
+      votes:
+        item.type === "VOTES_REVEALED"
+          ? (item.votes || []).map((vote) => ({
+              memberId: vote.memberId || "",
+              vote: vote.vote || "",
+            }))
+          : [],
       createdAt: toIsoString(item.createdAt),
     }));
 }
@@ -2271,6 +2278,7 @@ async function submitCommand(payload, openid) {
               ...nextGameCore,
               status,
               phase,
+              round: phase === "nomination" ? (gameCore.round || 1) + 1 : gameCore.round,
               currentPresidentCandidateId: nextPresidentCandidateId,
               currentChancellorCandidateId: null,
               currentPresidentId: null,
@@ -2322,6 +2330,7 @@ async function submitCommand(payload, openid) {
             status: nextGameCore.status,
             version: nextGameCore.version,
             eventSeq: nextGameCore.eventSeq,
+            round: nextGameCore.round,
             phase: nextGameCore.phase,
             currentPresidentCandidateId: nextGameCore.currentPresidentCandidateId,
             currentChancellorCandidateId: nextGameCore.currentChancellorCandidateId,

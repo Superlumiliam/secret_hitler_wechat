@@ -1106,6 +1106,22 @@ function assertResultSnapshotProjection() {
         summary: "玩家1 处决了 玩家5，独裁者被处决，自由派获胜",
         createdAt: "2026-05-12T00:07:59.000Z",
       },
+      {
+        eventId: "evt_result_2",
+        round: 2,
+        phase: "voting",
+        type: "VOTES_REVEALED",
+        title: "政府投票揭示",
+        summary: "政府投票公开：2 票赞成，3 票反对，政府未通过",
+        votes: [
+          { memberId: "mem_1", vote: "JA" },
+          { memberId: "mem_2", vote: "JA" },
+          { memberId: "mem_3", vote: "NEIN" },
+          { memberId: "mem_4", vote: "NEIN" },
+          { memberId: "mem_5", vote: "NEIN" },
+        ],
+        createdAt: "2026-05-12T00:03:00.000Z",
+      },
     ],
     new Date("2026-05-12T00:08:00.000Z"),
     "mem_1",
@@ -1118,6 +1134,17 @@ function assertResultSnapshotProjection() {
   assert.strictEqual(result.finalPlayers.length, 5, "result snapshot should include all final players");
   assert(result.finalPlayers.every((player) => player.role && player.party), "result snapshot should reveal final identities");
   assert.strictEqual(result.timeline[0].type, "EXEC_PLAYER_EXECUTED", "result snapshot should include key timeline events");
+  assert.deepStrictEqual(
+    result.timeline[1].votes,
+    [
+      { memberId: "mem_1", vote: "JA" },
+      { memberId: "mem_2", vote: "JA" },
+      { memberId: "mem_3", vote: "NEIN" },
+      { memberId: "mem_4", vote: "NEIN" },
+      { memberId: "mem_5", vote: "NEIN" },
+    ],
+    "result timeline should preserve the revealed vote pattern",
+  );
 }
 
 function assertRoomTtlPolicies() {

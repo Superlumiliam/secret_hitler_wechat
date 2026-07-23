@@ -130,9 +130,120 @@ async function assertResultSnapshotUsesEndedPublicProjection() {
   );
 }
 
+async function assertFailedElectionKeepsRevealedBallotsInHistory() {
+  const db = createMemoryDb();
+  const { service, setOpenId } = loadGameService({ db, openId: "openid_1" });
+  const members = makeMembers(5, "room_failed_vote");
+  const room = {
+    _id: "room_failed_vote",
+    roomId: "room_failed_vote",
+    roomCode: "100003",
+    status: "in_game",
+    currentGameId: "game_failed_vote",
+    expireAt: "2099-01-01T00:00:00.000Z",
+  };
+  const projection = service.__testHooks.createInitialGameProjection(room, members, {
+    gameId: "game_failed_vote",
+    createdAt: new Date("2026-05-12T00:00:00.000Z"),
+    pickIndex: () => 0,
+  });
+  const votingCore = {
+    ...projection.gameCore,
+    version: 2,
+    eventSeq: 3,
+    phase: "voting",
+    currentPresidentCandidateId: "mem_1",
+    currentChancellorCandidateId: "mem_2",
+    phaseData: {
+      presidentCandidateId: "mem_1",
+      chancellorCandidateId: "mem_2",
+      votesByMemberId: {},
+    },
+  };
+  const publicHistory = projection.publicSnapshotPayload.publicState.publicHistory.concat({
+    eventId: "evt_game_failed_vote_3",
+    round: 1,
+    phase: "nomination",
+    type: "CHANCELLOR_NOMINATED",
+    title: "总理候选人提名",
+    summary: "玩家1 提名 玩家2 为总理候选人",
+    createdAt: "2026-05-12T00:01:00.000Z",
+    presidentId: "mem_1",
+    chancellorId: "mem_2",
+  });
+  const publicPayload = service.__testHooks.buildPublicSnapshotPayload(
+    room,
+    votingCore,
+    members,
+    publicHistory,
+    new Date("2026-05-12T00:01:00.000Z"),
+  );
+
+  await db.collection("rooms").doc(room.roomId).set({ data: room });
+  await db.collection("game_core").doc(votingCore.gameId).set({ data: votingCore });
+  await db.collection("room_public_snapshots").doc(room.roomId).set({
+    data: {
+      _id: room.roomId,
+      roomId: room.roomId,
+      snapshotType: "game_public",
+      version: votingCore.version,
+      payload: publicPayload,
+    },
+  });
+  for (const member of members) {
+    await db.collection("room_members").doc(member.memberId).set({ data: member });
+    await db.collection("player_private_snapshots").doc(member.memberId).set({
+      data: {
+        _id: member.memberId,
+        roomId: room.roomId,
+        version: votingCore.version,
+        payload: {},
+      },
+    });
+  }
+
+  const ballots = ["JA", "JA", "NEIN", "NEIN", "NEIN"];
+  let expectedVersion = votingCore.version;
+  for (let index = 0; index < members.length; index += 1) {
+    setOpenId(members[index].openId);
+    const response = await service.main({
+      action: "submitCommand",
+      payload: {
+        roomId: room.roomId,
+        type: "SUBMIT_VOTE",
+        expectedVersion,
+        commandId: `cmd_failed_vote_${index + 1}`,
+        body: {
+          vote: ballots[index],
+        },
+      },
+    });
+    assert.strictEqual(response.success, true, `ballot ${index + 1} should be accepted`);
+    expectedVersion = response.data.newVersion;
+  }
+
+  const stored = db.dump();
+  const settledCore = stored.game_core[votingCore.gameId];
+  const settledPublicState = stored.room_public_snapshots[room.roomId].payload.publicState;
+  const failedRound = settledPublicState.history.rounds.find((round) => round.round === 1);
+  const nextRound = settledPublicState.history.rounds.find((round) => round.round === 2);
+
+  assert.strictEqual(settledCore.round, 2, "failed election should advance to the next round");
+  assert.strictEqual(settledCore.phase, "nomination", "failed election should return to nomination");
+  assert.strictEqual(failedRound.status, "vote_failed", "failed government should remain in round history");
+  assert.strictEqual(failedRound.voteSummary.revealed, true, "failed election ballots should stay revealed");
+  assert.deepStrictEqual(
+    failedRound.votes.map((vote) => vote.state),
+    ["ja", "ja", "nein", "nein", "nein"],
+    "failed election history should preserve each seat's ballot",
+  );
+  assert.strictEqual(nextRound.status, "nominating", "the next nomination should use a separate round record");
+}
+
 (async () => {
   await assertResultSnapshotBlockedBeforeGameEnds();
   await assertResultSnapshotUsesEndedPublicProjection();
+  await assertFailedElectionKeepsRevealedBallotsInHistory();
   console.log("gameService result snapshot integration tests passed");
 })().catch((err) => {
   console.error(err);

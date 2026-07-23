@@ -52,6 +52,27 @@ function createTimelineNameReplacer(players) {
   };
 }
 
+function createTimelineVoteRows(item, players) {
+  if (!item || item.type !== "VOTES_REVEALED") {
+    return [];
+  }
+
+  const playerById = Object.fromEntries(players.map((player) => [player.memberId, player]));
+  return (item.votes || [])
+    .filter((ballot) => ballot.vote === "JA" || ballot.vote === "NEIN")
+    .map((ballot) => {
+      const player = playerById[ballot.memberId] || {};
+      const vote = ballot.vote;
+      return {
+        memberId: ballot.memberId,
+        seatIndex: player.seatIndex || 0,
+        mark: vote === "JA" ? "✔" : "×",
+        cellClass: `timeline-vote-cell is-${vote.toLowerCase()}`,
+      };
+    })
+    .sort((a, b) => a.seatIndex - b.seatIndex);
+}
+
 function mapResultSnapshot(snapshot, assets = {}) {
   const policySummary = snapshot.policySummary || {};
   const finalPlayers = snapshot.finalPlayers || [];
@@ -102,13 +123,18 @@ function mapResultSnapshot(snapshot, assets = {}) {
           .filter(Boolean)
           .join(" "),
       })),
-    timeline: timeline.map((item) => ({
-      ...item,
-      title: replaceTimelineNames(item.title),
-      summary: replaceTimelineNames(item.summary),
-      timeText: formatTime(item.createdAt),
-      roundText: `第 ${item.round || 1} 轮`,
-    })),
+    timeline: timeline.map((item) => {
+      const voteRows = createTimelineVoteRows(item, finalPlayers);
+      return {
+        ...item,
+        title: replaceTimelineNames(item.title),
+        summary: replaceTimelineNames(item.summary),
+        timeText: formatTime(item.createdAt),
+        roundText: `第 ${item.round || 1} 轮`,
+        showVotePattern: voteRows.length > 0,
+        voteRows,
+      };
+    }),
   };
 }
 

@@ -88,6 +88,21 @@
           <view class="timeline-meta">{{item.roundText}} · {{item.timeText}}</view>
           <view class="timeline-title">{{item.title}}</view>
           <view class="timeline-summary">{{item.summary}}</view>
+          <view
+            wx:if="{{item.showVotePattern}}"
+            class="timeline-vote-strip"
+            style="grid-template-columns: repeat({{item.voteRows.length}}, minmax(0, 1fr));"
+          >
+            <view
+              wx:for="{{item.voteRows}}"
+              wx:for-item="voteItem"
+              wx:key="memberId"
+              class="{{voteItem.cellClass}}"
+            >
+              <view class="timeline-vote-seat">{{voteItem.seatIndex}}号</view>
+              <view class="timeline-vote-mark">{{voteItem.mark}}</view>
+            </view>
+          </view>
         </view>
       </view>
     </view>

@@ -1230,6 +1230,7 @@ interface RoundHistoryViewModel {
 - 展示胜利原因
 - 展示最终身份
 - 展示关键回合时间线
+- 展示每次已公开政府投票的逐席票型，包括未通过的政府
 
 ### `data` 字段
 
@@ -1634,10 +1635,16 @@ interface ResultSnapshot {
     type: string
     title: string
     summary: string
+    votes: Array<{
+      memberId: string
+      vote: 'JA' | 'NEIN'
+    }>
     createdAt: string
   }>
 }
 ```
+
+`timeline[].votes` 是必填固定字段：`VOTES_REVEALED` 事件按 `finalPlayers.seatIndex` 映射并展示逐席票型，失败选举与通过选举都必须保留；其他事件返回空数组。尚未公开的单人票不得进入结果快照或结果页。
 
 ## 16.4 `allowedActions` 的处理结论
 

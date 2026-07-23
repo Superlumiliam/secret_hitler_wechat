@@ -605,10 +605,27 @@ interface PublicHistoryProjection {
       "eventId": "evt_game_xxx_32",
       "round": 6,
       "phase": "executive_action",
-      "type": "PLAYER_EXECUTED",
+      "type": "EXEC_PLAYER_EXECUTED",
       "title": "总统处决玩家",
       "summary": "玩家A 处决了 玩家E，系统判定独裁者被处决，自由派获胜",
+      "votes": [],
       "createdAt": "2026-04-12T13:29:58.000Z"
+    },
+    {
+      "eventId": "evt_game_xxx_12",
+      "round": 2,
+      "phase": "voting",
+      "type": "VOTES_REVEALED",
+      "title": "政府投票揭示",
+      "summary": "政府投票公开：2 票赞成，3 票反对，政府未通过",
+      "votes": [
+        { "memberId": "mem_1", "vote": "JA" },
+        { "memberId": "mem_2", "vote": "JA" },
+        { "memberId": "mem_3", "vote": "NEIN" },
+        { "memberId": "mem_4", "vote": "NEIN" },
+        { "memberId": "mem_5", "vote": "NEIN" }
+      ],
+      "createdAt": "2026-04-12T12:18:00.000Z"
     }
   ]
 }
@@ -619,6 +636,8 @@ interface PublicHistoryProjection {
 - `winner` 只允许为 `LIBERAL` 或 `FASCIST`
 - `winReason` 必须使用枚举，不能直接返回展示文案
 - `timeline` 只记录复盘所需关键节点
+- `timeline[].votes` 为固定数组；仅 `type === VOTES_REVEALED` 时包含本轮所有实际投票玩家的 `{ memberId, vote }`，`vote` 只允许为 `JA` 或 `NEIN`，其他事件返回空数组
+- `timeline[].votes` 只能来自已经完成并公开的政府投票；失败选举与通过选举均须保留完整票型，未公开投票不得进入结果快照
 - `expireAt` 为游戏结束后固定 30 分钟的服务端过期时间
 
 ## 5. `bootstrapService` 详细接口
