@@ -34,7 +34,7 @@
     </view>
 
     <view class="room-meta">目标 {{lobby.targetPlayerCount}} 人 · 当前 {{lobby.playerCount}} 人 · 准备 {{readyPlayerCount}} 人</view>
-    <view class="lobby-seat-hint">{{lobby.isSoloRoom ? '双击空席可换座。' : '双击空席可换座；长按空席后点击邀请好友。'}}座位先到先得。</view>
+    <view class="lobby-seat-hint">{{lobby.isSoloRoom ? '双击空席可换座。' : '双击空席可换座；长按空席后点击邀请好友。'}}</view>
 
     <view wx:if="{{lobby.isSoloRoom}}" class="solo-panel">
       <view class="solo-label">单人模式</view>
@@ -67,6 +67,7 @@
             class="seat-body empty-seat-control"
             bindtap="onTapEmptySeat"
             bindlongpress="onLongPressEmptySeat"
+            hover-class="none"
             data-seat-index="{{item.seatIndex}}"
             role="button"
             aria-label="{{seatChangeSubmitting ? '正在换座' : (lobby.isSoloRoom ? '双击换到该空席' : '双击换到该空席，长按邀请好友')}}"
@@ -79,6 +80,7 @@
             class="seat-share-action"
             open-type="share"
             catchtap="onShareEmptySeat"
+            hover-class="none"
             aria-label="邀请好友"
           >邀请好友</button>
         </block>
