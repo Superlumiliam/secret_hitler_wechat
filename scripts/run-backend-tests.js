@@ -9,6 +9,7 @@ const testFiles = [
   "tests/backend/gameService/ruleScenarios.test.js",
   "tests/backend/gameService/resultSnapshot.integration.test.js",
   "tests/backend/roomService/isolation.test.js",
+  "tests/backend/roomService/claimLobbySeat.test.js",
   "tests/backend/roomService/joinRoomConcurrency.test.js",
   "tests/backend/roomService/roomLifecycleConcurrency.test.js",
   "tests/backend/commandRecords.performance.test.js",

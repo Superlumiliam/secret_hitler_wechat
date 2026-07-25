@@ -11,6 +11,7 @@ const LOBBY_ASSET_FILE_IDS = {
 const LOBBY_POLL_INTERVAL_MS = 3000;
 const LOBBY_RECONCILE_INTERVAL_MS = 10 * 1000;
 const PRESENCE_TOUCH_INTERVAL_MS = 60 * 1000;
+const EMPTY_SEAT_DOUBLE_TAP_INTERVAL_MS = 300;
 const {
   LOBBY_PAGE_TIMEOUT_MS,
   clearPageTimeout,
@@ -33,6 +34,7 @@ const REFRESH_AFTER_ERROR_CODES = [
   "NOT_ROOM_HOST",
   "NOT_ALL_READY",
   "GAME_ALREADY_STARTED",
+  "SEAT_OCCUPIED",
 ];
 
 function createCommandId(prefix) {
@@ -69,9 +71,10 @@ function createServiceError(result, fallbackMessage) {
     ROOM_EXPIRED: "房间已过期",
     NOT_ROOM_MEMBER: "当前用户不在房间中",
     NOT_ROOM_HOST: "只有房主可执行该操作",
-    TARGET_COUNT_BELOW_SEATED: "选择人数小于已落座玩家数",
+    TARGET_COUNT_BELOW_SEATED: "选择人数不能小于当前最高座位号",
     NOT_ALL_READY: "还有玩家未准备",
     GAME_ALREADY_STARTED: "对局已开始，正在为你恢复",
+    SEAT_OCCUPIED: "该座位已被其他玩家占用",
     ACTION_NOT_ALLOWED: "当前状态不允许执行该操作",
     INTERNAL_ERROR: "系统繁忙，请稍后重试",
   };
@@ -155,6 +158,8 @@ Page({
   pendingSyncSequence: 0,
   syncSignalCatchUpPromise: null,
   lastPresenceTouchAt: 0,
+  lastEmptySeatTap: null,
+  ignoreEmptySeatTapUntil: 0,
 
   data: {
     roomId: "",
@@ -165,6 +170,8 @@ Page({
     isJoiningFromShare: false,
     isSubmitting: false,
     isSoloActionSubmitting: false,
+    seatChangeSubmitting: false,
+    inviteSeatIndex: null,
     isLeaving: false,
     defaultAvatarSrc: "",
     backgroundSrc: "",
@@ -186,6 +193,8 @@ Page({
     this.syncSignalCatchUpPromise = null;
     this.syncSignalWatcher = null;
     this.lastPresenceTouchAt = 0;
+    this.lastEmptySeatTap = null;
+    this.ignoreEmptySeatTapUntil = 0;
     const roomId = options.roomId || "";
     const shareRoomCode = parseRoomCode(options.roomCode);
     const initialLobby = takeInitialLobbySnapshot(roomId);
@@ -453,6 +462,7 @@ Page({
         return {
           seatIndex,
           isEmpty: true,
+          isInviteArmed: this.data.inviteSeatIndex === seatIndex,
           displayName: "邀请好友",
           avatarSrc: this.data.defaultAvatarSrc,
           roleLabel: "",
@@ -506,35 +516,64 @@ Page({
 
   async hydrateLobby(lobby) {
     const lobbyView = normalizeLobbyView(lobby);
+    if (!this.shouldApplyLobbySnapshot(lobbyView)) {
+      return false;
+    }
     const cloudFileIds = ((lobbyView && lobbyView.seatOrder) || [])
       .map((member) => member.avatarUrl)
       .filter((avatarUrl) => isCloudFileId(avatarUrl));
 
     if (!cloudFileIds.length || !wx.cloud) {
+      if (!this.shouldApplyLobbySnapshot(lobbyView)) {
+        return false;
+      }
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView),
         readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
-      return;
+      return true;
     }
 
     try {
       const avatarUrlByFileId = await resolveTempFileUrls(cloudFileIds);
 
+      if (!this.shouldApplyLobbySnapshot(lobbyView)) {
+        return false;
+      }
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView, avatarUrlByFileId),
         readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
+      return true;
     } catch (err) {
       console.error("大厅头像临时链接获取失败", err);
+      if (!this.shouldApplyLobbySnapshot(lobbyView)) {
+        return false;
+      }
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView),
         readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
+      return true;
     }
+  },
+
+  shouldApplyLobbySnapshot(nextLobby) {
+    const currentLobby = this.data.lobby;
+    if (!currentLobby || !nextLobby || currentLobby.roomId !== nextLobby.roomId) {
+      return true;
+    }
+
+    const currentVersion = Number(currentLobby.version);
+    const nextVersion = Number(nextLobby.version);
+    return !(
+      Number.isFinite(currentVersion) &&
+      Number.isFinite(nextVersion) &&
+      nextVersion < currentVersion
+    );
   },
 
   async loadLobbySnapshot(options = {}) {
@@ -858,6 +897,105 @@ Page({
 
   shouldRefreshAfterError(err) {
     return Boolean(err && (err.retryable || REFRESH_AFTER_ERROR_CODES.includes(err.code)));
+  },
+
+  setInviteSeatIndex(inviteSeatIndex) {
+    this.setData({
+      inviteSeatIndex,
+      seats: (this.data.seats || []).map((seat) => ({
+        ...seat,
+        isInviteArmed: Boolean(seat.isEmpty && seat.seatIndex === inviteSeatIndex),
+      })),
+    });
+  },
+
+  clearEmptySeatInteraction() {
+    this.lastEmptySeatTap = null;
+    this.ignoreEmptySeatTapUntil = 0;
+    if (this.data.inviteSeatIndex !== null) {
+      this.setInviteSeatIndex(null);
+    }
+  },
+
+  onTapEmptySeat(event) {
+    const seatIndex = Number(event.currentTarget.dataset.seatIndex);
+    const tappedAt = Date.now();
+    if (
+      this.data.seatChangeSubmitting ||
+      !Number.isInteger(seatIndex) ||
+      tappedAt < this.ignoreEmptySeatTapUntil
+    ) {
+      return;
+    }
+
+    if (this.data.inviteSeatIndex === seatIndex) {
+      this.setInviteSeatIndex(null);
+      this.lastEmptySeatTap = null;
+      return;
+    }
+    if (this.data.inviteSeatIndex !== null) {
+      this.setInviteSeatIndex(null);
+    }
+
+    const lastTap = this.lastEmptySeatTap;
+    if (lastTap && lastTap.seatIndex === seatIndex && tappedAt - lastTap.tappedAt <= EMPTY_SEAT_DOUBLE_TAP_INTERVAL_MS) {
+      this.lastEmptySeatTap = null;
+      this.claimLobbySeat(seatIndex);
+      return;
+    }
+    this.lastEmptySeatTap = {
+      seatIndex,
+      tappedAt,
+    };
+  },
+
+  onLongPressEmptySeat(event) {
+    const seatIndex = Number(event.currentTarget.dataset.seatIndex);
+    if (this.data.seatChangeSubmitting || (this.data.lobby && this.data.lobby.isSoloRoom) || !Number.isInteger(seatIndex)) {
+      return;
+    }
+    this.lastEmptySeatTap = null;
+    this.ignoreEmptySeatTapUntil = Date.now() + EMPTY_SEAT_DOUBLE_TAP_INTERVAL_MS;
+    this.setInviteSeatIndex(seatIndex);
+  },
+
+  onShareEmptySeat() {
+    this.clearEmptySeatInteraction();
+  },
+
+  async claimLobbySeat(targetSeatIndex) {
+    if (!this.data.lobby || this.data.seatChangeSubmitting) {
+      return;
+    }
+
+    this.clearEmptySeatInteraction();
+    this.setData({
+      seatChangeSubmitting: true,
+    });
+    try {
+      const snapshot = await this.callRoomService("claimLobbySeat", {
+        commandId: createCommandId("claim_lobby_seat"),
+        roomId: this.data.roomId,
+        targetSeatIndex,
+      });
+      await this.hydrateLobby(snapshot);
+    } catch (err) {
+      console.error("大厅换座失败", err);
+      if (this.handleRoomUnavailable(err)) {
+        return;
+      }
+      wx.showToast({
+        title: err.message || "换座失败",
+        icon: "none",
+      });
+      if (this.shouldRefreshAfterError(err)) {
+        this.loadLobbySnapshot({ silent: true });
+      }
+    } finally {
+      this.setData({
+        seatChangeSubmitting: false,
+      });
+    }
   },
 
   handleRoomUnavailable(err) {

@@ -20,6 +20,7 @@ const ROOM_SYNC_WRITE_ACTIONS = new Set([
   "createRoom",
   "joinRoom",
   "leaveRoom",
+  "claimLobbySeat",
   "updateRoomSettings",
   "setReady",
   "soloCreateRoom",
@@ -684,7 +685,10 @@ function buildLobbySnapshotFromData(room, members, openid, context = null) {
 
   const roomId = room.roomId || room._id;
   const roomMode = room.mode || ROOM_MODE_NORMAL;
-  const activeMembers = members.filter(isActiveMember);
+  const activeMembers = members
+    .filter(isActiveMember)
+    .slice()
+    .sort((left, right) => Number(left.seatIndex) - Number(right.seatIndex));
   const myMember = activeMembers.find((member) => getMemberOpenId(member) === openid) || null;
   if (context) {
     context.viewerMember = myMember;
@@ -1427,6 +1431,81 @@ async function setReady(payload, openid) {
   });
 }
 
+async function claimLobbySeat(payload, openid) {
+  const roomId = payload && payload.roomId;
+  const targetSeatIndex = Number(payload && payload.targetSeatIndex);
+  if (!roomId || typeof roomId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+  if (!Number.isInteger(targetSeatIndex)) {
+    return fail("INVALID_PAYLOAD", "目标座位无效");
+  }
+
+  return withCommandTransaction(openid, payload, async (transaction) => {
+    const roomRef = transaction.collection("rooms").doc(roomId);
+    const room = await getTransactionDocument(roomRef);
+    if (!room) {
+      return fail("ROOM_NOT_FOUND", "房间不存在");
+    }
+    if (isRoomExpired(room)) {
+      return fail("ROOM_EXPIRED", "房间已过期");
+    }
+    if (room.status !== "lobby") {
+      return fail("GAME_ALREADY_STARTED", "房间已开局");
+    }
+    if (targetSeatIndex < 1 || targetSeatIndex > room.targetPlayerCount) {
+      return fail("INVALID_PAYLOAD", "目标座位无效");
+    }
+
+    const membersRes = await transaction
+      .collection("room_members")
+      .where({ roomId })
+      .orderBy("seatIndex", "asc")
+      .get();
+    const activeMembers = membersRes.data.filter(isActiveMember);
+    const member = activeMembers.find((item) => getMemberOpenId(item) === openid) || null;
+    if (!member || member.isVirtual) {
+      return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+    }
+    if (activeMembers.some((item) => item.seatIndex === targetSeatIndex)) {
+      return fail("SEAT_OCCUPIED", "目标座位已被占用");
+    }
+
+    const updatedAt = new Date();
+    const nextRoom = {
+      ...room,
+      version: (room.version || 1) + 1,
+      updatedAt,
+    };
+    const nextMembers = activeMembers.map((item) =>
+      getMemberId(item) === getMemberId(member)
+        ? {
+            ...item,
+            seatIndex: targetSeatIndex,
+            updatedAt,
+            lastSeenAt: updatedAt,
+          }
+        : item,
+    );
+
+    await transaction.collection("room_members").doc(getMemberId(member)).update({
+      data: {
+        seatIndex: targetSeatIndex,
+        updatedAt,
+        lastSeenAt: updatedAt,
+      },
+    });
+    await roomRef.update({
+      data: {
+        version: nextRoom.version,
+        updatedAt,
+      },
+    });
+
+    return ok(buildLobbySnapshotFromData(nextRoom, nextMembers, openid));
+  });
+}
+
 async function updateRoomSettings(payload, openid) {
   const roomId = payload && payload.roomId;
   const targetPlayerCount = Number(payload && payload.targetPlayerCount);
@@ -1441,9 +1520,9 @@ async function updateRoomSettings(payload, openid) {
     return fail("INVALID_PAYLOAD", "人数必须是 5-10 的整数");
   }
 
-  return withCommandIdempotency(openid, payload, async () => {
-    const roomRes = await db.collection("rooms").doc(roomId).get();
-    const room = roomRes.data;
+  return withCommandTransaction(openid, payload, async (transaction) => {
+    const roomRef = transaction.collection("rooms").doc(roomId);
+    const room = await getTransactionDocument(roomRef);
     if (!room) {
       return fail("ROOM_NOT_FOUND", "房间不存在");
     }
@@ -1454,7 +1533,13 @@ async function updateRoomSettings(payload, openid) {
       return fail("GAME_ALREADY_STARTED", "房间已开局");
     }
 
-    const member = await getRoomMember(roomId, openid);
+    const membersRes = await transaction
+      .collection("room_members")
+      .where({ roomId })
+      .orderBy("seatIndex", "asc")
+      .get();
+    const activeMembers = membersRes.data.filter(isActiveMember);
+    const member = activeMembers.find((item) => getMemberOpenId(item) === openid) || null;
     if (!member) {
       return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
     }
@@ -1462,21 +1547,30 @@ async function updateRoomSettings(payload, openid) {
       return fail("NOT_ROOM_HOST", "只有房主可以使用房间设置");
     }
 
-    const activeMembers = await getActiveRoomMembers(roomId);
-    if (targetPlayerCount < activeMembers.length) {
-      return fail("TARGET_COUNT_BELOW_SEATED", "选择人数小于已落座玩家数");
+    const highestOccupiedSeatIndex = activeMembers.reduce(
+      (highestSeatIndex, activeMember) => Math.max(highestSeatIndex, activeMember.seatIndex || 0),
+      0,
+    );
+    if (targetPlayerCount < activeMembers.length || targetPlayerCount < highestOccupiedSeatIndex) {
+      return fail("TARGET_COUNT_BELOW_SEATED", "选择人数不能小于当前最高座位号");
     }
 
     const updatedAt = new Date();
-    await db.collection("rooms").doc(roomId).update({
+    const nextRoom = {
+      ...room,
+      targetPlayerCount,
+      version: (room.version || 1) + 1,
+      updatedAt,
+    };
+    await roomRef.update({
       data: {
         targetPlayerCount,
-        version: _.inc(1),
+        version: nextRoom.version,
         updatedAt,
       },
     });
 
-    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
+    const lobbySnapshot = buildLobbySnapshotFromData(nextRoom, activeMembers, openid);
     return ok({
       roomId,
       roomStatus: "lobby",
@@ -1545,17 +1639,39 @@ async function soloCreateRoom(payload, openid) {
 
 async function soloFillVirtualPlayers(payload, openid) {
   const roomId = payload && payload.roomId;
-  return withCommandIdempotency(openid, payload, async () => {
-    const resolved = await assertSoloRoomHost(roomId, openid);
-    if (resolved.error) {
-      return resolved.error;
+  if (!roomId || typeof roomId !== "string") {
+    return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+
+  return withCommandTransaction(openid, payload, async (transaction) => {
+    const roomRef = transaction.collection("rooms").doc(roomId);
+    const room = await getTransactionDocument(roomRef);
+    if (!room) {
+      return fail("ROOM_NOT_FOUND", "房间不存在");
+    }
+    if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_SOLO) {
+      return fail("ACTION_NOT_ALLOWED", "当前房间不是单人模式房间");
+    }
+    if (room.status !== "lobby") {
+      return fail("ACTION_NOT_ALLOWED", "房间已开局");
+    }
+    if (isRoomExpired(room)) {
+      return fail("ROOM_EXPIRED", "房间已过期");
     }
 
-    const room = resolved.room;
-    const members = await getActiveRoomMembers(roomId);
+    const membersRes = await transaction
+      .collection("room_members")
+      .where({ roomId })
+      .orderBy("seatIndex", "asc")
+      .get();
+    const members = membersRes.data.filter(isActiveMember);
+    const member = members.find((item) => getMemberOpenId(item) === openid) || null;
+    if (!member || getMemberId(member) !== room.hostMemberId) {
+      return fail("ACTION_NOT_ALLOWED", "只有房主可以使用单人模式操作");
+    }
+
     if (members.length >= room.targetPlayerCount) {
-      const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
-      return ok(lobbySnapshot);
+      return ok(buildLobbySnapshotFromData(room, members, openid));
     }
 
     const occupiedSeats = members.map((member) => member.seatIndex);
@@ -1588,24 +1704,27 @@ async function soloFillVirtualPlayers(payload, openid) {
       });
     }
 
-    await Promise.all(
-      virtualMembers.map((member) =>
-        db.collection("room_members").doc(member.memberId).set({
-          data: member,
-        }),
-      ),
-    );
+    for (const virtualMember of virtualMembers) {
+      await transaction.collection("room_members").doc(virtualMember.memberId).set({
+        data: virtualMember,
+      });
+    }
 
-    await db.collection("rooms").doc(roomId).update({
+    const nextRoom = {
+      ...room,
+      playerCount: members.length + virtualMembers.length,
+      version: (room.version || 1) + 1,
+      updatedAt: createdAt,
+    };
+    await roomRef.update({
       data: {
-        playerCount: members.length + virtualMembers.length,
-        version: _.inc(1),
+        playerCount: nextRoom.playerCount,
+        version: nextRoom.version,
         updatedAt: createdAt,
       },
     });
 
-    const lobbySnapshot = await buildLobbySnapshot(roomId, openid);
-    return ok(lobbySnapshot);
+    return ok(buildLobbySnapshotFromData(nextRoom, members.concat(virtualMembers), openid));
   });
 }
 
@@ -1716,6 +1835,8 @@ async function dispatchAction(action, payload, openid) {
       return await leaveRoom(payload, openid);
     case "getLobbySnapshot":
       return await getLobbySnapshot(payload, openid);
+    case "claimLobbySeat":
+      return await claimLobbySeat(payload, openid);
     case "updateRoomSettings":
       return await updateRoomSettings(payload, openid);
     case "setReady":

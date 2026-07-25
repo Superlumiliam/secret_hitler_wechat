@@ -600,6 +600,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 - `leaveRoom(roomId)`
 - `getLobbySnapshot(roomId)`
 - `updateRoomSettings(roomId, targetPlayerCount)`
+- `claimLobbySeat(roomId, targetSeatIndex)`
 - `setReady(roomId, ready)`
 
 补充约束：
@@ -608,7 +609,7 @@ export async function callWriteAction<TInput extends Record<string, unknown>, TO
 - `createRoom`、`joinRoom` 成功后直接返回 `lobbySnapshot`
 - `createRoom`、`joinRoom` 前端必须先确认本地用户资料已完成；若使用自定义头像，应先上传为房间临时头像，再在请求中携带 `displayName/avatarUrl`，后端只校验并保存到当前房间成员快照
 - 房间临时头像建议使用可归属到房间的云路径，例如 `room_assets/{roomId}/avatars/{memberId或openid}_{timestamp}.jpg`；创建 / 加入房间前未知 `roomId` 时可先使用 `room_assets/pending/{commandId}/...`，由后端在成功创建或加入后关联到房间清理清单
-- `updateSeatOrder(roomId, orderedMemberIds)` 属于 P1 座位管理扩展，MVP 前端不接入
+- `claimLobbySeat` 属于大厅写操作，必须经 `callWriteAction` 自动携带 `commandId`；`updateSeatOrder(roomId, orderedMemberIds)` 仍属于 P1 座位管理扩展，MVP 前端不接入
 
 ### 9.4 `gameService`
 
@@ -962,7 +963,7 @@ interface CreateRoomPageData {
 5. 从大厅“房间设置”进入时使用 `mode=roomSettings&roomId=...`，页面只作为当前房间的设置视图，不创建新房间，不调用 `leaveRoom`，不清理当前活跃房间状态。
 6. 房间设置模式 `onLoad` 先调用 `roomService.getLobbySnapshot(roomId)` 初始化当前目标人数与已落座人数；若当前用户不是房主，提示“只有房主能使用房间设置功能”后返回大厅。
 7. 房间设置模式下点击完成调用 `roomService.updateRoomSettings(roomId, playerCount)`；成功后 `wx.navigateBack` 回大厅页，大厅页使用返回的 `lobbySnapshot` 或立即补拉 `getLobbySnapshot` 更新席位数量。
-8. 房间设置模式下若选择人数小于已落座人数，前端应直接提示“选择人数小于已落座玩家数”；后端返回 `TARGET_COUNT_BELOW_SEATED` 时也映射为同一提示。
+8. 房间设置模式下若选择人数小于已落座人数或当前最高已占用座位号，前端应直接提示“选择人数不能小于当前最高座位号”；后端返回 `TARGET_COUNT_BELOW_SEATED` 时也映射为同一提示。
 
 ## 12.4 大厅页 `lobby`
 
@@ -989,7 +990,7 @@ interface LobbyPageData {
 
 ### 座位展示策略
 
-MVP 不支持房主调整座位，座位顺序由加入顺序初始化并在开局后锁定。大厅页只展示当前 `1-N` 座位、玩家名、准备状态与房主标识；后续 P1 座位管理再补充调整交互。
+大厅阶段允许当前真实用户成员认领空席；普通多人房间与单人模式复用同一规则，单人模式不移动虚拟玩家。空席双击（约 300ms）提交 `claimLobbySeat`，成功后使用服务端大厅快照重绘；同席争抢失败返回 `SEAT_OCCUPIED` 并刷新大厅。换座不改变准备状态。房主全量重排序仍为 P1 能力，开局后座位锁定。
 
 ### 大厅页按钮策略
 
@@ -1000,6 +1001,7 @@ MVP 不支持房主调整座位，座位顺序由加入顺序初始化并在开�
 - 房主点击“房间设置”时跳转到 `pages/create-room/index?mode=roomSettings&roomId=...`，该跳转只是视图切换，房主仍是房间成员，其他玩家大厅轮询中仍应看到房主在原座位
 - 房主点击开始前弹出确认弹窗，避免误开局
 - 确认后调用 `gameService.startGame(roomId)`；成功后根据 `routeHint` 进入对局桌面，并立即拉取 `gameService.getGameSnapshot(roomId)`
+- 普通多人房间的空席长按后进入邀请模式，再点击“邀请好友”触发微信 `open-type="share"`；单人模式不显示邀请入口；双击换座提交期间禁用全部空席交互
 
 ### 分享策略
 
@@ -1678,7 +1680,8 @@ interface ResultSnapshot {
 | `ROOM_NOT_JOINABLE` | 留在首页 | 房间当前不可加入 |
 | `NOT_ROOM_HOST` | 就地提示 | 只有房主可执行该操作 |
 | `NOT_ROOM_HOST`（房间设置上下文） | 就地提示后回大厅 | 只有房主能使用房间设置功能 |
-| `TARGET_COUNT_BELOW_SEATED` | 创建房间页房间设置模式提示 | 选择人数小于已落座玩家数 |
+| `TARGET_COUNT_BELOW_SEATED` | 创建房间页房间设置模式提示 | 选择人数不能小于当前最高座位号 |
+| `SEAT_OCCUPIED` | 大厅页提示并刷新 | 该座位已被其他玩家占用 |
 | `NOT_ALL_READY` | 大厅页提示 | 还有玩家未准备 |
 | `GAME_ALREADY_STARTED` | 跳转桌面页 | 对局已开始，正在为你恢复 |
 | `GAME_ALREADY_ENDED` | 跳转结果页 | 对局已结束 |

@@ -71,7 +71,7 @@ MVP 阶段固定为以下三类对外云函数：
 | 云函数 | 职责 | 允许 action |
 | --- | --- | --- |
 | `bootstrapService` | 会话初始化与活跃房间恢复 | `ensureSession`、`recoverActiveRoom`、`clearActiveRoom` |
-| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`updateRoomSettings`、`setReady` |
+| `roomService` | 大厅阶段与房间生命周期 | `createRoom`、`joinRoom`、`leaveRoom`、`getLobbySnapshot`、`claimLobbySeat`、`updateRoomSettings`、`setReady` |
 | `gameService` | 游戏开局、对局快照、命令处理、结果快照 | `startGame`、`getGameSnapshot`、`submitCommand`、`getResultSnapshot` |
 
 说明：
@@ -136,7 +136,7 @@ MVP 阶段固定为以下三类对外云函数：
 
 所有会改变状态的请求都必须带 `commandId`：
 
-- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`updateRoomSettings`、`setReady`
+- 大厅写操作：`createRoom`、`joinRoom`、`leaveRoom`、`claimLobbySeat`、`updateRoomSettings`、`setReady`
 - 游戏写操作：`startGame`、`submitCommand`
 
 用途：
@@ -259,7 +259,7 @@ MVP 阶段不要求前端在每个请求显式传 `apiVersion`，但后续如发
 
 字段约束：
 
-- `targetPlayerCount` 来自创建房间页选择，用于大厅席位数量、加入上限展示和开局前提示；大厅阶段房主可通过房间设置调整该值
+- `targetPlayerCount` 来自创建房间页选择，用于大厅席位数量、加入上限展示和开局前提示；大厅阶段房主可通过房间设置调整该值，且不得小于当前最高已占用座位号
 - `roomMode` 当前只暴露 `normal` 或 `solo`；对外文案中 `solo` 房间展示为“单人模式”
 - `seatOrder` 只包含当前有效大厅成员，MVP 顺序由加入顺序初始化
 - `viewerState` 由后端根据当前 openid 与房间成员即时派生，只存在于 API 响应，不写入数据库
@@ -841,7 +841,7 @@ interface PublicHistoryProjection {
 
 ### 6.1.1 单人模式专用 action 概览
 
-单人模式 action 只允许作用于 `mode: 'solo'` 的房间；普通 `mode: 'normal'` 房间必须拒绝虚拟玩家、席位切换和单人模式控制条能力。
+单人模式 action 只允许作用于 `mode: 'solo'` 的房间；普通 `mode: 'normal'` 房间必须拒绝虚拟玩家、基于 `controlledMemberId` 的单人控制席位能力和单人模式控制条。`claimLobbySeat` 是普通/单人大厅共用的空席认领 action，不属于单人控制席位能力。
 
 第一阶段需要以下专用 action：
 
@@ -995,7 +995,44 @@ interface PublicHistoryProjection {
 - `GAME_ALREADY_STARTED`
 - `INTERNAL_ERROR`
 
-## 6.5 `updateSeatOrder`（P1 扩展，MVP 不开放）
+## 6.5 `claimLobbySeat`
+
+用于大厅中的真实用户成员认领空席。普通多人房间与单人模式均可调用；单人模式只移动真实用户成员，虚拟玩家不能通过该接口移动。
+
+请求：
+
+```json
+{
+  "action": "claimLobbySeat",
+  "payload": {
+    "commandId": "cmd_claim_lobby_seat_xxx",
+    "roomId": "room_xxx",
+    "targetSeatIndex": 5
+  }
+}
+```
+
+成功响应：直接返回完整 `LobbyView`。
+
+约束：
+
+- 仅当前有效成员可调用，且仅大厅、未过期房间可调用
+- `targetSeatIndex` 必须是 `1..targetPlayerCount` 的整数，并且当前没有有效成员占用
+- 服务端在一个事务中重新读取房间与所有有效成员后裁决；同一空席被多人争抢时，先成功提交者获胜，其他请求返回 `SEAT_OCCUPIED`
+- 成功后仅修改调用者的 `seatIndex`、`updatedAt`、`lastSeenAt` 并递增房间版本；准备态、房主身份、成员资料与虚拟玩家座位保持不变
+
+主要失败错误码：
+
+- `INVALID_PAYLOAD`
+- `ROOM_NOT_FOUND`
+- `ROOM_EXPIRED`
+- `NOT_ROOM_MEMBER`
+- `GAME_ALREADY_STARTED`
+- `SEAT_OCCUPIED`
+- `DUPLICATE_COMMAND`
+- `INTERNAL_ERROR`
+
+## 6.6 `updateSeatOrder`（P1 扩展，MVP 不开放）
 
 说明：座位管理已调整为 P1 可扩展能力，MVP 不在前端暴露该 action，也不要求后端首期实现。以下协议仅作为后续扩展预留。
 
@@ -1044,7 +1081,7 @@ interface PublicHistoryProjection {
 - `ACTION_NOT_ALLOWED`
 - `INTERNAL_ERROR`
 
-## 6.6 `updateRoomSettings`
+## 6.7 `updateRoomSettings`
 
 `updateRoomSettings` 用于房主在大厅阶段调整房间席位数量。该操作只修改当前房间的 `targetPlayerCount`，不会创建新房间，不会变更 `roomCode`，不会重排或压缩已有 `seatIndex`。
 
@@ -1066,7 +1103,7 @@ interface PublicHistoryProjection {
 - `targetPlayerCount` 必须是 `5-10` 的整数
 - 当前用户必须是该房间有效成员且为房主
 - 房间必须仍处于 `lobby`
-- `targetPlayerCount` 不得小于当前有效成员数
+- `targetPlayerCount` 不得小于当前有效成员数，也不得小于当前最高已占用座位号
 
 成功响应：
 
@@ -1102,7 +1139,7 @@ interface PublicHistoryProjection {
 - `DUPLICATE_COMMAND`
 - `INTERNAL_ERROR`
 
-## 6.7 `setReady`
+## 6.8 `setReady`
 
 请求：
 
@@ -1578,7 +1615,8 @@ MVP 阶段统一使用以下错误码：
 | `NOT_ROOM_MEMBER` | `false` | 当前用户不是该房间有效成员 |
 | `NOT_ROOM_HOST` | `false` | 当前用户不是房主 |
 | `INVALID_PLAYER_COUNT` | `false` | 玩家人数不符合开局条件 |
-| `TARGET_COUNT_BELOW_SEATED` | `false` | 房间设置选择人数小于当前已落座玩家数 |
+| `TARGET_COUNT_BELOW_SEATED` | `false` | 房间设置选择人数小于当前有效成员数或最高已占用座位号 |
+| `SEAT_OCCUPIED` | `false` | 目标座位已被其他有效成员占用 |
 | `NOT_ALL_READY` | `false` | 大厅成员未全部准备 |
 | `GAME_NOT_STARTED` | `false` | 房间尚未开局 |
 | `GAME_ALREADY_STARTED` | `false` | 房间已经开局，不能做大厅操作 |

@@ -731,10 +731,11 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - `joinRoom`
 - `leaveRoom`
 - `getLobbySnapshot`
+- `claimLobbySeat`
 - `updateRoomSettings`
 - `setReady`
 
-说明：`updateSeatOrder` 属于 P1 座位管理扩展，MVP 不要求实现。
+说明：`claimLobbySeat` 允许真实用户成员认领空席；`updateSeatOrder` 仍属于 P1 座位管理扩展，MVP 不要求实现。
 
 统一约束：
 
@@ -803,9 +804,27 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 
 说明：MVP 不提供“恢复所有人已离线的房间”能力。房间是否可回到活跃态只以具体玩家自己的 `room_members.openId/memberId` 与房间过期规则为准；当大厅阶段所有玩家都退出后，房间立即失效。
 
-### 8.2.4 `updateSeatOrder`（P1 扩展，MVP 不实现）
+### 8.2.4 `claimLobbySeat`
 
-座位管理已降为 P1 可扩展能力。MVP 后端只按加入顺序生成与压缩 `seatIndex`，不开放调整座位 action。
+用于大厅中的真实用户成员认领空席，普通多人房间与单人模式均可使用。单人模式只移动真实用户成员，虚拟玩家不能通过该 action 移动。
+
+强校验：
+
+- 仅大厅且房间未过期
+- 当前 openid 必须对应一个有效的真实用户成员
+- `targetSeatIndex` 必须是 `1..targetPlayerCount` 的整数，且没有有效成员占用
+
+更新方式：
+
+- 使用单一事务重新读取 `rooms` 与全部有效 `room_members`
+- 同一空席被多人争抢时，以事务成功提交顺序裁决；失败方返回 `SEAT_OCCUPIED`，不重试认领
+- 单人模式的 `soloFillVirtualPlayers` 必须使用同一房间事务边界重新读取空席，避免与认领空席并发时创建重复座位
+- 仅更新调用者 `seatIndex`、`updatedAt`、`lastSeenAt`，保持准备态、房主身份、成员资料与虚拟成员座位不变
+- `rooms.version + 1`，即时组装并返回大厅视图响应
+
+### 8.2.5 `updateSeatOrder`（P1 扩展，MVP 不实现）
+
+MVP 已开放玩家通过 `claimLobbySeat` 认领空席；本节保留为 P1 的仅是房主提交完整成员顺序的全量重排序能力。除认领空席、加入补位和退出压缩外，后端不开放其他座位调整 action。
 
 强校验：
 
@@ -819,7 +838,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - `rooms.version + 1`
 - 即时组装并返回大厅视图响应
 
-### 8.2.5 `updateRoomSettings`
+### 8.2.6 `updateRoomSettings`
 
 用于大厅页房主调整当前房间席位数量。该操作只更新 `rooms.targetPlayerCount`，不创建新房间，不修改 `roomCode`，不修改 `room_members` 中已有成员与座位。
 
@@ -828,7 +847,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - 仅大厅
 - 仅房主
 - `targetPlayerCount` 必须是 `5-10` 的整数
-- `targetPlayerCount` 必须大于等于当前有效成员数；小于当前有效成员数时返回 `TARGET_COUNT_BELOW_SEATED`
+- `targetPlayerCount` 必须大于等于当前有效成员数和当前最高已占用座位号；不满足时返回 `TARGET_COUNT_BELOW_SEATED`
 
 更新方式：
 
@@ -844,7 +863,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 - 已落座玩家的 `memberId`、`seatIndex`、`isReady`、`memberStatus` 与头像昵称快照必须保持不变
 - 该操作不属于 P1 座位管理，不提供座位重排能力
 
-### 8.2.6 `setReady`
+### 8.2.7 `setReady`
 
 强校验：
 

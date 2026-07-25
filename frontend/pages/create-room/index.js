@@ -115,7 +115,7 @@ function createServiceError(result, fallbackMessage) {
     ROOM_EXPIRED: "房间已过期",
     NOT_ROOM_MEMBER: "当前用户不在房间中",
     NOT_ROOM_HOST: "只有房主能使用房间设置功能",
-    TARGET_COUNT_BELOW_SEATED: "选择人数小于已落座玩家数",
+    TARGET_COUNT_BELOW_SEATED: "选择人数不能小于当前最高座位号",
     GAME_ALREADY_STARTED: "对局已开始",
     ACTION_NOT_ALLOWED: "当前状态不允许执行该操作",
     INTERNAL_ERROR: "系统繁忙，请稍后重试",
@@ -187,6 +187,7 @@ Page({
     mode: "normal",
     roomId: "",
     seatedPlayerCount: 0,
+    highestOccupiedSeatIndex: 0,
     isSubmitting: false,
     isLoadingSettings: false,
     preloadedAvatars: [],
@@ -327,6 +328,10 @@ Page({
         roomId,
       });
       const seatedPlayerCount = Number(lobby.playerCount || ((lobby.seatOrder || []).length || 0));
+      const highestOccupiedSeatIndex = (lobby.seatOrder || []).reduce(
+        (highestSeatIndex, member) => Math.max(highestSeatIndex, Number(member.seatIndex) || 0),
+        0,
+      );
       if (!lobby.viewerState || !lobby.viewerState.isHost) {
         wx.showToast({
           title: "只有房主能使用房间设置功能",
@@ -342,6 +347,7 @@ Page({
       this.setData({
         selectedCount,
         seatedPlayerCount,
+        highestOccupiedSeatIndex,
         isLoadingSettings: false,
         ...buildRoleData(selectedCount, this.avatarUrlByFileId),
       });
@@ -365,9 +371,12 @@ Page({
       return;
     }
 
-    if (this.data.selectedCount < this.data.seatedPlayerCount) {
+    if (
+      this.data.selectedCount < this.data.seatedPlayerCount ||
+      this.data.selectedCount < this.data.highestOccupiedSeatIndex
+    ) {
       wx.showToast({
-        title: "选择人数小于已落座玩家数",
+        title: "选择人数不能小于当前最高座位号",
         icon: "none",
       });
       return;
