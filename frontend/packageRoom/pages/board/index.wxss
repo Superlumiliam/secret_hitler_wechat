@@ -1364,6 +1364,17 @@
   background: rgba(13, 18, 17, 0.9);
 }
 
+.vote-modal .policy-choice-row.is-two-cards {
+  grid-template-columns: repeat(2, 250rpx);
+  gap: 24rpx;
+}
+
+.vote-modal .policy-choice-card-image,
+.vote-modal .policy-choice-card-fallback {
+  max-width: 250rpx;
+  height: 380rpx;
+}
+
 .policy-choice-item.is-liberal .policy-choice-card-fallback {
   border-color: rgba(31, 204, 215, 0.66);
   box-shadow: inset 0 0 30rpx rgba(31, 204, 215, 0.16);
@@ -2109,17 +2120,11 @@
   opacity: 0.56;
 }
 
-.action-panel {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14rpx;
-}
-
-.vote-action {
+.vote-reopen-action {
   position: relative;
-  height: 74rpx;
   width: 100%;
-  min-width: 0;
+  height: 74rpx;
+  margin-bottom: 10rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2127,22 +2132,11 @@
   color: #041014;
   font-size: 25rpx;
   font-weight: 900;
-  letter-spacing: 0;
-  box-shadow: inset 0 0 22rpx rgba(255, 255, 255, 0.14), 0 0 22rpx rgba(0, 0, 0, 0.34);
   overflow: visible;
 }
 
-.vote-action.is-disabled {
-  opacity: 0.55;
-}
-
-.ja-action {
-  background: rgba(27, 213, 223, 0.16);
-}
-
-.nein-action {
-  color: #f2c088;
-  background: rgba(103, 25, 21, 0.36);
+.vote-reopen-action.is-disabled {
+  opacity: 0.56;
 }
 
 .secondary-actions {

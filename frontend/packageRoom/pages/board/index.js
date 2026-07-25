@@ -90,6 +90,8 @@ Page({
     statusText: "",
     phaseHintText: "",
     canVote: false,
+    voteModalVisible: false,
+    voteModalTaskKey: "",
     voteProgressText: "",
     voteResult: null,
     voteResultModalVisible: false,
@@ -606,6 +608,19 @@ Page({
     const voteResultModalVisible = Boolean(
       voteResult && currentVoteResultKey && currentVoteResultKey !== confirmedVoteResultKey,
     );
+    const pendingTask = snapshot.pendingTask || {};
+    const canVote = pendingTask.taskType === "SUBMIT_VOTE";
+    const voteModalTaskKey = canVote
+      ? [
+          snapshot.roomId || this.data.roomId || "",
+          "voting",
+          snapshot.round || "",
+          snapshot.myMemberId || snapshot.realMemberId || this.data.controlledMemberId || "",
+        ].join(":")
+      : "";
+    const voteModalVisible = canVote && (
+      this.data.voteModalTaskKey !== voteModalTaskKey || this.data.voteModalVisible
+    );
     const investigationResult = this.createInvestigationResult(snapshot, policyAssetUrlByKey);
     const investigationReveal = this.createInvestigationReveal(snapshot, policyAssetUrlByKey);
     const identityIntroReveal = this.createIdentityIntroReveal(snapshot, policyAssetUrlByKey);
@@ -633,7 +648,9 @@ Page({
       phaseHintText: this.createPhaseHintText(snapshot, board),
       isSoloRoom: snapshot.roomMode === "solo",
       controlledSeatText: this.createControlledSeatText(snapshot),
-      canVote: Boolean(snapshot.pendingTask && snapshot.pendingTask.taskType === "SUBMIT_VOTE"),
+      canVote,
+      voteModalVisible,
+      voteModalTaskKey,
       voteProgressText: this.createVoteProgressText(snapshot),
       voteResult,
       currentVoteResultKey,
@@ -1266,6 +1283,25 @@ Page({
 
   onStopTap() {},
 
+  onDismissVoteModal() {
+    if (!this.data.canVote) {
+      return;
+    }
+    this.setData({
+      voteModalVisible: false,
+      voteModalTaskKey: this.data.voteModalTaskKey || "",
+    });
+  },
+
+  onTapOpenVoteModal() {
+    if (!this.data.canVote || this.data.isSubmittingCommand) {
+      return;
+    }
+    this.setData({
+      voteModalVisible: true,
+    });
+  },
+
   onTapDrawPile() {
     if (!this.data.canAckPolicyPeek || this.data.policyPeekCards.length !== 3) {
       return;
@@ -1573,6 +1609,8 @@ Page({
       this.markCommandSettled();
       this.setData({
         canVote: false,
+        voteModalVisible: false,
+        voteModalTaskKey: "",
         statusText: "投票已提交，等待局势更新",
       });
     } catch (err) {

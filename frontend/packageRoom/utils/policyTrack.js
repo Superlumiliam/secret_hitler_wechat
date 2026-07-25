@@ -15,6 +15,8 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   authoritarianBg: `${CLOUD_ASSET_ROOT}policy-track-authoritarian-bg.webp`,
   liberalCard: `${CLOUD_ASSET_ROOT}policy-card-liberal.webp`,
   authoritarianCard: `${CLOUD_ASSET_ROOT}policy-card-authoritarian.webp`,
+  cardJa: `${CLOUD_ASSET_ROOT}card-ja.webp`,
+  cardNein: `${CLOUD_ASSET_ROOT}card-nein.webp`,
   liberalSlot: `${CLOUD_ASSET_ROOT}slot-empty-liberal.webp`,
   authoritarianSlot: `${CLOUD_ASSET_ROOT}slot-empty-authoritarian.webp`,
   execution: `${CLOUD_ASSET_ROOT}power-badge-execution.webp`,

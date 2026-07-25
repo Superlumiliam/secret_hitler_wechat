@@ -121,15 +121,9 @@
           </view>
         </view>
 
-        <view wx:if="{{canVote}}" class="action-panel">
-          <view class="vote-action ja-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onVoteJa" hover-class="action-hover" role="button" aria-label="投赞成票">
-            <image wx:if="{{policyAssets.buttonBlue}}" class="dock-button-frame" src="{{policyAssets.buttonBlue}}" mode="scaleToFill" webp="{{true}}"></image>
-            <view class="dock-button-text">赞成 JA</view>
-          </view>
-          <view class="vote-action nein-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onVoteNein" hover-class="action-hover" role="button" aria-label="投反对票">
-            <image wx:if="{{policyAssets.buttonRed}}" class="dock-button-frame" src="{{policyAssets.buttonRed}}" mode="scaleToFill" webp="{{true}}"></image>
-            <view class="dock-button-text">反对 NEIN</view>
-          </view>
+        <view wx:if="{{canVote}}" class="vote-reopen-action {{isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onTapOpenVoteModal" role="button" aria-label="打开投票选择">
+          <image wx:if="{{policyAssets.buttonBlue}}" class="dock-button-frame" src="{{policyAssets.buttonBlue}}" mode="scaleToFill" webp="{{true}}"></image>
+          <view class="dock-button-text">投票</view>
         </view>
 
         <view class="secondary-actions">
@@ -171,6 +165,43 @@
           <view wx:if="{{canRequestVeto}}" class="policy-veto-action {{isSubmittingCommand ? 'is-disabled' : ''}}" catchtap="onTapRequestVeto" role="button" aria-label="提出否决">
             <image wx:if="{{policyAssets.modalFrameButtonMobile}}" class="policy-veto-action-image" src="{{policyAssets.modalFrameButtonMobile}}" mode="scaleToFill" webp="{{true}}"></image>
             <text class="policy-veto-action-text">提出否决</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{canVote && voteModalVisible && !canPickPolicy && !voteResultModalVisible}}" class="policy-modal-mask" catchtap="onDismissVoteModal">
+      <view class="policy-modal vote-modal" catchtap="onStopTap" role="dialog" aria-label="政府投票">
+        <view class="policy-modal-content">
+          <view class="policy-modal-title">请选择投票</view>
+          <view class="policy-modal-hint">投票提交后不能修改</view>
+          <view class="policy-choice-row is-two-cards">
+            <view
+              class="policy-choice-item vote-choice-item is-order-1 is-liberal {{isSubmittingCommand ? 'is-disabled' : ''}}"
+              catchtap="onVoteJa"
+              hover-class="policy-choice-hover"
+              role="button"
+              aria-label="投赞同票"
+            >
+              <image wx:if="{{policyAssets.cardJa}}" class="policy-choice-card-image" src="{{policyAssets.cardJa}}" mode="aspectFit" webp="{{true}}"></image>
+              <view wx:else class="policy-choice-card-fallback">
+                <view class="policy-card-mark">JA</view>
+                <view class="policy-card-title">赞同</view>
+              </view>
+            </view>
+            <view
+              class="policy-choice-item vote-choice-item is-order-2 is-fascist {{isSubmittingCommand ? 'is-disabled' : ''}}"
+              catchtap="onVoteNein"
+              hover-class="policy-choice-hover"
+              role="button"
+              aria-label="投反对票"
+            >
+              <image wx:if="{{policyAssets.cardNein}}" class="policy-choice-card-image" src="{{policyAssets.cardNein}}" mode="aspectFit" webp="{{true}}"></image>
+              <view wx:else class="policy-choice-card-fallback">
+                <view class="policy-card-mark">NEIN</view>
+                <view class="policy-card-title">反对</view>
+              </view>
+            </view>
           </view>
         </view>
       </view>
