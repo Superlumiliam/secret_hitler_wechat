@@ -103,9 +103,29 @@ function assertMissingSpecialAssetFallsBackToNormalSeat() {
   assert.strictEqual(frames.dictator, assets.playerSeat);
 }
 
+function assertSubmittedVoteSeatHasArchivedState() {
+  const snapshot = makeSnapshot({
+    role: "LIBERAL",
+    party: "LIBERAL",
+    knownMembers: [],
+  });
+  snapshot.currentPhase = "voting";
+  snapshot.publicState.submittedVoteMemberIds = ["dictator"];
+  const seats = gameMapper.createSeats(snapshot, { assets });
+  const submittedSeat = seats.find((seat) => seat.memberId === "dictator");
+  const pendingSeat = seats.find((seat) => seat.memberId === "other");
+
+  assert.strictEqual(submittedSeat.isVoteSubmitted, true);
+  assert.strictEqual(submittedSeat.voteStatusLabel, "已投票，等待其他玩家");
+  assert.ok(submittedSeat.seatClass.includes("is-vote-submitted"));
+  assert.strictEqual(pendingSeat.isVoteSubmitted, false);
+  assert.strictEqual(pendingSeat.voteStatusLabel, "等待投票");
+}
+
 assertFascistViewerSeesDictatorSeat();
 assertDictatorViewerSeesOwnSeat();
 assertLiberalViewerSeesOnlyNormalSeats();
 assertMissingSpecialAssetFallsBackToNormalSeat();
+assertSubmittedVoteSeatHasArchivedState();
 
 console.log("gameMapper seat perspective tests passed");

@@ -10,6 +10,9 @@
     >
       <image wx:if="{{seat.avatarSrc}}" class="avatar-image" src="{{seat.avatarSrc}}" mode="aspectFill" webp="{{true}}"></image>
     </view>
+    <view wx:if="{{seat.isVoteSubmitted}}" class="vote-submitted-avatar-mask" aria-label="{{seat.voteStatusLabel}}">
+      <view class="vote-submitted-stamp">已投票</view>
+    </view>
     <view class="{{seat.nameClass || 'seat-name'}}">{{seat.name}}</view>
     <government-badge
       wx:if="{{seat.roleBadgeSrc}}"

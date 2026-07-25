@@ -190,6 +190,7 @@ function createSeats(snapshot, options = {}) {
     const investigationMark = investigationMarkByMemberId[member.memberId] || null;
     const isVisibleFascistName = visibleFascistNameMemberIds.has(member.memberId);
     const isVisibleHitlerSeat = visibleHitlerSeatMemberIds.has(member.memberId);
+    const isVoteSubmitted = snapshot.currentPhase === "voting" && submittedVoteMemberIds.includes(member.memberId);
 
     return {
       memberId: member.memberId,
@@ -205,6 +206,8 @@ function createSeats(snapshot, options = {}) {
       isSelf,
       isAlive: member.isAlive,
       isOffline: member.isOffline,
+      isVoteSubmitted,
+      voteStatusLabel: isVoteSubmitted ? "已投票，等待其他玩家" : "等待投票",
       canChangeIdentityMark: !isSelf,
       identityMark,
       investigationStampSrc: investigationMark ? getInvestigationStampSrc(investigationMark.party, assets) : "",
@@ -226,9 +229,7 @@ function createSeats(snapshot, options = {}) {
       } ${
         resolvedSelectedExecutiveTargetId === member.memberId ? "is-selected-executive-target" : ""
       } ${
-        snapshot.currentPhase === "voting" && submittedVoteMemberIds.includes(member.memberId)
-          ? "is-vote-submitted"
-          : ""
+        isVoteSubmitted ? "is-vote-submitted" : ""
       } ${
         member.isAlive === false ? "is-dead" : ""
       }`,
