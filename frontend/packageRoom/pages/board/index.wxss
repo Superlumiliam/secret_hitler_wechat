@@ -871,6 +871,8 @@
   position: relative;
   width: 54rpx;
   height: 54rpx;
+  flex: 0 0 54rpx;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -888,12 +890,19 @@
 }
 
 .election-slot.is-active .election-slot-image {
-  filter: drop-shadow(0 0 12rpx rgba(233, 188, 114, 0.28)) drop-shadow(0 7rpx 8rpx rgba(0, 0, 0, 0.48));
+  filter: drop-shadow(0 0 18rpx rgba(255, 198, 100, 0.88)) drop-shadow(0 0 6rpx rgba(255, 227, 166, 0.82)) drop-shadow(0 7rpx 8rpx rgba(0, 0, 0, 0.48));
+}
+
+.election-slot.is-new-election {
+  animation: electionSlotLightUp 900ms cubic-bezier(0.16, 0.82, 0.24, 1) both;
 }
 
 .election-slot-label {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 50%;
   z-index: 1;
+  transform: translate(-50%, -50%);
   color: #c5955b;
   font-size: 27rpx;
   font-weight: 800;
@@ -903,7 +912,24 @@
 
 .election-slot.is-active .election-slot-label {
   color: #f0c47d;
-  text-shadow: 0 2rpx 2rpx rgba(0, 0, 0, 0.76), 0 0 10rpx rgba(236, 185, 105, 0.36);
+  text-shadow: 0 2rpx 2rpx rgba(0, 0, 0, 0.76), 0 0 14rpx rgba(255, 210, 125, 0.82);
+}
+
+@keyframes electionSlotLightUp {
+  0% {
+    opacity: 0.58;
+    transform: scale(0.82);
+  }
+
+  48% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .deck-piles-panel {
@@ -2198,5 +2224,6 @@
   .election-slot {
     width: 48rpx;
     height: 48rpx;
+    flex-basis: 48rpx;
   }
 }

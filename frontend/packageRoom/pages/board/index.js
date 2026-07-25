@@ -593,6 +593,10 @@ Page({
       shouldAnimateNewPolicy && board.fascistPolicyCount > (previousBoard.fascistPolicyCount || 0)
         ? board.fascistPolicyCount
         : 0;
+    const newElectionTracker =
+      shouldAnimateNewPolicy && board.electionTracker > (previousBoard.electionTracker || 0)
+        ? board.electionTracker
+        : 0;
 
     const voteResult = this.createVoteResult(snapshot);
     const currentVoteResultKey = voteResult ? voteResult.resultKey : "";
@@ -624,7 +628,7 @@ Page({
         policyAssetUrlByKey,
         newFascistPolicySlot,
       ),
-      electionTrack: this.createElectionTrack(board.electionTracker, policyAssetUrlByKey),
+      electionTrack: this.createElectionTrack(board.electionTracker, policyAssetUrlByKey, newElectionTracker),
       statusText: this.createStatusText(snapshot, board),
       phaseHintText: this.createPhaseHintText(snapshot, board),
       isSoloRoom: snapshot.roomMode === "solo",
@@ -786,8 +790,8 @@ Page({
     return gameMapper.createFascistTrack(targetPlayerCount, fascistPolicyCount, assets, newPolicySlot);
   },
 
-  createElectionTrack(electionTracker, assets = {}) {
-    return gameMapper.createElectionTrack(electionTracker, assets);
+  createElectionTrack(electionTracker, assets = {}, newElectionTracker = 0) {
+    return gameMapper.createElectionTrack(electionTracker, assets, newElectionTracker);
   },
 
   createStatusText(snapshot, board) {

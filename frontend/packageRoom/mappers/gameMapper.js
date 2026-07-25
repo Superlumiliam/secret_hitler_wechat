@@ -279,14 +279,14 @@ function createActiveIdentityPickerOptions(memberId, snapshot, judgments = {}, a
   return createIdentityPickerOptions(memberId, currentJudgment, assets);
 }
 
-function createElectionTrack(electionTracker, assets = {}) {
+function createElectionTrack(electionTracker, assets = {}, newElectionTracker = 0) {
   return Array.from({ length: 3 }, (_, index) => {
     const slot = index + 1;
     const isActive = slot <= electionTracker;
     return {
       slot,
       slotSrc: isActive ? assets.electionSlotActive : assets.electionSlotEmpty,
-      cellClass: `election-slot ${isActive ? "is-active" : "is-empty"}`,
+      cellClass: `election-slot ${isActive ? "is-active" : "is-empty"} ${slot === newElectionTracker ? "is-new-election" : ""}`,
     };
   });
 }
