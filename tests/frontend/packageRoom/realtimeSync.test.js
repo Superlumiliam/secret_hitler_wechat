@@ -60,7 +60,7 @@ function assertWatcherLifecycleAndFallback() {
 
   try {
     delete require.cache[watcherModulePath];
-    const { WATCH_RETRY_INTERVAL_MS, createRoomSyncSignalWatcher } = require(watcherModulePath);
+    const { WATCH_RETRY_INTERVALS_MS, createRoomSyncSignalWatcher } = require(watcherModulePath);
     const signals = [];
     let healthyCount = 0;
     let unavailableCount = 0;
@@ -87,12 +87,30 @@ function assertWatcherLifecycleAndFallback() {
     subscriptions[0].onError(new Error("connection lost"));
     assert.strictEqual(controller.isHealthy(), false);
     assert.strictEqual(unavailableCount, 1);
-    assert.strictEqual(scheduled[0].delay, WATCH_RETRY_INTERVAL_MS);
+    assert.strictEqual(scheduled[0].delay, WATCH_RETRY_INTERVALS_MS[0]);
     scheduled[0].callback();
     assert.strictEqual(subscriptions.length, 2, "watcher should retry while the page remains visible");
-    subscriptions[1].onChange({ docs: [{ roomId: "room_1", roomStatus: "in_game", version: 3 }] });
+    subscriptions[1].onError(new Error("connection still unavailable"));
+    assert.strictEqual(scheduled[1].delay, WATCH_RETRY_INTERVALS_MS[1]);
+    scheduled[1].callback();
+    assert.strictEqual(subscriptions.length, 3, "watcher should increase the retry delay after repeated failures");
+    subscriptions[2].onError(new Error("connection still unavailable"));
+    assert.strictEqual(scheduled[2].delay, WATCH_RETRY_INTERVALS_MS[2]);
+    scheduled[2].callback();
+    assert.strictEqual(subscriptions.length, 4, "watcher should continue the backoff sequence");
+    subscriptions[3].onError(new Error("connection still unavailable"));
+    assert.strictEqual(scheduled[3].delay, WATCH_RETRY_INTERVALS_MS[3]);
+    scheduled[3].callback();
+    assert.strictEqual(subscriptions.length, 5, "watcher should reach the maximum retry interval");
+    subscriptions[4].onError(new Error("connection still unavailable"));
+    assert.strictEqual(scheduled[4].delay, WATCH_RETRY_INTERVALS_MS[3]);
+    scheduled[4].callback();
+    assert.strictEqual(subscriptions.length, 6, "watcher should cap retries at the maximum interval");
+    subscriptions[5].onChange({ docs: [{ roomId: "room_1", roomStatus: "in_game", version: 3 }] });
     assert.strictEqual(controller.isHealthy(), true);
     assert.strictEqual(healthyCount, 2, "successful retry should leave fallback mode");
+    subscriptions[5].onError(new Error("connection lost again"));
+    assert.strictEqual(scheduled[5].delay, WATCH_RETRY_INTERVALS_MS[0], "healthy watcher should reset the retry backoff");
 
     controller.stop();
     assert.strictEqual(controller.isHealthy(), false);

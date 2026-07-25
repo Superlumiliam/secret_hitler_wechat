@@ -1,5 +1,5 @@
 const ROOM_SYNC_SIGNAL_COLLECTION = "room_sync_signals";
-const WATCH_RETRY_INTERVAL_MS = 30 * 1000;
+const WATCH_RETRY_INTERVALS_MS = [30 * 1000, 60 * 1000, 2 * 60 * 1000, 5 * 60 * 1000];
 
 function createRoomSyncSignalWatcher(options = {}) {
   let watcher = null;
@@ -7,6 +7,7 @@ function createRoomSyncSignalWatcher(options = {}) {
   let stopped = true;
   let healthy = false;
   let watcherGeneration = 0;
+  let retryAttempt = 0;
 
   function clearRetryTimer() {
     if (retryTimer) {
@@ -28,10 +29,13 @@ function createRoomSyncSignalWatcher(options = {}) {
     if (stopped) {
       return;
     }
+    const retryIndex = Math.min(retryAttempt, WATCH_RETRY_INTERVALS_MS.length - 1);
+    const retryIntervalMs = WATCH_RETRY_INTERVALS_MS[retryIndex];
+    retryAttempt += 1;
     retryTimer = setTimeout(() => {
       retryTimer = null;
       openWatcher();
-    }, WATCH_RETRY_INTERVAL_MS);
+    }, retryIntervalMs);
   }
 
   function markUnavailable(err) {
@@ -75,6 +79,7 @@ function createRoomSyncSignalWatcher(options = {}) {
             }
 
             clearRetryTimer();
+            retryAttempt = 0;
             if (!healthy) {
               healthy = true;
               if (typeof options.onHealthy === "function") {
@@ -109,6 +114,7 @@ function createRoomSyncSignalWatcher(options = {}) {
     stop() {
       stopped = true;
       healthy = false;
+      retryAttempt = 0;
       clearRetryTimer();
       closeWatcher();
     },
@@ -120,6 +126,6 @@ function createRoomSyncSignalWatcher(options = {}) {
 
 module.exports = {
   ROOM_SYNC_SIGNAL_COLLECTION,
-  WATCH_RETRY_INTERVAL_MS,
+  WATCH_RETRY_INTERVALS_MS,
   createRoomSyncSignalWatcher,
 };
