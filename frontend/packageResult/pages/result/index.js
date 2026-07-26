@@ -27,9 +27,45 @@ const RESULT_ASSET_FILE_IDS_BY_KEY = {
   "result-role-chip-dictator": `${CLOUD_ASSET_ROOT}result-role-chip-dictator-transparent.webp`,
   "default-avatar": `${CLOUD_ASSET_ROOT}man-in-black.webp`,
 };
+const RESULT_POLICY_ASSET_KEYS = [
+  "liberalBg",
+  "authoritarianBg",
+  "liberalCard",
+  "authoritarianCard",
+  "liberalSlot",
+  "authoritarianSlot",
+  "execution",
+  "investigate",
+  "policyPeek",
+  "specialElection",
+];
+const TEMP_FILE_URL_BATCH_SIZE = 50;
 
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
+}
+
+async function resolveTempFileUrlsInBatches(fileIds) {
+  const uniqueFileIds = Array.from(new Set(fileIds));
+  const urlByFileId = {};
+
+  for (let start = 0; start < uniqueFileIds.length; start += TEMP_FILE_URL_BATCH_SIZE) {
+    const fileList = uniqueFileIds.slice(start, start + TEMP_FILE_URL_BATCH_SIZE);
+    try {
+      const res = await wx.cloud.getTempFileURL({
+        fileList,
+      });
+      (res.fileList || []).forEach((file) => {
+        if (file.status === 0 && file.tempFileURL) {
+          urlByFileId[file.fileID] = file.tempFileURL;
+        }
+      });
+    } catch (err) {
+      console.error("结果页图片临时链接获取失败", err);
+    }
+  }
+
+  return urlByFileId;
 }
 
 function clearRuntimeActiveRoomState() {
@@ -152,11 +188,11 @@ Page({
     const players = (snapshot && snapshot.finalPlayers) || [];
     const cachedPolicyAssets = this.data.policyAssets || {};
     const cachedResultAssets = this.data.resultAssetSrcByKey || {};
-    const hasCachedPolicyAssets = Object.keys(POLICY_TRACK_ASSET_FILE_IDS).every((key) => Boolean(cachedPolicyAssets[key]));
+    const hasCachedPolicyAssets = RESULT_POLICY_ASSET_KEYS.every((key) => Boolean(cachedPolicyAssets[key]));
     const hasCachedResultAssets = Object.keys(RESULT_ASSET_FILE_IDS_BY_KEY).every((key) =>
       Boolean(cachedResultAssets[key]),
     );
-    const policyAssetFileIds = Object.values(POLICY_TRACK_ASSET_FILE_IDS);
+    const policyAssetFileIds = RESULT_POLICY_ASSET_KEYS.map((key) => POLICY_TRACK_ASSET_FILE_IDS[key]);
     const resultAssetFileIds = Object.values(RESULT_ASSET_FILE_IDS_BY_KEY);
     const fileIds = players
       .map((player) => player.avatarUrl)
@@ -171,32 +207,20 @@ Page({
       };
     }
 
-    const urlByFileId = {};
+    const urlByFileId = await resolveTempFileUrlsInBatches(fileIds);
     const policyAssets = { ...cachedPolicyAssets };
     const resultAssets = { ...cachedResultAssets };
-    try {
-      const res = await wx.cloud.getTempFileURL({
-        fileList: Array.from(new Set(fileIds)),
+    if (!hasCachedPolicyAssets) {
+      RESULT_POLICY_ASSET_KEYS.forEach((key) => {
+        const fileId = POLICY_TRACK_ASSET_FILE_IDS[key];
+        policyAssets[key] = urlByFileId[fileId] || "";
       });
-      (res.fileList || []).forEach((file) => {
-        if (file.status === 0 && file.tempFileURL) {
-          urlByFileId[file.fileID] = file.tempFileURL;
-        }
+    }
+    if (!hasCachedResultAssets) {
+      Object.keys(RESULT_ASSET_FILE_IDS_BY_KEY).forEach((key) => {
+        const fileId = RESULT_ASSET_FILE_IDS_BY_KEY[key];
+        resultAssets[key] = urlByFileId[fileId] || "";
       });
-      if (!hasCachedPolicyAssets) {
-        Object.keys(POLICY_TRACK_ASSET_FILE_IDS).forEach((key) => {
-          const fileId = POLICY_TRACK_ASSET_FILE_IDS[key];
-          policyAssets[key] = urlByFileId[fileId] || "";
-        });
-      }
-      if (!hasCachedResultAssets) {
-        Object.keys(RESULT_ASSET_FILE_IDS_BY_KEY).forEach((key) => {
-          const fileId = RESULT_ASSET_FILE_IDS_BY_KEY[key];
-          resultAssets[key] = urlByFileId[fileId] || "";
-        });
-      }
-    } catch (err) {
-      console.error("结果页图片临时链接获取失败", err);
     }
 
     return {
