@@ -60,6 +60,7 @@ Page({
   policyPeekRevealShownByKey: {},
   policyPeekRevealReadyTimer: null,
   policyPeekRevealExitTimer: null,
+  policyPeekAckConfirming: false,
   lastSeatTap: null,
   lastCommandSettledAt: 0,
   pendingInvestigationRevealActorId: "",
@@ -155,6 +156,7 @@ Page({
     this.identityJudgmentCacheByKey = {};
     this.identityIntroRevealShownByKey = {};
     this.policyPeekRevealShownByKey = {};
+    this.policyPeekAckConfirming = false;
     this.setData({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
@@ -1443,6 +1445,9 @@ Page({
   },
 
   onTapNominateSelected() {
+    if (this.data.isSubmittingCommand) {
+      return;
+    }
     if (!this.data.selectedNominationTargetId) {
       wx.showToast({
         title: "请先点击一个玩家席位",
@@ -1905,6 +1910,9 @@ Page({
   },
 
   async onTapExecutiveSelected() {
+    if (this.data.isSubmittingCommand) {
+      return;
+    }
     const targetMemberId = this.data.selectedExecutiveTargetId;
     if (!targetMemberId) {
       wx.showToast({
@@ -1961,16 +1969,36 @@ Page({
   async onTapPolicyPeekAck() {
     const snapshot = this.data.snapshot || {};
     const pendingTask = snapshot.pendingTask || {};
-    if (pendingTask.taskType !== "EXEC_POLICY_PEEK_ACK" || this.data.isSubmittingCommand) {
+    if (pendingTask.taskType !== "EXEC_POLICY_PEEK_ACK" || this.data.isSubmittingCommand || this.policyPeekAckConfirming) {
       return;
     }
-    await this.submitExecutiveCommand({
-      commandType: "EXEC_POLICY_PEEK_ACK",
-      body: {
-        acknowledged: true,
-      },
-      toastText: "政策预览已确认",
-    });
+
+    this.policyPeekAckConfirming = true;
+    try {
+      const confirmRes = await new Promise((resolve) => {
+        wx.showModal({
+          title: "确认完成政策预览",
+          content: "确认完成政策预览？牌库顶 3 张政策牌将按原顺序放回，并进入下一轮。",
+          confirmText: "确认完成",
+          cancelText: "取消",
+          success: resolve,
+          fail: () => resolve({ confirm: false }),
+        });
+      });
+      if (!confirmRes.confirm) {
+        return;
+      }
+
+      await this.submitExecutiveCommand({
+        commandType: "EXEC_POLICY_PEEK_ACK",
+        body: {
+          acknowledged: true,
+        },
+        toastText: "政策预览已确认",
+      });
+    } finally {
+      this.policyPeekAckConfirming = false;
+    }
   },
 
   async submitExecutiveCommand(options) {
