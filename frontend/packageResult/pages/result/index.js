@@ -122,10 +122,6 @@ Page({
 
   onUnload() {
     clearPageTimeout(this);
-    if (this.__isResettingPageStack) {
-      return;
-    }
-    this.clearResultActiveRoom({ silent: true });
   },
 
   async loadResult() {
@@ -267,7 +263,7 @@ Page({
     this.__resultActiveRoomCleared = true;
     clearRuntimeActiveRoomState();
     try {
-      await bootstrapService.clearActiveRoom();
+      await bootstrapService.clearActiveRoom(this.data.roomId);
     } catch (err) {
       if (!options.silent) {
         console.error("清理结果页活跃房间失败", err);

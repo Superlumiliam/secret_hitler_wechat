@@ -45,6 +45,8 @@ App({
     activeRoom: null,
     isRecoveringActiveRoom: false,
   },
+  activeRoomRecoveryPromise: null,
+  pendingActiveRoomRecoveryOptions: null,
   onLaunch(options = {}) {
     if (!wx.cloud) {
       console.error("请使用 2.2.3 或以上的基础库以使用云能力");
@@ -72,26 +74,46 @@ App({
   },
 
   async ensureSessionAndRecover(options = {}) {
-    if (!wx.cloud || this.globalData.isRecoveringActiveRoom) {
+    if (!wx.cloud) {
       return;
     }
 
-    this.globalData.isRecoveringActiveRoom = true;
-    try {
-      const recovered = options.skipRecoverRoute
-        ? await bootstrapService.ensureSession()
-        : await bootstrapService.recoverActiveRoom();
-      const activeRoom = recovered.activeRoom || null;
-      this.globalData.activeRoom = activeRoom;
-
-      if (!options.skipRecoverRoute) {
-        this.routeByActiveRoom(activeRoom);
-      }
-    } catch (err) {
-      console.error("恢复活跃房间失败", err);
-    } finally {
-      this.globalData.isRecoveringActiveRoom = false;
+    if (this.activeRoomRecoveryPromise) {
+      this.pendingActiveRoomRecoveryOptions = options;
+      return await this.activeRoomRecoveryPromise;
     }
+
+    this.globalData.isRecoveringActiveRoom = true;
+    let recoverySucceeded = false;
+    this.activeRoomRecoveryPromise = (async () => {
+      try {
+        const recovered = options.skipRecoverRoute
+          ? await bootstrapService.ensureSession()
+          : await bootstrapService.recoverActiveRoom();
+        const activeRoom = recovered.activeRoom || null;
+        this.globalData.activeRoom = activeRoom;
+
+        if (!options.skipRecoverRoute) {
+          this.routeByActiveRoom(activeRoom);
+        }
+        recoverySucceeded = true;
+        return activeRoom;
+      } catch (err) {
+        console.error("恢复活跃房间失败", err);
+        return null;
+      }
+    })();
+
+    const activeRoom = await this.activeRoomRecoveryPromise;
+    this.activeRoomRecoveryPromise = null;
+    this.globalData.isRecoveringActiveRoom = false;
+
+    const retryOptions = recoverySucceeded ? null : this.pendingActiveRoomRecoveryOptions;
+    this.pendingActiveRoomRecoveryOptions = null;
+    if (retryOptions) {
+      return await this.ensureSessionAndRecover(retryOptions);
+    }
+    return activeRoom;
   },
 
   routeByActiveRoom(activeRoom) {

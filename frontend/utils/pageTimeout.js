@@ -14,7 +14,7 @@ function clearRuntimeRoomState() {
   app.globalData.initialLobbySnapshots = {};
 }
 
-async function clearActiveRoomOnServer() {
+async function clearActiveRoomOnServer(roomId) {
   if (!wx.cloud) {
     return;
   }
@@ -24,7 +24,7 @@ async function clearActiveRoomOnServer() {
       name: "bootstrapService",
       data: {
         action: "clearActiveRoom",
-        payload: {},
+        payload: roomId ? { roomId } : {},
       },
     });
     const result = res.result || {};
@@ -54,7 +54,7 @@ async function handlePageTimeout(page, options = {}) {
   }
 
   clearRuntimeRoomState();
-  await clearActiveRoomOnServer();
+  await clearActiveRoomOnServer(page && page.data && page.data.roomId);
   redirectHomeWithTimeoutNotice(options.reasonCode);
 }
 

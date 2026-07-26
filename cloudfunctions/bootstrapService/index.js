@@ -5,7 +5,7 @@ cloud.init({
 });
 
 const db = cloud.database();
-const _ = db.command;
+const ACTIVE_ROOM_RECOVERY_SUPPRESSED = "recovery_suppressed";
 
 function nowIso() {
   return new Date().toISOString();
@@ -87,22 +87,46 @@ async function getProfile(openid) {
   }
 }
 
-async function clearActiveRoomForProfile(openid, updatedAt) {
+async function getTransactionDocument(documentRef) {
   try {
-    await db.collection("user_profiles").doc(openid).update({
+    return (await documentRef.get()).data || null;
+  } catch (err) {
+    if (isDocumentNotFoundError(err)) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+async function clearActiveRoomForProfile(openid, updatedAt, expectations = {}, options = {}) {
+  const hasExpectedRoomId = Object.prototype.hasOwnProperty.call(expectations, "roomId");
+  const hasExpectedMemberId = Object.prototype.hasOwnProperty.call(expectations, "memberId");
+  const nextActiveRoomStatus = options.suppressRecovery
+    ? ACTIVE_ROOM_RECOVERY_SUPPRESSED
+    : null;
+  await db.runTransaction(async (transaction) => {
+    const profileRef = transaction.collection("user_profiles").doc(openid);
+    const profile = await getTransactionDocument(profileRef);
+    if (!profile) {
+      return;
+    }
+    if (hasExpectedRoomId && (profile.activeRoomId || null) !== (expectations.roomId || null)) {
+      return;
+    }
+    if (hasExpectedMemberId && (profile.activeMemberId || null) !== (expectations.memberId || null)) {
+      return;
+    }
+
+    await profileRef.update({
       data: {
         openid,
         activeRoomId: null,
         activeMemberId: null,
-        activeRoomStatus: null,
+        activeRoomStatus: nextActiveRoomStatus,
         updatedAt,
       },
     });
-  } catch (err) {
-    if (!isDocumentNotFoundError(err)) {
-      throw err;
-    }
-  }
+  });
 }
 
 function getRouteHint(room) {
@@ -131,6 +155,10 @@ function isRecoverableRoom(room) {
 
 function isRecoverableMemberForRoom(room, member, openid) {
   if (!room || !member || getMemberOpenId(member) !== openid) {
+    return false;
+  }
+  const roomId = room.roomId || room._id;
+  if (!roomId || member.roomId !== roomId || member.isVirtual) {
     return false;
   }
   const status = member.memberStatus || member.status;
@@ -184,83 +212,188 @@ async function buildActiveRoom(room, member) {
   };
 }
 
+function isRepairableActiveRoom(room) {
+  return Boolean(room && ["lobby", "in_game"].includes(room.status) && isRecoverableRoom(room));
+}
+
+async function findRepairableActiveRoomCandidates(openid) {
+  const membersRes = await db
+    .collection("room_members")
+    .where({
+      openId: openid,
+      memberStatus: "active",
+    })
+    .limit(100)
+    .get();
+  const candidates = [];
+
+  for (const member of membersRes.data) {
+    if (!member || member.isVirtual || !member.roomId) {
+      continue;
+    }
+
+    const room = await getTransactionDocument(db.collection("rooms").doc(member.roomId));
+    if (
+      isRepairableActiveRoom(room) &&
+      isRecoverableMemberForRoom(room, member, openid)
+    ) {
+      candidates.push({
+        room,
+        member,
+      });
+    }
+  }
+
+  return candidates;
+}
+
+async function repairActiveRoomAnchor(openid) {
+  const candidates = await findRepairableActiveRoomCandidates(openid);
+  if (!candidates.length) {
+    return null;
+  }
+  if (candidates.length > 1) {
+    console.info("active room anchor repair skipped", {
+      candidateCount: candidates.length,
+      reason: "ambiguous_candidates",
+    });
+    return null;
+  }
+
+  const candidate = candidates[0];
+  const repaired = await db.runTransaction(async (transaction) => {
+    const profileRef = transaction.collection("user_profiles").doc(openid);
+    const profile = await getTransactionDocument(profileRef);
+    if (
+      !profile ||
+      profile.activeRoomId ||
+      profile.activeMemberId ||
+      profile.activeRoomStatus === ACTIVE_ROOM_RECOVERY_SUPPRESSED
+    ) {
+      return null;
+    }
+
+    const roomId = candidate.room.roomId || candidate.room._id;
+    const memberId = getMemberId(candidate.member);
+    const room = await getTransactionDocument(transaction.collection("rooms").doc(roomId));
+    const member = await getTransactionDocument(transaction.collection("room_members").doc(memberId));
+    if (
+      !isRepairableActiveRoom(room) ||
+      !isRecoverableMemberForRoom(room, member, openid) ||
+      (member.memberStatus || member.status) !== "active"
+    ) {
+      return null;
+    }
+
+    const updatedAt = new Date();
+    await profileRef.update({
+      data: {
+        openid,
+        activeRoomId: roomId,
+        activeMemberId: memberId,
+        activeRoomStatus: room.status,
+        updatedAt,
+      },
+    });
+    return {
+      room,
+      member,
+    };
+  });
+
+  if (!repaired) {
+    console.info("active room anchor repair skipped", {
+      candidateCount: 1,
+      reason: "transaction_revalidation_failed",
+    });
+    return null;
+  }
+  return await buildActiveRoom(repaired.room, repaired.member);
+}
+
 async function getActiveRoomFromProfile(openid) {
   const profile = await getProfile(openid);
-  if (!profile || !profile.activeRoomId || !profile.activeMemberId) {
+  if (!profile) {
+    return null;
+  }
+  if (
+    !profile.activeRoomId &&
+    !profile.activeMemberId &&
+    profile.activeRoomStatus === ACTIVE_ROOM_RECOVERY_SUPPRESSED
+  ) {
     return null;
   }
 
-  let room;
-  let member;
-  try {
-    const roomRes = await db.collection("rooms").doc(profile.activeRoomId).get();
-    room = roomRes.data || null;
-  } catch (err) {
-    if (!isDocumentNotFoundError(err)) {
-      throw err;
+  if (profile.activeRoomId && profile.activeMemberId) {
+    const room = await getTransactionDocument(db.collection("rooms").doc(profile.activeRoomId));
+    const member = await getTransactionDocument(
+      db.collection("room_members").doc(profile.activeMemberId),
+    );
+    if (isRecoverableRoom(room) && isRecoverableMemberForRoom(room, member, openid)) {
+      return await buildActiveRoom(room, member);
     }
+
+    await clearActiveRoomForProfile(openid, new Date(), {
+      roomId: profile.activeRoomId,
+      memberId: profile.activeMemberId,
+    });
+  } else if (profile.activeRoomId || profile.activeMemberId) {
+    await clearActiveRoomForProfile(openid, new Date(), {
+      roomId: profile.activeRoomId || null,
+      memberId: profile.activeMemberId || null,
+    });
   }
 
-  try {
-    const memberRes = await db.collection("room_members").doc(profile.activeMemberId).get();
-    member = memberRes.data || null;
-  } catch (err) {
-    if (!isDocumentNotFoundError(err)) {
-      throw err;
-    }
-  }
-
-  if (!isRecoverableRoom(room) || !isRecoverableMemberForRoom(room, member, openid)) {
-    await clearActiveRoomForProfile(openid, new Date());
-    return null;
-  }
-
-  return await buildActiveRoom(room, member);
+  return await repairActiveRoomAnchor(openid);
 }
 
 async function touchActiveMember(openid, activeRoom) {
-  if (!activeRoom || !activeRoom.roomId) {
-    return;
+  if (!activeRoom || !activeRoom.roomId || !activeRoom.memberId) {
+    return false;
   }
 
-  try {
-    const membersRes = await db
-      .collection("room_members")
-      .where({
-        roomId: activeRoom.roomId,
-        openId: openid,
-        memberStatus: _.in(["active", "offline"]),
-      })
-      .limit(1)
-      .get();
-    const member = membersRes.data[0];
-    if (!member) {
-      return;
+  return await db.runTransaction(async (transaction) => {
+    const profileRef = transaction.collection("user_profiles").doc(openid);
+    const profile = await getTransactionDocument(profileRef);
+    if (
+      !profile ||
+      profile.activeRoomStatus === ACTIVE_ROOM_RECOVERY_SUPPRESSED ||
+      profile.activeRoomId !== activeRoom.roomId ||
+      profile.activeMemberId !== activeRoom.memberId
+    ) {
+      return false;
     }
+
+    const room = await getTransactionDocument(
+      transaction.collection("rooms").doc(activeRoom.roomId),
+    );
+    const memberRef = transaction.collection("room_members").doc(activeRoom.memberId);
+    const member = await getTransactionDocument(memberRef);
+    if (
+      !isRecoverableRoom(room) ||
+      !isRecoverableMemberForRoom(room, member, openid)
+    ) {
+      return false;
+    }
+
     const updatedAt = new Date();
-    await db.collection("room_members").doc(getMemberId(member)).update({
+    await memberRef.update({
       data: {
         memberStatus: "active",
         lastSeenAt: updatedAt,
         updatedAt,
       },
     });
-    await db.collection("user_profiles").doc(openid).update({
+    await profileRef.update({
       data: {
         activeRoomId: activeRoom.roomId,
-        activeMemberId: getMemberId(member),
-        activeRoomStatus: activeRoom.roomStatus,
+        activeMemberId: activeRoom.memberId,
+        activeRoomStatus: room.status,
         updatedAt,
       },
     });
-  } catch (err) {
-    if (!isDocumentNotFoundError(err)) {
-      console.error("touch active member failed", {
-        roomId: activeRoom.roomId,
-        err,
-      });
-    }
-  }
+    return true;
+  });
 }
 
 async function ensureSession(openid) {
@@ -273,9 +406,9 @@ async function ensureSession(openid) {
 }
 
 async function recoverActiveRoom(openid) {
-  const activeRoom = await getActiveRoomFromProfile(openid);
-  if (activeRoom) {
-    await touchActiveMember(openid, activeRoom);
+  let activeRoom = await getActiveRoomFromProfile(openid);
+  if (activeRoom && !(await touchActiveMember(openid, activeRoom))) {
+    activeRoom = null;
   }
   return ok({
     user: {
@@ -285,8 +418,27 @@ async function recoverActiveRoom(openid) {
   });
 }
 
-async function clearActiveRoom(openid) {
-  await clearActiveRoomForProfile(openid, new Date());
+async function clearActiveRoom(payload, openid) {
+  if (
+    Object.prototype.hasOwnProperty.call(payload, "roomId") &&
+    (typeof payload.roomId !== "string" || !payload.roomId.trim())
+  ) {
+    return fail("INVALID_PAYLOAD", "roomId 参数无效");
+  }
+
+  const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : "";
+  await clearActiveRoomForProfile(
+    openid,
+    new Date(),
+    roomId
+      ? {
+          roomId,
+        }
+      : {},
+    {
+      suppressRecovery: true,
+    },
+  );
   return ok({
     activeRoom: null,
   });
@@ -299,7 +451,7 @@ async function dispatchAction(action, payload, openid) {
     case "recoverActiveRoom":
       return await recoverActiveRoom(openid);
     case "clearActiveRoom":
-      return await clearActiveRoom(openid);
+      return await clearActiveRoom(payload, openid);
     default:
       return fail("INVALID_PAYLOAD", "未知 action");
   }

@@ -44,8 +44,9 @@ async function recoverActiveRoom() {
   return await callBootstrapService("recoverActiveRoom", {}, "恢复房间失败");
 }
 
-async function clearActiveRoom() {
-  return await callBootstrapService("clearActiveRoom", {}, "清理活跃房间失败");
+async function clearActiveRoom(roomId) {
+  const payload = roomId ? { roomId } : {};
+  return await callBootstrapService("clearActiveRoom", payload, "清理活跃房间失败");
 }
 
 module.exports = {

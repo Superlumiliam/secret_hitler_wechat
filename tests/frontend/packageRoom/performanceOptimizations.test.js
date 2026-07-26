@@ -402,12 +402,122 @@ async function assertAppUsesSingleBootstrapCall() {
   assert.deepStrictEqual(actions, ["ensureSession"], "skip-recovery route should only ensure the session");
 }
 
+async function assertAppRetriesFailedOverlappingRecoveryOnce() {
+  const appPath = path.resolve(__dirname, "../../../frontend/app.js");
+  const bootstrapServicePath = path.resolve(__dirname, "../../../frontend/services/bootstrapService.js");
+  const originalConsoleError = console.error;
+  let appDefinition;
+  let callCount = 0;
+  let rejectFirst;
+  const routedRooms = [];
+  global.App = (definition) => {
+    appDefinition = definition;
+  };
+  global.getCurrentPages = () => [];
+  global.wx = {
+    cloud: {
+      callFunction: ({ data }) => {
+        assert.strictEqual(data.action, "recoverActiveRoom");
+        callCount += 1;
+        if (callCount === 1) {
+          return new Promise((resolve, reject) => {
+            rejectFirst = reject;
+          });
+        }
+        return Promise.resolve({
+          result: {
+            success: true,
+            data: {
+              activeRoom: {
+                roomId: "room_recovered",
+                roomCode: "654321",
+                routeHint: "board",
+              },
+            },
+          },
+        });
+      },
+    },
+  };
+  console.error = () => {};
+  delete require.cache[bootstrapServicePath];
+  delete require.cache[appPath];
+  require(appPath);
+
+  try {
+    const context = {
+      ...appDefinition,
+      globalData: { ...appDefinition.globalData },
+      routeByActiveRoom(activeRoom) {
+        routedRooms.push(activeRoom);
+      },
+    };
+    const launchRecovery = appDefinition.ensureSessionAndRecover.call(context, { source: "launch" });
+    const showRecovery = appDefinition.ensureSessionAndRecover.call(context, { source: "show" });
+    assert.strictEqual(callCount, 1, "overlapping startup recovery should share the first request");
+
+    rejectFirst(new Error("first recovery failed"));
+    await Promise.all([launchRecovery, showRecovery]);
+    assert.strictEqual(callCount, 2, "a failed startup request with a pending onShow should retry once");
+    assert.strictEqual(routedRooms.length, 1);
+    assert.strictEqual(routedRooms[0].roomId, "room_recovered");
+  } finally {
+    console.error = originalConsoleError;
+  }
+}
+
+async function assertAppDoesNotLoopAfterRetryFailure() {
+  const appPath = path.resolve(__dirname, "../../../frontend/app.js");
+  const bootstrapServicePath = path.resolve(__dirname, "../../../frontend/services/bootstrapService.js");
+  const originalConsoleError = console.error;
+  let appDefinition;
+  const rejectors = [];
+  let callCount = 0;
+  global.App = (definition) => {
+    appDefinition = definition;
+  };
+  global.getCurrentPages = () => [];
+  global.wx = {
+    cloud: {
+      callFunction: () => {
+        callCount += 1;
+        return new Promise((resolve, reject) => {
+          rejectors.push(reject);
+        });
+      },
+    },
+  };
+  console.error = () => {};
+  delete require.cache[bootstrapServicePath];
+  delete require.cache[appPath];
+  require(appPath);
+
+  try {
+    const context = {
+      ...appDefinition,
+      globalData: { ...appDefinition.globalData },
+    };
+    const launchRecovery = appDefinition.ensureSessionAndRecover.call(context, { source: "launch" });
+    const showRecovery = appDefinition.ensureSessionAndRecover.call(context, { source: "show" });
+    rejectors[0](new Error("first recovery failed"));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(callCount, 2);
+    rejectors[1](new Error("retry failed"));
+    await Promise.all([launchRecovery, showRecovery]);
+    assert.strictEqual(callCount, 2, "a failed retry must not start an unbounded loop");
+  } finally {
+    console.error = originalConsoleError;
+  }
+}
+
 (async () => {
   await assertTempFileUrlCache();
   await assertStablePollSkipsHydrate();
   await assertPollingDoesNotOverlapAndUsesExpectedIntervals();
   await assertLobbySuccessCommandDoesNotPullAgain();
   await assertAppUsesSingleBootstrapCall();
+  await assertAppRetriesFailedOverlappingRecoveryOnce();
+  await assertAppDoesNotLoopAfterRetryFailure();
   console.log("frontend performance optimization tests passed");
 })().catch((err) => {
   console.error(err);

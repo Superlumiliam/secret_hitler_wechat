@@ -65,9 +65,11 @@ last_verified: 2026-07-26
 | --- | --- | --- |
 | `ensureSession` | `{}` | `{ user: { sessionReady }, activeRoom }` |
 | `recoverActiveRoom` | `{}` | 同上，并刷新有效真实成员的在线状态 |
-| `clearActiveRoom` | `{}` | `{ activeRoom: null }` |
+| `clearActiveRoom` | `{ roomId? }` | `{ activeRoom: null }` |
 
 `activeRoom` 为 `null` 或包含 `roomId`、`roomCode`、`roomStatus`、`memberId`、`routeHint`、`version` 和时间字段。`routeHint` 为 `lobby`、`board` 或 `result`。
+
+`clearActiveRoom` 传入 `roomId` 时仅在资料中的恢复锚点仍指向该房间时清除；若已切换到其他房间则成功返回但不修改。成功清除会抑制成员扫描重新写回同一锚点，直到创建或加入新的有效房间。保留空 payload 的无条件清除语义以兼容旧客户端。
 
 ### `roomService`
 

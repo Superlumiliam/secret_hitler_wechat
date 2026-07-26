@@ -134,9 +134,49 @@ function assertProtectedPagesResetStackBeforeLoading() {
 
     result.onUnload.call(resultContext);
     assert.strictEqual(activeRoomCleared, false, "self relaunching result page must not clear active room");
+
+    const ordinaryResultContext = {
+      ...result,
+      data: { ...result.data, roomId: "room_ordinary" },
+      clearResultActiveRoom() {
+        activeRoomCleared = true;
+      },
+    };
+    activeRoomCleared = false;
+    result.onUnload.call(ordinaryResultContext);
+    assert.strictEqual(activeRoomCleared, false, "ordinary result unload must not clear active room");
   } finally {
     global.getCurrentPages = originalGetCurrentPages;
     global.wx = originalWx;
+  }
+}
+
+async function assertExplicitResultClearUsesRoomId() {
+  const bootstrapServicePath = path.join(repoRoot, "frontend/services/bootstrapService.js");
+  const bootstrapService = require(bootstrapServicePath);
+  const originalClearActiveRoom = bootstrapService.clearActiveRoom;
+  const originalGetApp = global.getApp;
+  const clearedRoomIds = [];
+  bootstrapService.clearActiveRoom = async (roomId) => {
+    clearedRoomIds.push(roomId);
+  };
+  global.getApp = () => ({
+    globalData: {
+      activeRoom: { roomId: "room_result" },
+    },
+  });
+
+  try {
+    const result = loadPageDefinition("frontend/packageResult/pages/result/index.js");
+    const context = {
+      ...result,
+      data: { ...result.data, roomId: "room_result" },
+    };
+    await result.clearResultActiveRoom.call(context);
+    assert.deepStrictEqual(clearedRoomIds, ["room_result"]);
+  } finally {
+    bootstrapService.clearActiveRoom = originalClearActiveRoom;
+    global.getApp = originalGetApp;
   }
 }
 
@@ -341,12 +381,30 @@ async function assertPageTimeoutClearsSnapshotCache() {
       initialLobbySnapshots: { room_timeout: {} },
     },
   });
+  let clearPayload = null;
   global.wx = {
-    cloud: null,
+    cloud: {
+      callFunction: async ({ data }) => {
+        clearPayload = data.payload;
+        return {
+          result: {
+            success: true,
+          },
+        };
+      },
+    },
     reLaunch() {},
   };
-  await pageTimeout.handlePageTimeout({}, { reasonCode: "ROOM_EXPIRED" });
+  await pageTimeout.handlePageTimeout(
+    {
+      data: {
+        roomId: "room_timeout",
+      },
+    },
+    { reasonCode: "ROOM_EXPIRED" },
+  );
   assert.strictEqual(cache.getGameSnapshotCache("room_timeout", ""), null);
+  assert.deepStrictEqual(clearPayload, { roomId: "room_timeout" });
 }
 
 function assertPackageConfiguration() {
@@ -365,6 +423,7 @@ function assertPackageConfiguration() {
 (async () => {
   assertProtectedPageRouteHelpers();
   assertProtectedPagesResetStackBeforeLoading();
+  await assertExplicitResultClearUsesRoomId();
   await assertCacheKeyTtlAndClear();
   await assertSnapshotPagesUseExactCacheKey();
   await assertCachedHydrateFailureIsHandled();
