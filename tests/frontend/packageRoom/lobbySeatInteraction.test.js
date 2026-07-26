@@ -20,8 +20,8 @@ function createContext(lobby, overrides = {}) {
       roomId: "room_1",
       lobby: { roomId: "room_1", roomStatus: "lobby" },
       seats: [
-        { seatIndex: 3, isEmpty: true, isInviteArmed: false },
-        { seatIndex: 4, isEmpty: true, isInviteArmed: false },
+        { seatIndex: 3, isEmpty: true },
+        { seatIndex: 4, isEmpty: true },
       ],
       ...overrides.data,
     },
@@ -59,21 +59,16 @@ async function assertDoubleTapClaimsExactlyOnce() {
   }
 }
 
-async function assertLongPressArmsInvitationAndSuppressesTap() {
+async function assertEmptySeatsHaveNoInvitationState() {
   const lobby = loadLobbyPage();
   const context = createContext(lobby);
-  const originalNow = Date.now;
-  try {
-    Date.now = () => 2000;
-    lobby.onLongPressEmptySeat.call(context, emptySeatEvent(4));
-    assert.strictEqual(context.data.inviteSeatIndex, 4);
-    assert.strictEqual(context.data.seats.find((seat) => seat.seatIndex === 4).isInviteArmed, true);
+  const seats = lobby.buildSeats.call(context, {
+    targetPlayerCount: 1,
+    seatOrder: [],
+  });
 
-    lobby.onTapEmptySeat.call(context, emptySeatEvent(4));
-    assert.strictEqual(context.lastEmptySeatTap, null, "the tap emitted after long press must not start a double-tap sequence");
-  } finally {
-    Date.now = originalNow;
-  }
+  assert.strictEqual(typeof lobby.onLongPressEmptySeat, "undefined");
+  assert.strictEqual("isInviteArmed" in seats[0], false);
 }
 
 async function assertClaimUsesReturnedSnapshotAndRefreshesConflict() {
@@ -139,7 +134,7 @@ async function assertOlderLobbySnapshotCannotOverwriteNewerState() {
 
 (async () => {
   await assertDoubleTapClaimsExactlyOnce();
-  await assertLongPressArmsInvitationAndSuppressesTap();
+  await assertEmptySeatsHaveNoInvitationState();
   await assertClaimUsesReturnedSnapshotAndRefreshesConflict();
   await assertOlderLobbySnapshotCannotOverwriteNewerState();
   console.log("lobby seat interaction tests passed");

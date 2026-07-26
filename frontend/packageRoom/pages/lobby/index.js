@@ -5,6 +5,7 @@ const LOBBY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-room-prepare.web
 const LOBBY_ASSET_FILE_IDS = {
   roomPlayerFrame: `${CLOUD_ASSET_ROOT}room-player-frame.webp`,
   roomIdentity: `${CLOUD_ASSET_ROOT}room-identity.webp`,
+  logoInvite: `${CLOUD_ASSET_ROOT}logo-invite.webp`,
   logoRoomAdjust: `${CLOUD_ASSET_ROOT}logo-room-adjust.webp`,
   logoRule: `${CLOUD_ASSET_ROOT}logo-rule.webp`,
 };
@@ -159,7 +160,6 @@ Page({
   syncSignalCatchUpPromise: null,
   lastPresenceTouchAt: 0,
   lastEmptySeatTap: null,
-  ignoreEmptySeatTapUntil: 0,
 
   data: {
     roomId: "",
@@ -171,7 +171,6 @@ Page({
     isSubmitting: false,
     isSoloActionSubmitting: false,
     seatChangeSubmitting: false,
-    inviteSeatIndex: null,
     isLeaving: false,
     defaultAvatarSrc: "",
     backgroundSrc: "",
@@ -194,7 +193,6 @@ Page({
     this.syncSignalWatcher = null;
     this.lastPresenceTouchAt = 0;
     this.lastEmptySeatTap = null;
-    this.ignoreEmptySeatTapUntil = 0;
     const roomId = options.roomId || "";
     const shareRoomCode = parseRoomCode(options.roomCode);
     const initialLobby = takeInitialLobbySnapshot(roomId);
@@ -462,8 +460,6 @@ Page({
         return {
           seatIndex,
           isEmpty: true,
-          isInviteArmed: this.data.inviteSeatIndex === seatIndex,
-          displayName: "邀请好友",
           avatarSrc: this.data.defaultAvatarSrc,
           roleLabel: "",
         };
@@ -497,6 +493,7 @@ Page({
           lobbyAssets: {
             roomPlayerFrame: urlByFileId[LOBBY_ASSET_FILE_IDS.roomPlayerFrame] || "",
             roomIdentity: urlByFileId[LOBBY_ASSET_FILE_IDS.roomIdentity] || "",
+            logoInvite: urlByFileId[LOBBY_ASSET_FILE_IDS.logoInvite] || "",
             logoRoomAdjust: urlByFileId[LOBBY_ASSET_FILE_IDS.logoRoomAdjust] || "",
             logoRule: urlByFileId[LOBBY_ASSET_FILE_IDS.logoRule] || "",
           },
@@ -899,42 +896,11 @@ Page({
     return Boolean(err && (err.retryable || REFRESH_AFTER_ERROR_CODES.includes(err.code)));
   },
 
-  setInviteSeatIndex(inviteSeatIndex) {
-    this.setData({
-      inviteSeatIndex,
-      seats: (this.data.seats || []).map((seat) => ({
-        ...seat,
-        isInviteArmed: Boolean(seat.isEmpty && seat.seatIndex === inviteSeatIndex),
-      })),
-    });
-  },
-
-  clearEmptySeatInteraction() {
-    this.lastEmptySeatTap = null;
-    this.ignoreEmptySeatTapUntil = 0;
-    if (this.data.inviteSeatIndex !== null) {
-      this.setInviteSeatIndex(null);
-    }
-  },
-
   onTapEmptySeat(event) {
     const seatIndex = Number(event.currentTarget.dataset.seatIndex);
     const tappedAt = Date.now();
-    if (
-      this.data.seatChangeSubmitting ||
-      !Number.isInteger(seatIndex) ||
-      tappedAt < this.ignoreEmptySeatTapUntil
-    ) {
+    if (this.data.seatChangeSubmitting || !Number.isInteger(seatIndex)) {
       return;
-    }
-
-    if (this.data.inviteSeatIndex === seatIndex) {
-      this.setInviteSeatIndex(null);
-      this.lastEmptySeatTap = null;
-      return;
-    }
-    if (this.data.inviteSeatIndex !== null) {
-      this.setInviteSeatIndex(null);
     }
 
     const lastTap = this.lastEmptySeatTap;
@@ -949,26 +915,12 @@ Page({
     };
   },
 
-  onLongPressEmptySeat(event) {
-    const seatIndex = Number(event.currentTarget.dataset.seatIndex);
-    if (this.data.seatChangeSubmitting || (this.data.lobby && this.data.lobby.isSoloRoom) || !Number.isInteger(seatIndex)) {
-      return;
-    }
-    this.lastEmptySeatTap = null;
-    this.ignoreEmptySeatTapUntil = Date.now() + EMPTY_SEAT_DOUBLE_TAP_INTERVAL_MS;
-    this.setInviteSeatIndex(seatIndex);
-  },
-
-  onShareEmptySeat() {
-    this.clearEmptySeatInteraction();
-  },
-
   async claimLobbySeat(targetSeatIndex) {
     if (!this.data.lobby || this.data.seatChangeSubmitting) {
       return;
     }
 
-    this.clearEmptySeatInteraction();
+    this.lastEmptySeatTap = null;
     this.setData({
       seatChangeSubmitting: true,
     });

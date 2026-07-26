@@ -83,10 +83,19 @@ page {
 
 .room-head {
   margin-top: 58rpx;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330rpx;
+  grid-template-rows: 60rpx 29rpx auto;
+  column-gap: 16rpx;
+}
+
+.room-code-row {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 22rpx;
+  align-items: baseline;
+  white-space: nowrap;
 }
 
 .room-code-label {
@@ -107,20 +116,37 @@ page {
 }
 
 .room-actions {
-  display: flex;
-  align-items: flex-start;
-  gap: 16rpx;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
 }
 
-.tool-control {
-  width: 104rpx;
+.room-actions .tool-control {
+  width: auto;
+  height: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   color: #d7a35e;
 }
 
-.tool-icon-image {
+.tool-share-control {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  line-height: normal;
+  background: transparent;
+}
+
+.tool-share-control::after {
+  border: 0;
+}
+
+.room-actions .tool-icon-image {
   display: block;
   width: 60rpx;
   height: 60rpx;
@@ -139,16 +165,22 @@ page {
 }
 
 .room-meta {
-  margin-top: 20rpx;
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-top: 16rpx;
   color: rgba(236, 198, 142, 0.75);
   font-size: 26rpx;
+  white-space: nowrap;
 }
 
 .lobby-seat-hint {
-  margin-top: 12rpx;
-  color: rgba(224, 190, 136, 0.78);
-  font-size: 22rpx;
-  line-height: 1.5;
+  grid-column: 1;
+  grid-row: 2;
+  margin: 0;
+  color: rgba(236, 198, 142, 0.75);
+  font-size: 26rpx;
+  line-height: 29rpx;
+  white-space: nowrap;
 }
 
 .solo-panel {
@@ -226,10 +258,6 @@ page {
   cursor: pointer;
 }
 
-.seat-card.is-invite-armed {
-  filter: drop-shadow(0 0 14rpx rgba(31, 206, 211, 0.76));
-}
-
 .seat-frame-image {
   position: absolute;
   inset: 0;
@@ -272,26 +300,6 @@ page {
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
-}
-
-.seat-share-action {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  color: transparent;
-  font-size: 0;
-  line-height: 0;
-  background: transparent;
-}
-
-.seat-share-action::after {
-  border: 0;
 }
 
 .seat-avatar {
