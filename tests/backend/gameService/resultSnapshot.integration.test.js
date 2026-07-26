@@ -240,10 +240,136 @@ async function assertFailedElectionKeepsRevealedBallotsInHistory() {
   assert.strictEqual(nextRound.status, "nominating", "the next nomination should use a separate round record");
 }
 
+async function assertAcceptedVetoChaosClearsTermLimits() {
+  const db = createMemoryDb();
+  const { service } = loadGameService({ db, openId: "openid_1" });
+  const members = makeMembers(7, "room_veto_chaos");
+  const room = {
+    _id: "room_veto_chaos",
+    roomId: "room_veto_chaos",
+    roomCode: "100004",
+    mode: "normal",
+    status: "in_game",
+    currentGameId: "game_veto_chaos",
+    expireAt: "2099-01-01T00:00:00.000Z",
+  };
+  const projection = service.__testHooks.createInitialGameProjection(room, members, {
+    gameId: "game_veto_chaos",
+    createdAt: new Date("2026-05-12T00:00:00.000Z"),
+    pickIndex: () => 0,
+  });
+  const chancellorHand = ["FASCIST", "LIBERAL"];
+  const vetoCore = {
+    ...projection.gameCore,
+    version: 9,
+    eventSeq: 12,
+    round: 4,
+    phase: "veto_response",
+    currentPresidentCandidateId: "mem_1",
+    currentChancellorCandidateId: "mem_3",
+    currentPresidentId: "mem_1",
+    currentChancellorId: "mem_3",
+    previousElectedPresidentId: "mem_1",
+    previousElectedChancellorId: "mem_3",
+    electionTracker: 2,
+    fascistPolicyCount: 5,
+    vetoUnlocked: true,
+    policyState: {
+      drawPile: ["LIBERAL", "FASCIST", "LIBERAL", "FASCIST"],
+      discardPile: [],
+      presidentHand: null,
+      chancellorHand,
+      peekPile: null,
+    },
+    phaseData: {
+      presidentId: "mem_1",
+      chancellorId: "mem_3",
+      cards: chancellorHand,
+      requestedBy: "mem_3",
+    },
+  };
+  const publicHistory = projection.publicSnapshotPayload.publicState.publicHistory;
+  const publicPayload = service.__testHooks.buildPublicSnapshotPayload(
+    room,
+    vetoCore,
+    members,
+    publicHistory,
+    new Date("2026-05-12T00:09:00.000Z"),
+  );
+
+  await db.collection("rooms").doc(room.roomId).set({ data: room });
+  await db.collection("game_core").doc(vetoCore.gameId).set({ data: vetoCore });
+  await db.collection("room_public_snapshots").doc(room.roomId).set({
+    data: {
+      _id: room.roomId,
+      roomId: room.roomId,
+      snapshotType: "game_public",
+      version: vetoCore.version,
+      payload: publicPayload,
+    },
+  });
+  for (const member of members) {
+    const privatePayload = service.__testHooks.buildPrivateSnapshotPayload(
+      vetoCore,
+      member,
+      members,
+      new Date("2026-05-12T00:09:00.000Z"),
+    );
+    await db.collection("room_members").doc(member.memberId).set({ data: member });
+    await db.collection("player_private_snapshots").doc(member.memberId).set({
+      data: {
+        _id: member.memberId,
+        memberId: member.memberId,
+        roomId: room.roomId,
+        version: vetoCore.version,
+        payload: privatePayload,
+        pendingTask: privatePayload.pendingTask,
+      },
+    });
+  }
+
+  const response = await service.main({
+    action: "submitCommand",
+    payload: {
+      commandId: "cmd_veto_chaos_accept",
+      roomId: room.roomId,
+      expectedVersion: vetoCore.version,
+      type: "PRESIDENT_RESPOND_VETO",
+      taskId: `${vetoCore.gameId}:${vetoCore.version}:PRESIDENT_RESPOND_VETO:mem_1`,
+      body: {
+        accepted: true,
+      },
+    },
+  });
+
+  assert.strictEqual(response.success, true, "president should be able to accept the veto");
+  const settledCore = db.dump().game_core[vetoCore.gameId];
+  assert.strictEqual(settledCore.electionTracker, 0, "accepted veto at tracker 2 should trigger chaos");
+  assert.strictEqual(
+    settledCore.previousElectedPresidentId,
+    null,
+    "chaos policy after an accepted veto should clear the previous president term limit",
+  );
+  assert.strictEqual(
+    settledCore.previousElectedChancellorId,
+    null,
+    "chaos policy after an accepted veto should clear the previous chancellor term limit",
+  );
+  assert(
+    settledCore.phaseData.eligibleChancellorIds.includes("mem_1"),
+    "the previous president should be eligible after chaos clears term limits",
+  );
+  assert(
+    settledCore.phaseData.eligibleChancellorIds.includes("mem_3"),
+    "the previous chancellor should be eligible after chaos clears term limits",
+  );
+}
+
 (async () => {
   await assertResultSnapshotBlockedBeforeGameEnds();
   await assertResultSnapshotUsesEndedPublicProjection();
   await assertFailedElectionKeepsRevealedBallotsInHistory();
+  await assertAcceptedVetoChaosClearsTermLimits();
   console.log("gameService result snapshot integration tests passed");
 })().catch((err) => {
   console.error(err);

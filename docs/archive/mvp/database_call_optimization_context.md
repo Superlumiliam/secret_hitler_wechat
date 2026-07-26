@@ -1,3 +1,11 @@
+---
+status: historical
+normative: false
+archived_at: 2026-07-26
+---
+
+> **历史文档，不再约束开发。** 本文记录一次 MVP 阶段的数据库调用量排查；已采用的同步与成本控制约束见 [`../../architecture.md`](../../architecture.md)。
+
 # 数据库调用次数异常增长问题背景
 
 ## 1. 问题现象

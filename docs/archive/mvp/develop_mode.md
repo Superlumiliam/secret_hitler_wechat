@@ -1,3 +1,11 @@
+---
+status: historical
+normative: false
+archived_at: 2026-07-26
+---
+
+> **历史文档，不再约束开发。** 本文记录开发者模式迁移为单人模式的过程；当前能力分别以 [`../../product.md`](../../product.md)、[`../../architecture.md`](../../architecture.md) 和 [`../../api.md`](../../api.md) 为准。
+
 # 《secret dictator》单人模式方案
 
 ## 1. 文档目标
@@ -288,7 +296,7 @@ interface SoloActingMemberPayload {
 
 ## 14. API 设计原则
 
-具体接口在实现前再同步更新 `/docs/front_back_api.md`。
+具体接口在实现前再同步更新 `./front_back_api.md`。
 
 当前阶段只确定原则：
 
@@ -354,8 +362,8 @@ interface RoomMember {
 
 ## 18. 与其他文档的关系
 
-- `/docs/secret_hitler_prd.md`：保留产品层面的单人模式说明，不展开技术细节。
-- `/docs/backend_tech_detail.md`：记录后端安全边界与实现约束。
-- `/docs/frontend_tech_detail.md`：记录首页入口、创建房间页复用与交互约束。
-- `/docs/front_back_api.md`：记录 `solo*` action 与普通多人 action 的边界。
-- `/docs/project_state.md`：记录该方案文档已调整为单人模式。
+- `./secret_hitler_prd.md`：保留产品层面的单人模式说明，不展开技术细节。
+- `./backend_tech_detail.md`：记录后端安全边界与实现约束。
+- `./frontend_tech_detail.md`：记录首页入口、创建房间页复用与交互约束。
+- `./front_back_api.md`：记录 `solo*` action 与普通多人 action 的边界。
+- `./project_state.md`：记录该方案文档已调整为单人模式。

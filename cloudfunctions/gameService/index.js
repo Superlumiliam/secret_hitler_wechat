@@ -2941,6 +2941,8 @@ async function submitCommand(payload, openid) {
           let liberalPolicyCount = gameCore.liberalPolicyCount || 0;
           let fascistPolicyCount = gameCore.fascistPolicyCount || 0;
           let electionTracker = (gameCore.electionTracker || 0) + 1;
+          let previousElectedPresidentId = gameCore.previousElectedPresidentId || null;
+          let previousElectedChancellorId = gameCore.previousElectedChancellorId || null;
           const nominationTransition = getNextNominationTransition(gameCore, members);
           let nextPresidentCandidateId = nominationTransition.nextPresidentCandidateId;
           let nextPolicyState = {
@@ -2965,6 +2967,8 @@ async function submitCommand(payload, openid) {
               fascistPolicyCount += 1;
             }
             electionTracker = 0;
+            previousElectedPresidentId = null;
+            previousElectedChancellorId = null;
             eventExtra.electionTrackerAfter = 0;
             eventExtra.chaosPolicy = {
               policy: chaosPolicy,
@@ -3007,6 +3011,8 @@ async function submitCommand(payload, openid) {
               phase === "nomination" ? nominationTransition.specialElectionCallerId : gameCore.specialElectionCallerId || null,
             forcedNextPresidentId:
               phase === "nomination" ? nominationTransition.forcedNextPresidentId : gameCore.forcedNextPresidentId || null,
+            previousElectedPresidentId,
+            previousElectedChancellorId,
             electionTracker,
             liberalPolicyCount,
             fascistPolicyCount,
@@ -3081,6 +3087,8 @@ async function submitCommand(payload, openid) {
             currentChancellorId: nextGameCore.currentChancellorId,
             specialElectionCallerId: nextGameCore.specialElectionCallerId,
             forcedNextPresidentId: nextGameCore.forcedNextPresidentId,
+            previousElectedPresidentId: nextGameCore.previousElectedPresidentId,
+            previousElectedChancellorId: nextGameCore.previousElectedChancellorId,
             electionTracker: nextGameCore.electionTracker,
             liberalPolicyCount: nextGameCore.liberalPolicyCount,
             fascistPolicyCount: nextGameCore.fascistPolicyCount,

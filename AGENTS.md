@@ -1,21 +1,28 @@
 ## reference
-根据任务决定读哪些文件
+先读`/docs/README.md`了解文档权威关系，再根据任务选择当前文档：
 
-- `/docs/game_rules.md`:游戏规则
-- `/docs/secret_hitler_prd.md`:整体产品需求
-- `/docs/backend_tech_detail.md`:后端技术方案设计
-- `/docs/frontend_tech_detail.md`:前端技术方案设计
-- `/docs/front_back_api.md`:前后端api
-- `/docs/project_state.md`:本项目开发进展
-- `/docs/develop_mode.md`:开发者模式开发指南
+- `/docs/product.md`:当前产品基线与已交付能力
+- `/docs/game_rules.md`:游戏规则唯一来源
+- `/docs/architecture.md`:当前前后端架构、数据流和安全边界
+- `/docs/api.md`:当前已经实现的前后端 API
+- `/docs/roadmap.md`:1→100 候选需求和工程改进
+- `/docs/releases/mvp.md`:MVP 交付范围、验证证据和已知工程债
+- `/docs/rfcs/`:新需求提案；`draft`状态不具开发约束
+- `/docs/decisions/`:重大长期技术决策
+- `/docs/archive/`:历史材料，只用于追溯，`historical`文档不得约束当前开发
+
+文档与代码不一致时，沿前端调用、云函数入口、业务校验、数据库写入和测试确认真实边界，在同一次变更中修正文档或实现。不得因为历史文档存在而恢复已废弃的接口、目录或技术方案。
+
 - `reference/01-首页入口.png`:首页创建房间入口的页面参考设计图
 - `reference/02-创建房间.png`:创建房间时选择对局人数的页面参考设计图
 - `reference/03-房间大厅.png`:房间大厅等待游戏开始的页面参考设计图
 - `reference/04-对局桌面页.png`:对局中的游戏桌面页面参考设计图
 - `reference/05-对局结果页.png`:对局结束复盘游戏的页面参考设计图
-- `reference/06-具备规则页.png`:对局中查看规则的页面参考设计图
+- `reference/06-局内规则页.png`:对局中查看规则的页面参考设计图
 - `reference/07-身份页.png`:用户查看自己身份的页面参考设计图
 - `reference/08-创建用户.png`:用户创建/修改头像和用户名
+- `reference/09-历史记录页.png`:对局中查看公开历史的页面参考设计图
+- `reference/10-玩家席位图.png`至`reference/14-房间大厅玩家席位.png`:玩家席位和桌面局部参考设计图
 
 ## 术语映射
 - 对外展示桌游名称时使用英文《secret dictator》和中文《揭秘独裁者》，不要使用中文《揭秘希特勒》或包含“希特勒”的中文项目名
@@ -26,7 +33,9 @@
 ## 行为规范
 - 只有我让你生成文档时才生成文档，文档应当凝练地反应核心思想，不要做重复性长篇大论，文档总是输出文档到`/docs`目录下
 - 每次修改文档后做一致性检查，确保关联文档逻辑一致
-- 不要删除`docs/`和`reference/`目录下的文件
+- 新需求涉及多个模块、接口变化或重要产品取舍时先写短 RFC；重大且长期的技术取舍再写 ADR。实现完成时同步更新受影响的当前权威文档和测试
+- 不要把尚未实现的字段、action 或目录写入当前权威文档；候选能力只进入`roadmap.md`或 RFC
+- 不要删除`reference/`目录下的文件。`docs/`中的历史文件只有在用户按`docs/archive/`审查清单逐项明确批准后才能删除
 - 图像处理方面的需求，从`reference/origin_images`目录下读取图片，处理完输出到`reference/processed_images`目录下。当前有`imageMagick`工具可以用，如果有使用未安装工具的需求及时反馈，保证图片输出质量。
 
 ## Bug 修复方法论

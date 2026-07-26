@@ -1,3 +1,11 @@
+---
+status: historical
+normative: false
+archived_at: 2026-07-26
+---
+
+> **历史文档，不再约束开发。** 本文记录 MVP 的 0→1 前端设计；当前技术约束以 [`../../architecture.md`](../../architecture.md) 和 [`../../api.md`](../../api.md) 为准。
+
 # 《secret dictator》前端详细技术方案
 
 ## 1. 文档目标
@@ -12,7 +20,7 @@
 - 阶段任务 UI 实现
 - 隐私保护、异常恢复、性能与测试
 
-后续前端开发应以本文档为直接编码依据；若实际实现需要修改接口字段或交互契约，必须先同步更新 `/docs/front_back_api.md`。
+后续前端开发应以本文档为直接编码依据；若实际实现需要修改接口字段或交互契约，必须先同步更新 `./front_back_api.md`。
 
 ## 2. 现状与设计前提
 
@@ -1270,7 +1278,7 @@ interface RuleSection {
 
 1. 小程序前端不适合在运行时解析本地 markdown。
 2. 规则页只需要局内可读的精简摘要。
-3. 开发时可手工维护一份与 `/docs/game_rules.md` 对齐的结构化文案。
+3. 开发时可手工维护一份与 `../../game_rules.md` 对齐的结构化文案。
 
 ## 13. 组件设计
 
@@ -1543,7 +1551,7 @@ interface PendingTaskViewModel {
 
 ## 16. 前后端联调正式契约
 
-`/docs/front_back_api.md` 已经冻结了正式接口协议，本节只保留前端必须直接消费的关键契约。
+`./front_back_api.md` 已经冻结了正式接口协议，本节只保留前端必须直接消费的关键契约。
 
 ## 16.1 `pendingTask.meta` 正式消费规则
 
@@ -1658,7 +1666,7 @@ interface ResultSnapshot {
 
 1. MVP 前端只依赖 `pendingTask` 作为主动操作入口。
 2. `allowedActions` 不作为必需字段。
-3. 若后续要做更细粒度禁用态，再单独扩展协议并更新 `/docs/front_back_api.md`。
+3. 若后续要做更细粒度禁用态，再单独扩展协议并更新 `./front_back_api.md`。
 
 ## 17. 错误处理与用户提示
 
@@ -1859,7 +1867,7 @@ MVP 尽量少图化：
 
 ## 21.4 单人模式
 
-单人模式需要支持一个用户手动完成完整对局流程。具体方案以 `/docs/develop_mode.md` 为准。
+单人模式需要支持一个用户手动完成完整对局流程。具体方案以 `./develop_mode.md` 为准。
 
 前端实现时必须遵守：
 
@@ -1935,8 +1943,8 @@ MVP 尽量少图化：
 
 如果后续实现与本方案冲突，以：
 
-1. `/docs/front_back_api.md` 的正式字段定义
-2. `/docs/game_rules.md` 的规则正确性
-3. `/docs/secret_hitler_prd.md` 的产品边界
+1. `./front_back_api.md` 的正式字段定义
+2. `../../game_rules.md` 的规则正确性
+3. `./secret_hitler_prd.md` 的产品边界
 
 为最终裁决依据。

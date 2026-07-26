@@ -1,4 +1,12 @@
+---
+status: active
+authority: game-rules
+last_verified: 2026-07-26
+---
+
 # 《secret dictator》游戏规则与流程说明
+
+本文档是游戏规则的唯一权威来源。产品、架构或 API 文档不得改变这里定义的规则；如规则本身需要调整，应先确认规则来源，再同步修改实现与测试。
 
 ## 文档目的
 

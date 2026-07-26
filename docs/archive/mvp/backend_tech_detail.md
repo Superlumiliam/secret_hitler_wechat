@@ -1,3 +1,11 @@
+---
+status: historical
+normative: false
+archived_at: 2026-07-26
+---
+
+> **历史文档，不再约束开发。** 本文记录 MVP 的 0→1 后端设计；当前技术约束以 [`../../architecture.md`](../../architecture.md) 和 [`../../api.md`](../../api.md) 为准。
+
 # 《secret dictator》后端详细技术方案
 
 ## 1. 文档定位
@@ -740,7 +748,7 @@ MVP 后端建立轻量 `user_profiles` 集合，但它不是长期头像库或�
 统一约束：
 
 - 除 `getLobbySnapshot` 外，其余 action 都属于写操作，正式协议要求必须携带 `commandId`
-- 请求与响应字段以 `/docs/front_back_api.md` 为唯一对外准则
+- 请求与响应字段以 `./front_back_api.md` 为唯一对外准则
 - 本节重点描述后端实现步骤与强校验点，不重复维护一份独立返回结构
 
 ### 8.2.1 `createRoom`
@@ -1801,7 +1809,7 @@ type ApplyCommandResult = {
 
 ## 14.1 错误码落地原则
 
-严格使用 `/docs/front_back_api.md` 已定义错误码：
+严格使用 `./front_back_api.md` 已定义错误码：
 
 - `INVALID_PAYLOAD`
 - `ROOM_NOT_FOUND`
@@ -2000,7 +2008,7 @@ export interface RandomProvider {
 
 ## 17.4 单人模式
 
-单人模式需要支持一个用户通过虚拟席位和席位视角切换手动完成完整对局流程。具体方案以 `/docs/develop_mode.md` 为准。
+单人模式需要支持一个用户通过虚拟席位和席位视角切换手动完成完整对局流程。具体方案以 `./develop_mode.md` 为准。
 
 后端实现时必须遵守：
 

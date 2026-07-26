@@ -1,3 +1,11 @@
+---
+status: historical
+normative: false
+archived_at: 2026-07-26
+---
+
+> **历史文档，不再约束开发。** 本文包含 MVP 设计期的接口和预留能力；当前已实现契约只以 [`../../api.md`](../../api.md) 为准。
+
 # 《secret dictator》前后端交互 API 详细设计
 
 ## 1. 文档目标
