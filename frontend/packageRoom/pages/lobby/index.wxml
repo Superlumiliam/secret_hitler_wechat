@@ -22,7 +22,7 @@
         <text class="room-code">{{lobby.roomCode}}</text>
       </view>
 
-      <view class="room-actions">
+      <view class="room-actions {{lobby.isSoloRoom ? 'is-solo' : ''}}">
         <button
           wx:if="{{!lobby.isSoloRoom}}"
           class="tool-control tool-share-control"
@@ -33,7 +33,7 @@
           <image wx:if="{{lobbyAssets.logoInvite}}" class="tool-icon-image" src="{{lobbyAssets.logoInvite}}" mode="aspectFit" webp="{{true}}"></image>
           <view class="tool-text">好友邀请</view>
         </button>
-        <view class="tool-control" bindtap="onTapRoomSettings" role="button" aria-label="房间设置">
+        <view class="tool-control room-settings-control" bindtap="onTapRoomSettings" role="button" aria-label="房间设置">
           <image wx:if="{{lobbyAssets.logoRoomAdjust}}" class="tool-icon-image" src="{{lobbyAssets.logoRoomAdjust}}" mode="aspectFit" webp="{{true}}"></image>
           <view class="tool-text">房间设置</view>
         </view>

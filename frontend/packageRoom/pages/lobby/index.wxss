@@ -123,6 +123,10 @@ page {
   gap: 0;
 }
 
+.room-actions.is-solo .room-settings-control {
+  grid-column: 2;
+}
+
 .room-actions .tool-control {
   width: auto;
   height: auto;
