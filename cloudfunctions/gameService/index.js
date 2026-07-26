@@ -10,7 +10,7 @@ const _ = db.command;
 
 const MIN_PLAYER_COUNT = 5;
 const MAX_PLAYER_COUNT = 10;
-const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
+const ROOM_TTL_ACTIVE_MS = 3 * 60 * 60 * 1000;
 const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 const COMMAND_RECORD_TTL_MS = 10 * 60 * 1000;
 const LAST_SEEN_THROTTLE_MS = 20 * 1000;

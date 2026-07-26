@@ -21,7 +21,7 @@ const COLLECTIONS = [
 ];
 const BATCH_LIMIT = 100;
 const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
-const ROOM_TTL_ACTIVE_MS = 2 * 60 * 60 * 1000;
+const ROOM_TTL_ACTIVE_MS = 3 * 60 * 60 * 1000;
 const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 const MAINTENANCE_STATE_COLLECTION = "maintenance_state";
 const COLLECTION_INIT_STATE_DOC_ID = "collection_init_daily";

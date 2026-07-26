@@ -1163,6 +1163,7 @@ function assertRoomTtlPolicies() {
     ROOM_TTL_ACTIVE_MS,
     "active game projection should keep active-room ttl",
   );
+  assert.strictEqual(ROOM_TTL_ACTIVE_MS, 3 * 60 * 60 * 1000, "active room ttl should be 3 hours");
 
   const endedAt = new Date("2026-05-12T00:15:00.000Z");
   assert.strictEqual(

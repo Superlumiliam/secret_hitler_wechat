@@ -136,7 +136,7 @@ function showTimeoutModalIfNeeded(options = {}) {
 
 module.exports = {
   LOBBY_PAGE_TIMEOUT_MS: 30 * 60 * 1000,
-  GAME_PAGE_TIMEOUT_MS: 2 * 60 * 60 * 1000,
+  GAME_PAGE_TIMEOUT_MS: 3 * 60 * 60 * 1000,
   RESULT_PAGE_TIMEOUT_MS: 30 * 60 * 1000,
   clearPageTimeout,
   handlePageTimeout,
