@@ -27,6 +27,7 @@ const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
 const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const { createRoomSyncSignalWatcher } = require("../../utils/roomSyncSignal");
 const userProfileStore = require("../../../utils/userProfileStore");
+const bootstrapService = require("../../../services/bootstrapService");
 const REFRESH_AFTER_ERROR_CODES = [
   "VERSION_CONFLICT",
   "PHASE_MISMATCH",
@@ -180,7 +181,7 @@ Page({
     seats: [],
   },
 
-  onLoad(options) {
+  onLoad(options = {}) {
     this.initialSnapshotSettled = false;
     this.shouldStartRefreshAfterInitial = false;
     this.isPageVisible = false;
@@ -193,8 +194,9 @@ Page({
     this.syncSignalWatcher = null;
     this.lastPresenceTouchAt = 0;
     this.lastEmptySeatTap = null;
-    const roomId = options.roomId || "";
     const shareRoomCode = parseRoomCode(options.roomCode);
+    const sharedRoomId = shareRoomCode ? String(options.roomId || "").trim() : "";
+    const roomId = shareRoomCode ? "" : options.roomId || "";
     const initialLobby = takeInitialLobbySnapshot(roomId);
     enableShareMenu();
     this.setData({
@@ -207,8 +209,8 @@ Page({
       beforeRedirect: () => this.stopRefreshTimer(),
     });
     this.loadPageAssets();
-    if (!roomId && shareRoomCode) {
-      this.joinSharedRoom(shareRoomCode);
+    if (shareRoomCode) {
+      this.joinSharedRoom(shareRoomCode, sharedRoomId);
       return;
     }
 
@@ -267,11 +269,11 @@ Page({
   },
 
   onShareAppMessage() {
-    return buildRoomShare(this.data.lobby && this.data.lobby.roomCode);
+    return buildRoomShare(this.data.lobby && this.data.lobby.roomCode, this.data.roomId);
   },
 
   onShareTimeline() {
-    const share = buildRoomShare(this.data.lobby && this.data.lobby.roomCode);
+    const share = buildRoomShare(this.data.lobby && this.data.lobby.roomCode, this.data.roomId);
     return {
       title: share.title,
       query: share.query,
@@ -724,7 +726,7 @@ Page({
     }
   },
 
-  async joinSharedRoom(roomCode) {
+  async joinSharedRoom(roomCode, sharedRoomId = "") {
     if (this.data.isJoiningFromShare) {
       return;
     }
@@ -732,14 +734,6 @@ Page({
     if (!roomCode) {
       wx.reLaunch({
         url: "/pages/home/index",
-      });
-      return;
-    }
-
-    const profile = await userProfileStore.getCachedProfileAsync();
-    if (!profile) {
-      wx.redirectTo({
-        url: buildProfileRedirectUrl(`/packageRoom/pages/lobby/index?roomCode=${encodeURIComponent(roomCode)}`),
       });
       return;
     }
@@ -760,13 +754,40 @@ Page({
       isLoading: true,
     });
 
+    try {
+      const recovered = await bootstrapService.recoverActiveRoom();
+      const activeRoom = recovered.activeRoom || null;
+      const app = getApp();
+      if (app && app.globalData) {
+        app.globalData.activeRoom = activeRoom;
+      }
+      const isMatchingActiveRoom = sharedRoomId
+        ? activeRoom && activeRoom.roomId === sharedRoomId
+        : activeRoom && String(activeRoom.roomCode || "") === roomCode;
+      if (isMatchingActiveRoom) {
+        app.routeByActiveRoom(activeRoom);
+        return;
+      }
+    } catch (err) {
+      console.error("恢复分享房间失败，将继续尝试加入", err);
+    }
+
+    const profile = await userProfileStore.getCachedProfileAsync();
+    if (!profile) {
+      wx.redirectTo({
+        url: buildProfileRedirectUrl(buildRoomShare(roomCode, sharedRoomId).path),
+      });
+      return;
+    }
+
     let uploadedAvatarFileId = "";
     try {
       const commandId = createCommandId("join_room");
+      const joinTarget = sharedRoomId ? { roomId: sharedRoomId } : { roomCode };
       uploadedAvatarFileId = await this.uploadRoomAvatarIfNeeded(profile, commandId);
       const room = await this.callRoomService("joinRoom", {
         commandId,
-        roomCode,
+        ...joinTarget,
         displayName: profile.displayName,
         avatarUrl: uploadedAvatarFileId,
       });

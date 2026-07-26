@@ -21,9 +21,17 @@ function buildHomeShare() {
   };
 }
 
-function buildRoomShare(roomCode) {
+function buildRoomShare(roomCode, roomId) {
   const safeRoomCode = String(roomCode || "").trim();
-  const query = safeRoomCode ? `roomCode=${encodeURIComponent(safeRoomCode)}` : "";
+  const safeRoomId = String(roomId || "").trim();
+  const query = safeRoomCode
+    ? [
+        safeRoomId ? `roomId=${encodeURIComponent(safeRoomId)}` : "",
+        `roomCode=${encodeURIComponent(safeRoomCode)}`,
+      ]
+        .filter(Boolean)
+        .join("&")
+    : "";
   const title = `加入《揭秘独裁者》房间 ${safeRoomCode}`.trim();
 
   return {
