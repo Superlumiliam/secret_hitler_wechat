@@ -81,7 +81,8 @@ function mapResultSnapshot(snapshot, assets = {}) {
   const winner = snapshot.winner || "";
   const myPlayer = finalPlayers.find((player) => player.memberId === snapshot.myMemberId);
   const isMyWinner = myPlayer ? myPlayer.party === winner : true;
-  const myPartyAssetSuffix = myPlayer && myPlayer.party === "FASCIST" ? "fascist" : "liberal";
+  const viewerParty = myPlayer ? myPlayer.party : winner;
+  const myPartyAssetSuffix = viewerParty === "FASCIST" ? "fascist" : "liberal";
   const targetPlayerCount = finalPlayers.length || 6;
   const liberalPolicyCount = policySummary.liberal || 0;
   const fascistPolicyCount = policySummary.fascist || 0;

@@ -33,16 +33,16 @@ function createContext(lobby, overrides = {}) {
   };
 }
 
-function emptySeatEvent(seatIndex) {
-  return { currentTarget: { dataset: { seatIndex } } };
+function emptySeatEvent(seatIndex, memberType = "player") {
+  return { currentTarget: { dataset: { seatIndex, memberType } } };
 }
 
 async function assertDoubleTapClaimsExactlyOnce() {
   const lobby = loadLobbyPage();
   const claims = [];
   const context = createContext(lobby, {
-    claimLobbySeat(seatIndex) {
-      claims.push(seatIndex);
+    claimLobbySeat(seatIndex, memberType) {
+      claims.push({ seatIndex, memberType });
     },
   });
   const originalNow = Date.now;
@@ -54,7 +54,33 @@ async function assertDoubleTapClaimsExactlyOnce() {
     Date.now = () => 1300;
     lobby.onTapEmptySeat.call(context, emptySeatEvent(3));
 
-    assert.deepStrictEqual(claims, [3], "only the second tap in the threshold should claim the seat");
+    assert.deepStrictEqual(
+      claims,
+      [{ seatIndex: 3, memberType: "player" }],
+      "only the second tap in the threshold should claim the seat",
+    );
+  } finally {
+    Date.now = originalNow;
+  }
+}
+
+async function assertDoubleTapKeyIncludesMemberType() {
+  const lobby = loadLobbyPage();
+  const claims = [];
+  const context = createContext(lobby, {
+    claimLobbySeat(seatIndex, memberType) {
+      claims.push({ seatIndex, memberType });
+    },
+  });
+  const originalNow = Date.now;
+  try {
+    Date.now = () => 1000;
+    lobby.onTapEmptySeat.call(context, emptySeatEvent(1, "player"));
+    Date.now = () => 1100;
+    lobby.onTapEmptySeat.call(context, emptySeatEvent(1, "spectator"));
+    Date.now = () => 1200;
+    lobby.onTapEmptySeat.call(context, emptySeatEvent(1, "spectator"));
+    assert.deepStrictEqual(claims, [{ seatIndex: 1, memberType: "spectator" }]);
   } finally {
     Date.now = originalNow;
   }
@@ -72,17 +98,51 @@ async function assertEmptySeatsHaveNoInvitationState() {
   assert.strictEqual("isInviteArmed" in seats[0], false);
 }
 
+function assertSpectatorSeatMappingIsFixedAtThreeSlots() {
+  const lobby = loadLobbyPage();
+  const context = createContext(lobby);
+  const seats = lobby.buildSpectatorSeats.call(context, {
+    spectatorCapacity: 3,
+    spectatorSeatOrder: [
+      {
+        memberId: "spectator_2",
+        memberType: "spectator",
+        seatIndex: 2,
+        displayName: "领队",
+        avatarUrl: "cloud://avatar",
+        isHost: true,
+      },
+    ],
+  }, {
+    "cloud://avatar": "https://example.com/avatar.webp",
+  });
+
+  assert.strictEqual(seats.length, 3);
+  assert.strictEqual(seats[0].isEmpty, true);
+  assert.strictEqual(seats[1].displayName, "领队");
+  assert.strictEqual(seats[1].roleLabel, "房主");
+  assert.strictEqual(seats[1].avatarSrc, "https://example.com/avatar.webp");
+  assert.strictEqual(seats[2].isEmpty, true);
+}
+
 async function assertClaimUsesReturnedSnapshotAndRefreshesConflict() {
   const lobby = loadLobbyPage();
   let hydratedSnapshot = null;
+  let claimPayload = null;
   const successContext = createContext(lobby, {
-    callRoomService: async () => ({ roomId: "room_1", version: 2 }),
+    callRoomService: async (action, payload) => {
+      assert.strictEqual(action, "claimLobbySeat");
+      claimPayload = payload;
+      return { roomId: "room_1", version: 2 };
+    },
     hydrateLobby: async (snapshot) => {
       hydratedSnapshot = snapshot;
     },
   });
-  await lobby.claimLobbySeat.call(successContext, 3);
+  await lobby.claimLobbySeat.call(successContext, 2, "spectator");
   assert.strictEqual(hydratedSnapshot.version, 2);
+  assert.strictEqual(claimPayload.targetSeatIndex, 2);
+  assert.strictEqual(claimPayload.targetMemberType, "spectator");
   assert.strictEqual(successContext.data.seatChangeSubmitting, false);
 
   let refreshCount = 0;
@@ -106,6 +166,86 @@ async function assertClaimUsesReturnedSnapshotAndRefreshesConflict() {
   }
   assert.strictEqual(refreshCount, 1, "seat conflicts should refresh the authoritative lobby snapshot");
   assert.strictEqual(conflictContext.data.seatChangeSubmitting, false);
+}
+
+async function assertCrossTypeClaimShowsPrompt() {
+  const lobby = loadLobbyPage();
+  const toastTitles = [];
+  global.wx = {
+    showToast(options) {
+      toastTitles.push(options.title);
+    },
+  };
+  let returnedMemberType = "spectator";
+  const context = createContext(lobby, {
+    data: {
+      lobby: {
+        roomId: "room_1",
+        roomStatus: "lobby",
+        viewerState: {
+          myMemberType: "player",
+        },
+      },
+    },
+    callRoomService: async () => ({
+      roomId: "room_1",
+      roomStatus: "lobby",
+      version: returnedMemberType === "spectator" ? 2 : 3,
+      viewerState: {
+        myMemberType: returnedMemberType,
+      },
+    }),
+    hydrateLobby: async (snapshot) => {
+      context.data.lobby = snapshot;
+      return true;
+    },
+  });
+
+  await lobby.claimLobbySeat.call(context, 1, "spectator");
+  assert.strictEqual(toastTitles[0], "已切换到观战位");
+
+  returnedMemberType = "player";
+  await lobby.claimLobbySeat.call(context, 1, "player");
+  assert.deepStrictEqual(toastTitles, ["已切换到观战位", "已切换到玩家位"]);
+}
+
+async function assertSpectatorReadyActionNeverSubmitsReady() {
+  const lobby = loadLobbyPage();
+  let roomServiceCallCount = 0;
+  let startCount = 0;
+  const context = {
+    ...lobby,
+    data: {
+      ...lobby.data,
+      isSubmitting: false,
+      lobby: {
+        viewerState: {
+          myMemberType: "spectator",
+          isHost: false,
+          canStart: false,
+        },
+      },
+    },
+    setData(update) {
+      this.data = { ...this.data, ...update };
+    },
+    callRoomService() {
+      roomServiceCallCount += 1;
+    },
+    onStartGame() {
+      startCount += 1;
+    },
+  };
+
+  await lobby.onReadyAction.call(context);
+  assert.strictEqual(roomServiceCallCount, 0);
+  assert.strictEqual(startCount, 0);
+
+  context.data.lobby.viewerState.isHost = true;
+  context.data.lobby.viewerState.canStart = true;
+  await lobby.onReadyAction.call(context);
+  assert.strictEqual(roomServiceCallCount, 0);
+  assert.strictEqual(startCount, 1);
 }
 
 async function assertOlderLobbySnapshotCannotOverwriteNewerState() {
@@ -204,6 +344,7 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
   let recoveryShouldFail = false;
   let joinAttempts = 0;
   const redirects = [];
+  const reLaunches = [];
 
   global.getApp = () => app;
   global.wx = {
@@ -235,6 +376,9 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
     },
     redirectTo({ url }) {
       redirects.push(url);
+    },
+    reLaunch({ url }) {
+      reLaunches.push(url);
     },
     showToast() {},
   };
@@ -324,6 +468,46 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
       redirects[redirects.length - 1],
       "/packageRoom/pages/lobby/index?roomId=room_fallback&memberId=mem_fallback",
     );
+
+    const spectatorLobbyContext = createContext(lobby, {
+      data: {
+        roomId: "",
+        lobby: null,
+      },
+      callRoomService: async () => ({
+        roomId: "room_spectator",
+        memberId: "mem_spectator",
+        memberType: "spectator",
+        routeHint: "lobby",
+        lobbySnapshot: {},
+      }),
+      cacheInitialLobbySnapshot() {},
+    });
+    await lobby.joinSharedRoom.call(spectatorLobbyContext, "654321", "room_spectator");
+    assert.strictEqual(
+      redirects[redirects.length - 1],
+      "/packageRoom/pages/lobby/index?roomId=room_spectator&memberId=mem_spectator&joinedAs=spectator",
+    );
+
+    const inGameContext = createContext(lobby, {
+      data: {
+        roomId: "",
+        lobby: null,
+      },
+      callRoomService: async () => ({
+        roomId: "room_in_game",
+        memberId: "mem_late_spectator",
+        memberType: "spectator",
+        roomStatus: "in_game",
+        routeHint: "board",
+        lobbySnapshot: null,
+      }),
+    });
+    await lobby.joinSharedRoom.call(inGameContext, "654321", "room_in_game");
+    assert.strictEqual(
+      reLaunches[reLaunches.length - 1],
+      "/packageRoom/pages/board/index?roomId=room_in_game",
+    );
   } finally {
     global.wx = originalWx;
     global.getApp = originalGetApp;
@@ -333,8 +517,12 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
 
 (async () => {
   await assertDoubleTapClaimsExactlyOnce();
+  await assertDoubleTapKeyIncludesMemberType();
   await assertEmptySeatsHaveNoInvitationState();
+  assertSpectatorSeatMappingIsFixedAtThreeSlots();
   await assertClaimUsesReturnedSnapshotAndRefreshesConflict();
+  await assertCrossTypeClaimShowsPrompt();
+  await assertSpectatorReadyActionNeverSubmitsReady();
   await assertOlderLobbySnapshotCannotOverwriteNewerState();
   assertRoomShareUsesStableRoomId();
   assertSharedLoadTreatsRoomIdAsJoinTarget();

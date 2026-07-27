@@ -39,4 +39,42 @@ assert.deepStrictEqual(
   "result mapper should render failed election ballots in seat order",
 );
 
+const fascistObserverResult = mapResultSnapshot({
+  roomId: "room_fascist_win",
+  winner: "FASCIST",
+  myMemberId: "mem_spectator",
+  finalPlayers: [
+    { memberId: "virtual_1", seatIndex: 1, displayName: "玩家1", role: "HITLER", party: "FASCIST" },
+    { memberId: "virtual_2", seatIndex: 2, displayName: "玩家2", role: "LIBERAL", party: "LIBERAL" },
+  ],
+  policySummary: {
+    liberal: 2,
+    fascist: 6,
+  },
+  timeline: [],
+});
+
+assert.strictEqual(fascistObserverResult.winnerText, "极权派胜利");
+assert.strictEqual(
+  fascistObserverResult.resultImageAssetKey,
+  "result-success-fascist",
+  "an observer must see the result image for the actual winning faction",
+);
+
+const losingPlayerResult = mapResultSnapshot({
+  winner: "FASCIST",
+  myMemberId: "virtual_2",
+  finalPlayers: [
+    { memberId: "virtual_1", seatIndex: 1, displayName: "玩家1", role: "HITLER", party: "FASCIST" },
+    { memberId: "virtual_2", seatIndex: 2, displayName: "玩家2", role: "LIBERAL", party: "LIBERAL" },
+  ],
+  policySummary: {},
+  timeline: [],
+});
+assert.strictEqual(
+  losingPlayerResult.resultImageAssetKey,
+  "result-fail-liberal",
+  "player result images must continue to use the player's own faction",
+);
+
 console.log("result mapper tests passed");

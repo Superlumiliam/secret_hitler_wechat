@@ -4,6 +4,7 @@ const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const LOBBY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-room-prepare.webp`;
 const LOBBY_ASSET_FILE_IDS = {
   roomPlayerFrame: `${CLOUD_ASSET_ROOT}room-player-frame.webp`,
+  spectatorFrame: `${CLOUD_ASSET_ROOT}history-frame.webp`,
   roomIdentity: `${CLOUD_ASSET_ROOT}room-identity.webp`,
   logoInvite: `${CLOUD_ASSET_ROOT}logo-invite.webp`,
   logoRoomAdjust: `${CLOUD_ASSET_ROOT}logo-room-adjust.webp`,
@@ -98,6 +99,7 @@ function getJoinErrorMessage(err) {
     ROOM_NOT_FOUND: "房间不存在",
     ROOM_EXPIRED: "房间已过期",
     ROOM_FULL: "房间已满",
+    SPECTATOR_SEATS_FULL: "玩家席和观战席均已满",
     ROOM_NOT_JOINABLE: "房间不可加入",
     ACTION_NOT_ALLOWED: "当前账号已有进行中的房间",
     PROFILE_REQUIRED: "请先创建用户资料",
@@ -127,17 +129,18 @@ function normalizeLobbyView(lobby) {
     return lobby;
   }
 
-  if (lobby.viewerState) {
-    return lobby;
-  }
-
   return {
     ...lobby,
+    spectatorCapacity: Number(lobby.spectatorCapacity) || 3,
+    spectatorCount: Number(lobby.spectatorCount) || 0,
+    spectatorSeatOrder: lobby.spectatorSeatOrder || [],
     viewerState: {
-      myMemberId: lobby.myMemberId || "",
-      isHost: Boolean(lobby.isHost),
-      myIsReady: Boolean(lobby.myIsReady),
-      canStart: Boolean(lobby.canStart),
+      ...(lobby.viewerState || {}),
+      myMemberId: (lobby.viewerState && lobby.viewerState.myMemberId) || lobby.myMemberId || "",
+      myMemberType: (lobby.viewerState && lobby.viewerState.myMemberType) || "player",
+      isHost: Boolean(lobby.viewerState ? lobby.viewerState.isHost : lobby.isHost),
+      myIsReady: Boolean(lobby.viewerState ? lobby.viewerState.myIsReady : lobby.myIsReady),
+      canStart: Boolean(lobby.viewerState ? lobby.viewerState.canStart : lobby.canStart),
     },
   };
 }
@@ -179,6 +182,7 @@ Page({
     lobbyAssets: {},
     readyPlayerCount: 0,
     seats: [],
+    spectatorSeats: [],
   },
 
   onLoad(options = {}) {
@@ -199,6 +203,12 @@ Page({
     const roomId = shareRoomCode ? "" : options.roomId || "";
     const initialLobby = takeInitialLobbySnapshot(roomId);
     enableShareMenu();
+    if (options.joinedAs === "spectator") {
+      wx.showToast({
+        title: "玩家席已满，已进入观战席",
+        icon: "none",
+      });
+    }
     this.setData({
       roomId,
       shareRoomCode,
@@ -476,6 +486,35 @@ Page({
     });
   },
 
+  buildSpectatorSeats(lobby, avatarUrlByFileId = {}) {
+    const capacity = Number(lobby && lobby.spectatorCapacity) || 3;
+    const members = (lobby && lobby.spectatorSeatOrder) || [];
+    const memberBySeat = {};
+    members.forEach((member) => {
+      memberBySeat[member.seatIndex] = member;
+    });
+
+    return Array.from({ length: capacity }, (_, index) => {
+      const seatIndex = index + 1;
+      const member = memberBySeat[seatIndex];
+      if (!member) {
+        return {
+          seatIndex,
+          isEmpty: true,
+          avatarSrc: this.data.defaultAvatarSrc,
+          roleLabel: "",
+        };
+      }
+
+      return {
+        ...member,
+        isEmpty: false,
+        avatarSrc: avatarUrlByFileId[member.avatarUrl] || member.avatarUrl || this.data.defaultAvatarSrc,
+        roleLabel: member.isHost ? "房主" : "",
+      };
+    });
+  },
+
   countReadyPlayers(lobby) {
     return ((lobby && lobby.seatOrder) || []).filter((member) => member && member.isReady).length;
   },
@@ -494,6 +533,7 @@ Page({
           backgroundVisible: Boolean(urlByFileId[LOBBY_BACKGROUND_FILE_ID]),
           lobbyAssets: {
             roomPlayerFrame: urlByFileId[LOBBY_ASSET_FILE_IDS.roomPlayerFrame] || "",
+            spectatorFrame: urlByFileId[LOBBY_ASSET_FILE_IDS.spectatorFrame] || "",
             roomIdentity: urlByFileId[LOBBY_ASSET_FILE_IDS.roomIdentity] || "",
             logoInvite: urlByFileId[LOBBY_ASSET_FILE_IDS.logoInvite] || "",
             logoRoomAdjust: urlByFileId[LOBBY_ASSET_FILE_IDS.logoRoomAdjust] || "",
@@ -504,6 +544,7 @@ Page({
         if (this.data.lobby) {
           this.setData({
             seats: this.buildSeats(this.data.lobby),
+            spectatorSeats: this.buildSpectatorSeats(this.data.lobby),
             readyPlayerCount: this.countReadyPlayers(this.data.lobby),
           });
         }
@@ -519,6 +560,7 @@ Page({
       return false;
     }
     const cloudFileIds = ((lobbyView && lobbyView.seatOrder) || [])
+      .concat((lobbyView && lobbyView.spectatorSeatOrder) || [])
       .map((member) => member.avatarUrl)
       .filter((avatarUrl) => isCloudFileId(avatarUrl));
 
@@ -529,6 +571,7 @@ Page({
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView),
+        spectatorSeats: this.buildSpectatorSeats(lobbyView),
         readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
       return true;
@@ -543,6 +586,7 @@ Page({
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView, avatarUrlByFileId),
+        spectatorSeats: this.buildSpectatorSeats(lobbyView, avatarUrlByFileId),
         readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
       return true;
@@ -554,6 +598,7 @@ Page({
       this.setData({
         lobby: lobbyView,
         seats: this.buildSeats(lobbyView),
+        spectatorSeats: this.buildSpectatorSeats(lobbyView),
         readyPlayerCount: this.countReadyPlayers(lobbyView),
       });
       return true;
@@ -792,9 +837,15 @@ Page({
         avatarUrl: uploadedAvatarFileId,
       });
 
+      if (room.routeHint === "board" || room.roomStatus === "in_game") {
+        reLaunchPage(`/packageRoom/pages/board/index?roomId=${encodeURIComponent(room.roomId)}`);
+        return;
+      }
+
       this.cacheInitialLobbySnapshot(room);
+      const joinedAsSpectator = room.memberType === "spectator" ? "&joinedAs=spectator" : "";
       wx.redirectTo({
-        url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}`,
+        url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}${joinedAsSpectator}`,
       });
     } catch (err) {
       if (err.isBusinessFailure) {
@@ -919,28 +970,32 @@ Page({
 
   onTapEmptySeat(event) {
     const seatIndex = Number(event.currentTarget.dataset.seatIndex);
+    const memberType = event.currentTarget.dataset.memberType === "spectator" ? "spectator" : "player";
+    const seatKey = `${memberType}:${seatIndex}`;
     const tappedAt = Date.now();
     if (this.data.seatChangeSubmitting || !Number.isInteger(seatIndex)) {
       return;
     }
 
     const lastTap = this.lastEmptySeatTap;
-    if (lastTap && lastTap.seatIndex === seatIndex && tappedAt - lastTap.tappedAt <= EMPTY_SEAT_DOUBLE_TAP_INTERVAL_MS) {
+    if (lastTap && lastTap.seatKey === seatKey && tappedAt - lastTap.tappedAt <= EMPTY_SEAT_DOUBLE_TAP_INTERVAL_MS) {
       this.lastEmptySeatTap = null;
-      this.claimLobbySeat(seatIndex);
+      this.claimLobbySeat(seatIndex, memberType);
       return;
     }
     this.lastEmptySeatTap = {
-      seatIndex,
+      seatKey,
       tappedAt,
     };
   },
 
-  async claimLobbySeat(targetSeatIndex) {
+  async claimLobbySeat(targetSeatIndex, targetMemberType = "player") {
     if (!this.data.lobby || this.data.seatChangeSubmitting) {
       return;
     }
 
+    const previousMemberType =
+      (this.data.lobby.viewerState && this.data.lobby.viewerState.myMemberType) || "player";
     this.lastEmptySeatTap = null;
     this.setData({
       seatChangeSubmitting: true,
@@ -950,8 +1005,17 @@ Page({
         commandId: createCommandId("claim_lobby_seat"),
         roomId: this.data.roomId,
         targetSeatIndex,
+        targetMemberType,
       });
-      await this.hydrateLobby(snapshot);
+      const applied = await this.hydrateLobby(snapshot);
+      const nextMemberType =
+        (snapshot.viewerState && snapshot.viewerState.myMemberType) || "player";
+      if (applied !== false && previousMemberType !== nextMemberType) {
+        wx.showToast({
+          title: nextMemberType === "spectator" ? "已切换到观战位" : "已切换到玩家位",
+          icon: "none",
+        });
+      }
     } catch (err) {
       console.error("大厅换座失败", err);
       if (this.handleRoomUnavailable(err)) {
@@ -987,6 +1051,21 @@ Page({
     const lobby = this.data.lobby;
     const viewerState = (lobby && lobby.viewerState) || {};
     if (!lobby || this.data.isSubmitting) {
+      return;
+    }
+
+    if (viewerState.myMemberType === "spectator") {
+      if (!viewerState.isHost) {
+        return;
+      }
+      if (!viewerState.canStart) {
+        wx.showToast({
+          title: "房间未满或有玩家未准备",
+          icon: "none",
+        });
+        return;
+      }
+      await this.onStartGame();
       return;
     }
 

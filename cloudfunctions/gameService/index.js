@@ -17,6 +17,8 @@ const LAST_SEEN_THROTTLE_MS = 20 * 1000;
 const ROOM_SYNC_SIGNAL_COLLECTION = "room_sync_signals";
 const ROOM_MODE_NORMAL = "normal";
 const ROOM_MODE_SOLO = "solo";
+const MEMBER_TYPE_PLAYER = "player";
+const MEMBER_TYPE_SPECTATOR = "spectator";
 const COMMAND_RECORD_DIRECT_ID_ENABLED_AT = Date.now();
 const GAME_INITIAL_VERSION = 1;
 const ROLE_PRESET_BY_PLAYER_COUNT = {
@@ -142,6 +144,16 @@ function isActiveMember(member) {
 function isGameParticipantMember(member) {
   const status = member.memberStatus || member.status;
   return status === "active" || status === "offline";
+}
+
+function getMemberType(member) {
+  return member && member.memberType === MEMBER_TYPE_SPECTATOR
+    ? MEMBER_TYPE_SPECTATOR
+    : MEMBER_TYPE_PLAYER;
+}
+
+function isPlayerMember(member) {
+  return getMemberType(member) === MEMBER_TYPE_PLAYER;
 }
 
 function replaceFieldValue(value) {
@@ -421,6 +433,7 @@ async function resolveActingMember(room, openid, controlledMemberId) {
     !controlledMember ||
     controlledMember.roomId !== roomId ||
     !isActiveMember(controlledMember) ||
+    !isPlayerMember(controlledMember) ||
     !controlledMember.isVirtual
   ) {
     return {
@@ -1397,20 +1410,17 @@ async function persistEndedRoomProjection(transaction, roomId, members, endedAt,
     },
   });
 
-  for (const member of members) {
-    await transaction
-      .collection("user_profiles")
-      .where({
-        activeRoomId: roomId,
-        activeMemberId: getMemberId(member),
-      })
-      .update({
-        data: {
-          activeRoomStatus: "ended",
-          updatedAt,
-        },
-      });
-  }
+  await transaction
+    .collection("user_profiles")
+    .where({
+      activeRoomId: roomId,
+    })
+    .update({
+      data: {
+        activeRoomStatus: "ended",
+        updatedAt,
+      },
+    });
 }
 
 function getTerminalExpirePatch(gameCore, updatedAt) {
@@ -1765,8 +1775,9 @@ async function startGame(payload, openid) {
           roomId,
         })
         .get();
-      const members = membersRes.data.filter(isActiveMember).sort((a, b) => a.seatIndex - b.seatIndex);
-      const member = members.find((item) => getMemberOpenId(item) === openid) || null;
+      const activeMembers = membersRes.data.filter(isActiveMember);
+      const members = activeMembers.filter(isPlayerMember).sort((a, b) => a.seatIndex - b.seatIndex);
+      const member = activeMembers.find((item) => getMemberOpenId(item) === openid) || null;
       if (!member) {
         return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
       }
@@ -1854,7 +1865,7 @@ async function startGame(payload, openid) {
         },
       });
 
-      for (const item of members) {
+      for (const item of activeMembers) {
         const memberOpenId = getMemberOpenId(item);
         if (!memberOpenId) {
           continue;
@@ -1914,6 +1925,9 @@ async function getGameSnapshot(payload, openid) {
     return acting.error;
   }
   const member = acting.member;
+  const realMemberType = getMemberType(acting.realMember);
+  const hasPrivateView = isPlayerMember(member);
+  const isSpectatorView = !hasPrivateView;
 
   const publicRes = await db.collection("room_public_snapshots").doc(roomId).get();
   const publicSnapshot = publicRes.data;
@@ -1922,10 +1936,13 @@ async function getGameSnapshot(payload, openid) {
   }
 
   const memberId = getMemberId(member);
-  const privateRes = await db.collection("player_private_snapshots").doc(memberId).get();
-  const privateSnapshot = privateRes.data;
-  if (!privateSnapshot || privateSnapshot.roomId !== roomId) {
-    return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+  let privateSnapshot = null;
+  if (hasPrivateView) {
+    const privateRes = await db.collection("player_private_snapshots").doc(memberId).get();
+    privateSnapshot = privateRes.data;
+    if (!privateSnapshot || privateSnapshot.roomId !== roomId) {
+      return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
+    }
   }
 
   if (payload.touchPresence === true) {
@@ -1936,7 +1953,7 @@ async function getGameSnapshot(payload, openid) {
   }
 
   const publicPayload = publicSnapshot.payload || {};
-  const privatePayload = privateSnapshot.payload || {};
+  const privatePayload = (privateSnapshot && privateSnapshot.payload) || {};
   return ok({
     roomId,
     roomCode: publicPayload.roomCode || room.roomCode,
@@ -1945,12 +1962,19 @@ async function getGameSnapshot(payload, openid) {
     myMemberId: memberId,
     realMemberId: getMemberId(acting.realMember),
     controlledMemberId: controlledMemberId || "",
+    viewerState: {
+      realMemberType,
+      isSpectatorView,
+      hasPrivateView,
+    },
     version: publicPayload.version || publicSnapshot.version || GAME_INITIAL_VERSION,
     round: publicPayload.round || 1,
     currentPhase: publicPayload.currentPhase || "nomination",
     publicState: publicPayload.publicState || {},
-    privateState: privatePayload.privateState || {},
-    pendingTask: privatePayload.pendingTask || privateSnapshot.pendingTask || null,
+    privateState: hasPrivateView ? privatePayload.privateState || {} : {},
+    pendingTask: hasPrivateView
+      ? privatePayload.pendingTask || (privateSnapshot && privateSnapshot.pendingTask) || null
+      : null,
     serverHints: [],
     expireAt: publicPayload.expireAt || toIsoString(room.expireAt || room.expiresAt),
     updatedAt: publicPayload.updatedAt || nowIso(),
@@ -2055,6 +2079,7 @@ async function submitCommand(payload, openid) {
           !controlledMember ||
           controlledMember.roomId !== roomId ||
           !isActiveMember(controlledMember) ||
+          !isPlayerMember(controlledMember) ||
           !controlledMember.isVirtual
         ) {
           return fail("INVALID_TARGET", "只能操控当前单人模式房间中的虚拟席位");
@@ -2063,6 +2088,9 @@ async function submitCommand(payload, openid) {
           return fail("ACTION_NOT_ALLOWED", "没有该虚拟席位的操控权限");
         }
         actorMember = controlledMember;
+      }
+      if (!isPlayerMember(actorMember)) {
+        return fail("ACTION_NOT_ALLOWED", "观战者不能提交游戏操作");
       }
       const actorMemberId = getMemberId(actorMember);
 
@@ -2116,7 +2144,9 @@ async function submitCommand(payload, openid) {
           roomId,
         })
         .get();
-      const members = membersRes.data.filter(isActiveMember).sort((a, b) => a.seatIndex - b.seatIndex);
+      const members = membersRes.data
+        .filter((member) => isGameParticipantMember(member) && isPlayerMember(member))
+        .sort((a, b) => a.seatIndex - b.seatIndex);
 
       if (type === "SUBMIT_VOTE") {
         if (gameCore.phase !== "voting") {
@@ -3593,8 +3623,9 @@ async function getResultSnapshot(payload, openid) {
       roomId,
     })
     .get();
-  const members = membersRes.data.filter(isGameParticipantMember).sort((a, b) => a.seatIndex - b.seatIndex);
-  const member = members.find((item) => getMemberOpenId(item) === openid) || null;
+  const roomMembers = membersRes.data.filter(isGameParticipantMember);
+  const members = roomMembers.filter(isPlayerMember).sort((a, b) => a.seatIndex - b.seatIndex);
+  const member = roomMembers.find((item) => getMemberOpenId(item) === openid) || null;
   if (!member) {
     return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
   }

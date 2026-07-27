@@ -76,10 +76,10 @@ last_verified: 2026-07-27
 | action | 必要 payload | 主要返回 |
 | --- | --- | --- |
 | `createRoom` | `commandId, targetPlayerCount, displayName`；`avatarUrl?` | 房间标识、成员标识和 `lobbySnapshot` |
-| `joinRoom` | `commandId, roomCode 或 roomId, displayName`；`avatarUrl?` | 房间标识、成员标识和 `lobbySnapshot` |
+| `joinRoom` | `commandId, roomCode 或 roomId, displayName`；`avatarUrl?` | 房间与成员标识、`memberType`、`routeHint`；大厅加入另含 `lobbySnapshot` |
 | `leaveRoom` | `commandId, roomId` | 离开结果及后续路由信息 |
 | `getLobbySnapshot` | `roomId`；`touchPresence?` | `LobbyView` |
-| `claimLobbySeat` | `commandId, roomId, targetSeatIndex` | 更新后的 `LobbyView` |
+| `claimLobbySeat` | `commandId, roomId, targetSeatIndex`；`targetMemberType?` | 更新后的 `LobbyView` |
 | `updateRoomSettings` | `commandId, roomId, targetPlayerCount` | 版本和 `lobbySnapshot` |
 | `setReady` | `commandId, roomId, isReady` | 更新后的 `LobbyView` |
 | `soloCreateRoom` | 与 `createRoom` 相同 | `mode: solo` 的房间和 `lobbySnapshot` |
@@ -87,11 +87,13 @@ last_verified: 2026-07-27
 | `soloSetVirtualReady` | `commandId, roomId, memberId, isReady` | 更新后的 `LobbyView` |
 | `soloReadyAllVirtualPlayers` | `commandId, roomId` | 真实房主及其虚拟席位准备后的 `LobbyView` |
 
-`targetPlayerCount` 必须为 5–10。单人模式专用 action 只允许单人模式房间的真实房主调用。
+`targetPlayerCount` 必须为 5–10。单人模式专用 action 只允许单人模式房间的真实房主调用。`targetMemberType` 缺省为 `player`；跨玩家席与观战席切换会清除准备状态，只允许在大厅执行。
+
+`joinRoom` 在大厅依次分配最低空玩家席、最低空观战席；两类均满时返回 `SPECTATOR_SEATS_FULL`。对局中，新成员只能进入观战席，原本离线的玩家则恢复原成员和玩家席。对局中加入成功返回 `routeHint: "board"` 且 `lobbySnapshot` 为 `null`。单人房间仍拒绝房主之外的真实用户，结束房间不可加入。
 
 当前没有 `updateSeatOrder` action。房主全量重排座位仍是未来候选能力，不能由客户端调用。
 
-`leaveRoom` 成功后返回 `routeHint: "home"`。该值表示离开结果的下一路由，不会出现在 `ActiveRoomSummary` 中。
+`leaveRoom` 成功后返回 `routeHint: "home"`。该值表示离开结果的下一路由，不会出现在 `ActiveRoomSummary` 中。观战者主动离开会立即释放观战席；切后台、断网或重启仍沿恢复链路保留成员记录。
 
 ### `gameService`
 
@@ -102,7 +104,7 @@ last_verified: 2026-07-27
 | `submitCommand` | `commandId, roomId, expectedVersion, type, body`；`taskId?`、`controlledMemberId?` | 命令接受结果和新版本提示 |
 | `getResultSnapshot` | `roomId` | `ResultSnapshot` |
 
-`controlledMemberId` 只在单人模式中有效，并且只能指向当前 openid 控制的虚拟席位。
+`controlledMemberId` 只在单人模式中有效，并且只能指向当前 openid 控制的虚拟玩家席。普通观战者提交游戏命令或伪造受控席位会返回 `ACTION_NOT_ALLOWED`。
 
 ### `maintenanceService`
 
@@ -123,9 +125,13 @@ last_verified: 2026-07-27
   "targetPlayerCount": 5,
   "minPlayerCount": 5,
   "maxPlayerCount": 10,
+  "spectatorCapacity": 3,
+  "spectatorCount": 1,
   "seatOrder": [],
+  "spectatorSeatOrder": [],
   "viewerState": {
     "myMemberId": "mem_...",
+    "myMemberType": "player",
     "isHost": true,
     "myIsReady": true,
     "canStart": true
@@ -136,7 +142,7 @@ last_verified: 2026-07-27
 }
 ```
 
-`seatOrder` 只包含大厅有效成员及其公开资料、席位、房主和准备状态。大厅视图不得包含身份、政策牌、投票或游戏真相。
+`seatOrder` 只包含有效玩家及其公开资料、席位、房主和准备状态；`spectatorSeatOrder` 只包含有效观战者的公开资料、观战席号和房主标识。两类席位分别从 1 编号，`playerCount` 只统计玩家。大厅视图不得包含身份、政策牌、投票或游戏真相。
 
 ### `GameSnapshot`
 
@@ -149,6 +155,11 @@ last_verified: 2026-07-27
   "myMemberId": "mem_...",
   "realMemberId": "mem_...",
   "controlledMemberId": "",
+  "viewerState": {
+    "realMemberType": "spectator",
+    "isSpectatorView": true,
+    "hasPrivateView": false
+  },
   "version": 18,
   "round": 3,
   "currentPhase": "voting",
@@ -164,6 +175,7 @@ last_verified: 2026-07-27
 - `publicState` 只含全体成员可见的座位、政府、政策轨、选举计数器、公开票型和公共历史。
 - `privateState` 只含当前席位的身份、手牌、个人投票、调查结果、政策预览等私密信息。
 - `pendingTask` 是当前席位的权威待办；目标选择不得超出其中的 `allowedTargets`。
+- 普通观战视图强制返回 `privateState: {}` 和 `pendingTask: null`。单人观战房主只有在选择其控制的虚拟玩家后，`hasPrivateView` 才为 `true`。
 - 前端不得从其他字段推导无权限信息。
 
 ### `CommandAccepted`
@@ -204,7 +216,7 @@ last_verified: 2026-07-27
 }
 ```
 
-只有终局后且当前 openid 属于本局真实成员时可以读取。`finalPlayers` 可公开最终身份；`timeline[].votes` 只允许包含已经公开的政府投票。
+只有终局后且当前 openid 仍属于本局真实成员（玩家或观战者）时可以读取。`finalPlayers` 只列实际玩家并可公开最终身份；`timeline[].votes` 只允许包含已经公开的政府投票。
 
 ## 游戏命令
 
@@ -258,6 +270,7 @@ last_verified: 2026-07-27
 ## 当前枚举
 
 - `roomMode`：`normal`、`solo`
+- `memberType`：`player`、`spectator`；历史成员缺失时按 `player` 解释
 - `roomStatus`：`lobby`、`in_game`、`ended`、`expired`
 - `routeHint`：`home`、`lobby`、`board`、`result`；其中 `ActiveRoomSummary` 只使用 `lobby`、`board`、`result`，`leaveRoom` 使用 `home`
 - `vote`：`JA`、`NEIN`
@@ -272,7 +285,7 @@ last_verified: 2026-07-27
 | 类别 | 错误码 |
 | --- | --- |
 | 请求与资料 | `INVALID_PAYLOAD`、`PROFILE_REQUIRED` |
-| 房间 | `ROOM_NOT_FOUND`、`ROOM_EXPIRED`、`ROOM_FULL`、`ROOM_NOT_JOINABLE` |
+| 房间 | `ROOM_NOT_FOUND`、`ROOM_EXPIRED`、`ROOM_FULL`、`ROOM_NOT_JOINABLE`、`SPECTATOR_SEATS_FULL` |
 | 权限 | `NOT_ROOM_MEMBER`、`NOT_ROOM_HOST`、`NOT_CURRENT_ACTOR`、`ACTION_NOT_ALLOWED` |
 | 大厅与座位 | `INVALID_PLAYER_COUNT`、`TARGET_COUNT_BELOW_SEATED`、`SEAT_OCCUPIED`、`NOT_ALL_READY` |
 | 游戏生命周期 | `GAME_NOT_STARTED`、`GAME_ALREADY_STARTED`、`GAME_ALREADY_ENDED` |

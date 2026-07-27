@@ -19,6 +19,11 @@
         </view>
       </view>
       <view class="top-actions">
+        <view class="tool-control tool-share-control">
+          <button class="tool-share-trigger" open-type="share" hover-class="none" aria-label="邀请观战"></button>
+          <image wx:if="{{policyAssets.logoInvite}}" class="tool-icon-image" src="{{policyAssets.logoInvite}}" mode="aspectFit" webp="{{true}}"></image>
+          <view class="tool-text">邀请观战</view>
+        </view>
         <view class="tool-control" bindtap="onTapRules" role="button" aria-label="规则说明">
           <image wx:if="{{policyAssets.logoRule}}" class="tool-icon-image" src="{{policyAssets.logoRule}}" mode="aspectFit" webp="{{true}}"></image>
           <view class="tool-text">规则说明</view>
@@ -27,6 +32,8 @@
     </view>
 
     <view class="board-layout">
+      <view wx:if="{{isSpectatorView}}" class="spectator-view-strip">观战视角，仅显示公共信息</view>
+
       <view wx:if="{{isSoloRoom}}" class="solo-control-strip">
         <view class="solo-mark">单人模式</view>
         <view class="solo-seat">{{controlledSeatText}}</view>

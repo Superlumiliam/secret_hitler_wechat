@@ -10,6 +10,7 @@ const _ = db.command;
 
 const MIN_PLAYER_COUNT = 5;
 const MAX_PLAYER_COUNT = 10;
+const SPECTATOR_CAPACITY = 3;
 const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_RETRY_LIMIT = 10;
 const ROOM_TTL_LOBBY_MS = 30 * 60 * 1000;
@@ -32,6 +33,8 @@ const MIN_DISPLAY_NAME_LENGTH = 2;
 const MAX_DISPLAY_NAME_LENGTH = 12;
 const ROOM_MODE_NORMAL = "normal";
 const ROOM_MODE_SOLO = "solo";
+const MEMBER_TYPE_PLAYER = "player";
+const MEMBER_TYPE_SPECTATOR = "spectator";
 const COMMAND_RECORD_DIRECT_ID_ENABLED_AT = Date.now();
 function nowIso() {
   return new Date().toISOString();
@@ -108,6 +111,24 @@ function getMemberOpenId(member) {
 
 function isActiveMember(member) {
   return (member.memberStatus || member.status) === "active";
+}
+
+function isOfflineMember(member) {
+  return (member.memberStatus || member.status) === "offline";
+}
+
+function getMemberType(member) {
+  return member && member.memberType === MEMBER_TYPE_SPECTATOR
+    ? MEMBER_TYPE_SPECTATOR
+    : MEMBER_TYPE_PLAYER;
+}
+
+function isPlayerMember(member) {
+  return getMemberType(member) === MEMBER_TYPE_PLAYER;
+}
+
+function isSpectatorMember(member) {
+  return getMemberType(member) === MEMBER_TYPE_SPECTATOR;
 }
 
 function payloadHash(payload) {
@@ -205,11 +226,26 @@ async function refreshRoomSyncSignal(roomId) {
       return;
     }
 
+    let version = room.version || 1;
+    if (room.status === "in_game" || room.status === "ended") {
+      let publicSnapshot = null;
+      try {
+        const publicSnapshotRes = await transaction.collection("room_public_snapshots").doc(roomId).get();
+        publicSnapshot = publicSnapshotRes.data || null;
+      } catch (err) {
+        if (!isDocumentNotFoundError(err)) {
+          throw err;
+        }
+      }
+      const publicPayload = (publicSnapshot && publicSnapshot.payload) || {};
+      version = publicPayload.version || (publicSnapshot && publicSnapshot.version) || version;
+    }
+
     await transaction.collection(ROOM_SYNC_SIGNAL_COLLECTION).doc(roomId).set({
       data: {
         roomId,
         roomStatus: room.status,
-        version: room.version || 1,
+        version,
         signalType: "room_version",
         updatedAt: room.updatedAt || new Date(),
       },
@@ -685,8 +721,13 @@ function buildLobbySnapshotFromData(room, members, openid, context = null) {
 
   const roomId = room.roomId || room._id;
   const roomMode = room.mode || ROOM_MODE_NORMAL;
-  const activeMembers = members
-    .filter(isActiveMember)
+  const activeMembers = members.filter(isActiveMember);
+  const activePlayers = activeMembers
+    .filter(isPlayerMember)
+    .slice()
+    .sort((left, right) => Number(left.seatIndex) - Number(right.seatIndex));
+  const activeSpectators = activeMembers
+    .filter(isSpectatorMember)
     .slice()
     .sort((left, right) => Number(left.seatIndex) - Number(right.seatIndex));
   const myMember = activeMembers.find((member) => getMemberOpenId(member) === openid) || null;
@@ -695,8 +736,8 @@ function buildLobbySnapshotFromData(room, members, openid, context = null) {
   }
   const isHost = Boolean(myMember && getMemberId(myMember) === room.hostMemberId);
   const isLobby = room.status === "lobby";
-  const isFull = activeMembers.length === room.targetPlayerCount;
-  const allReady = activeMembers.length > 0 && activeMembers.every((member) => Boolean(member.isReady));
+  const isFull = activePlayers.length === room.targetPlayerCount;
+  const allReady = activePlayers.length > 0 && activePlayers.every((member) => Boolean(member.isReady));
 
   return {
     roomId,
@@ -705,12 +746,14 @@ function buildLobbySnapshotFromData(room, members, openid, context = null) {
     roomMode,
     isSoloRoom: roomMode === ROOM_MODE_SOLO,
     hostMemberId: room.hostMemberId,
-    playerCount: activeMembers.length,
+    playerCount: activePlayers.length,
     targetPlayerCount: room.targetPlayerCount,
     minPlayerCount: MIN_PLAYER_COUNT,
     maxPlayerCount: MAX_PLAYER_COUNT,
+    spectatorCapacity: SPECTATOR_CAPACITY,
+    spectatorCount: activeSpectators.length,
     expireAt: toIsoString(room.expireAt || room.expiresAt),
-    seatOrder: activeMembers.map((member) => ({
+    seatOrder: activePlayers.map((member) => ({
       memberId: getMemberId(member),
       displayName: member.displayName,
       avatarUrl: member.avatarUrl || "",
@@ -720,10 +763,18 @@ function buildLobbySnapshotFromData(room, members, openid, context = null) {
       isVirtual: Boolean(member.isVirtual),
       controlledByCurrentViewer: Boolean(member.isVirtual && member.controlledByOpenId === openid),
     })),
+    spectatorSeatOrder: activeSpectators.map((member) => ({
+      memberId: getMemberId(member),
+      displayName: member.displayName,
+      avatarUrl: member.avatarUrl || "",
+      seatIndex: member.seatIndex,
+      isHost: Boolean(member.isHost || getMemberId(member) === room.hostMemberId),
+    })),
     viewerState: {
       myMemberId: myMember ? getMemberId(myMember) : "",
+      myMemberType: myMember ? getMemberType(myMember) : "",
       isHost,
-      myIsReady: Boolean(myMember && myMember.isReady),
+      myIsReady: Boolean(myMember && isPlayerMember(myMember) && myMember.isReady),
       canStart: Boolean(isHost && isLobby && isFull && allReady),
     },
     version: room.version || 1,
@@ -830,6 +881,7 @@ async function createRoom(payload, openid, options = {}) {
         displayName,
         avatarUrl,
         seatIndex: 1,
+        memberType: MEMBER_TYPE_PLAYER,
         isHost: true,
         isReady: false,
         isVirtual: false,
@@ -944,7 +996,7 @@ async function joinRoom(payload, openid) {
       if (isRoomExpired(currentRoom)) {
         return { response: fail("ROOM_EXPIRED", "房间已过期") };
       }
-      if (currentRoom.status !== "lobby") {
+      if (!["lobby", "in_game"].includes(currentRoom.status)) {
         return { response: fail("ROOM_NOT_JOINABLE", "房间不可加入") };
       }
 
@@ -956,6 +1008,10 @@ async function joinRoom(payload, openid) {
         .orderBy("seatIndex", "asc")
         .get();
       const activeMembers = membersRes.data.filter(isActiveMember);
+      const offlinePlayerMembers =
+        currentRoom.status === "in_game"
+          ? membersRes.data.filter((member) => isOfflineMember(member) && isPlayerMember(member))
+          : [];
       const profileRef = transaction.collection("user_profiles").doc(openid);
       let profile = null;
       try {
@@ -965,14 +1021,19 @@ async function joinRoom(payload, openid) {
           throw err;
         }
       }
-      const matchingMembers = activeMembers.filter((member) => getMemberOpenId(member) === openid);
+      const matchingMembers = activeMembers
+        .concat(offlinePlayerMembers)
+        .filter((member) => getMemberOpenId(member) === openid);
 
       if (matchingMembers.length) {
         const existingMember =
           matchingMembers.find((member) => getMemberId(member) === (profile && profile.activeMemberId)) ||
+          matchingMembers.find(isPlayerMember) ||
           matchingMembers[0];
-        const duplicateMembers = matchingMembers.filter(
-          (member) => getMemberId(member) !== getMemberId(existingMember),
+        const duplicateMembers = activeMembers.filter(
+          (member) =>
+            getMemberOpenId(member) === openid &&
+            getMemberId(member) !== getMemberId(existingMember),
         );
         const updatedAt = new Date();
 
@@ -988,20 +1049,39 @@ async function joinRoom(payload, openid) {
           });
         }
 
-        const remainingMembers = activeMembers.filter(
+        let remainingMembers = activeMembers.filter(
           (member) => !duplicateMembers.some((duplicate) => getMemberId(duplicate) === getMemberId(member)),
         );
+        if (!isActiveMember(existingMember)) {
+          await transaction.collection("room_members").doc(getMemberId(existingMember)).update({
+            data: {
+              memberStatus: "active",
+              leftAt: null,
+              lastSeenAt: updatedAt,
+              updatedAt,
+            },
+          });
+          remainingMembers = remainingMembers.concat({
+            ...existingMember,
+            memberStatus: "active",
+            leftAt: null,
+            lastSeenAt: updatedAt,
+            updatedAt,
+          });
+        }
+
         let nextRoom = currentRoom;
-        if (duplicateMembers.length) {
+        if (duplicateMembers.length && currentRoom.status === "lobby") {
+          const playerCount = remainingMembers.filter(isPlayerMember).length;
           nextRoom = {
             ...currentRoom,
-            playerCount: remainingMembers.length,
+            playerCount,
             version: (currentRoom.version || 1) + 1,
             updatedAt,
           };
           await roomRef.update({
             data: {
-              playerCount: nextRoom.playerCount,
+              playerCount,
               version: nextRoom.version,
               updatedAt,
             },
@@ -1018,7 +1098,7 @@ async function joinRoom(payload, openid) {
             profileCompleted: true,
             activeRoomId: resolvedRoomId,
             activeMemberId: getMemberId(existingMember),
-            activeRoomStatus: "lobby",
+            activeRoomStatus: currentRoom.status,
             updatedAt,
           },
           updatedAt,
@@ -1040,13 +1120,23 @@ async function joinRoom(payload, openid) {
       if (requestProfile.error && !(profile && profile.profileCompleted)) {
         return { response: fail("PROFILE_REQUIRED", "请先创建用户资料") };
       }
-      if (activeMembers.length >= currentRoom.targetPlayerCount) {
-        return { response: fail("ROOM_FULL", "房间已满") };
+
+      const activePlayers = activeMembers.filter(isPlayerMember);
+      const activeSpectators = activeMembers.filter(isSpectatorMember);
+      const memberType =
+        currentRoom.status === "lobby" && activePlayers.length < currentRoom.targetPlayerCount
+          ? MEMBER_TYPE_PLAYER
+          : MEMBER_TYPE_SPECTATOR;
+      if (memberType === MEMBER_TYPE_SPECTATOR && activeSpectators.length >= SPECTATOR_CAPACITY) {
+        return { response: fail("SPECTATOR_SEATS_FULL", "观战席已满") };
       }
 
-      const occupiedSeats = activeMembers.map((member) => member.seatIndex);
+      const occupiedSeats = (memberType === MEMBER_TYPE_PLAYER ? activePlayers : activeSpectators).map(
+        (member) => member.seatIndex,
+      );
+      const seatLimit = memberType === MEMBER_TYPE_PLAYER ? currentRoom.targetPlayerCount : SPECTATOR_CAPACITY;
       let seatIndex = 1;
-      while (occupiedSeats.includes(seatIndex) && seatIndex <= currentRoom.targetPlayerCount) {
+      while (occupiedSeats.includes(seatIndex) && seatIndex <= seatLimit) {
         seatIndex += 1;
       }
 
@@ -1066,8 +1156,10 @@ async function joinRoom(payload, openid) {
         displayName,
         avatarUrl,
         seatIndex,
+        memberType,
         isHost: false,
         isReady: false,
+        isVirtual: false,
         memberStatus: "active",
         joinedAt,
         leftAt: null,
@@ -1077,22 +1169,28 @@ async function joinRoom(payload, openid) {
       };
       const nextRoom = {
         ...currentRoom,
-        playerCount: activeMembers.length + 1,
+        playerCount: (currentRoom.playerCount || activePlayers.length) + (memberType === MEMBER_TYPE_PLAYER ? 1 : 0),
         assetFileIds,
-        version: (currentRoom.version || 1) + 1,
+        version:
+          currentRoom.status === "lobby"
+            ? (currentRoom.version || 1) + 1
+            : currentRoom.version || 1,
         updatedAt: joinedAt,
       };
 
       await transaction.collection("room_members").doc(memberId).set({
         data: memberData,
       });
+      const roomUpdate = {
+        playerCount: nextRoom.playerCount,
+        assetFileIds,
+        updatedAt: joinedAt,
+      };
+      if (currentRoom.status === "lobby") {
+        roomUpdate.version = nextRoom.version;
+      }
       await roomRef.update({
-        data: {
-          playerCount: nextRoom.playerCount,
-          assetFileIds,
-          version: nextRoom.version,
-          updatedAt: joinedAt,
-        },
+        data: roomUpdate,
       });
       await upsertProfileInTransaction(
         transaction,
@@ -1107,7 +1205,7 @@ async function joinRoom(payload, openid) {
             : {}),
           activeRoomId: resolvedRoomId,
           activeMemberId: memberId,
-          activeRoomStatus: "lobby",
+          activeRoomStatus: currentRoom.status,
           updatedAt: joinedAt,
         },
         joinedAt,
@@ -1125,17 +1223,23 @@ async function joinRoom(payload, openid) {
     }
 
     const joinedMember = transactionResult.member;
-    const lobbySnapshot = buildLobbySnapshotFromData(
-      transactionResult.room,
-      transactionResult.members,
-      openid,
-    );
+    const joinedMemberType = getMemberType(joinedMember);
+    const isLobby = transactionResult.room.status === "lobby";
+    const lobbySnapshot = isLobby
+      ? buildLobbySnapshotFromData(
+          transactionResult.room,
+          transactionResult.members,
+          openid,
+        )
+      : null;
 
     return ok({
       roomId: resolvedRoomId,
       roomCode: transactionResult.room.roomCode,
-      roomStatus: "lobby",
+      roomStatus: transactionResult.room.status,
       memberId: getMemberId(joinedMember),
+      memberType: joinedMemberType,
+      routeHint: isLobby ? "lobby" : "board",
       lobbySnapshot,
     });
   });
@@ -1283,6 +1387,30 @@ async function leaveRoom(payload, openid) {
         }
       }
 
+      if (isSpectatorMember(member)) {
+        await transaction.collection("room_members").doc(memberId).update({
+          data: {
+            memberStatus: "left",
+            isHost: false,
+            isReady: false,
+            leftAt: updatedAt,
+            updatedAt,
+            lastSeenAt: updatedAt,
+          },
+        });
+        await clearActiveRoomForProfileInTransaction(transaction, openid, updatedAt);
+
+        return ok({
+          roomId,
+          roomStatus: "in_game",
+          memberId,
+          leaveMode: "removed_spectator",
+          newHostMemberId: null,
+          roomExpired: false,
+          routeHint: "home",
+        });
+      }
+
       await transaction.collection("room_members").doc(memberId).update({
         data: {
           memberStatus: "offline",
@@ -1345,13 +1473,24 @@ async function leaveRoom(payload, openid) {
     const currentHostStillActive = remainingMembers.some(
       (remainingMember) => getMemberId(remainingMember) === room.hostMemberId,
     );
-    const newHostMemberId = currentHostStillActive ? room.hostMemberId : getMemberId(remainingMembers[0]);
+    const remainingPlayers = remainingMembers
+      .filter(isPlayerMember)
+      .slice()
+      .sort((left, right) => Number(left.seatIndex) - Number(right.seatIndex));
+    const remainingSpectators = remainingMembers
+      .filter(isSpectatorMember)
+      .slice()
+      .sort((left, right) => Number(left.seatIndex) - Number(right.seatIndex));
+    const hostCandidates = remainingPlayers.concat(remainingSpectators);
+    const newHostMemberId = currentHostStillActive ? room.hostMemberId : getMemberId(hostCandidates[0]);
     const hostChanged = newHostMemberId !== room.hostMemberId;
-    for (let index = 0; index < remainingMembers.length; index += 1) {
-      const remainingMember = remainingMembers[index];
+    for (const remainingMember of remainingMembers) {
+      const playerIndex = isPlayerMember(remainingMember)
+        ? remainingPlayers.findIndex((player) => getMemberId(player) === getMemberId(remainingMember))
+        : -1;
       await transaction.collection("room_members").doc(getMemberId(remainingMember)).update({
         data: {
-          seatIndex: index + 1,
+          seatIndex: playerIndex >= 0 ? playerIndex + 1 : remainingMember.seatIndex,
           isHost: getMemberId(remainingMember) === newHostMemberId,
           updatedAt,
         },
@@ -1361,7 +1500,7 @@ async function leaveRoom(payload, openid) {
     await roomRef.update({
       data: {
         hostMemberId: newHostMemberId,
-        playerCount: remainingMembers.length,
+        playerCount: remainingPlayers.length,
         version: (room.version || 1) + 1,
         updatedAt,
       },
@@ -1409,6 +1548,9 @@ async function setReady(payload, openid) {
     if (!member) {
       return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
     }
+    if (!isPlayerMember(member)) {
+      return fail("ACTION_NOT_ALLOWED", "观战者无需准备");
+    }
 
     const updatedAt = new Date();
     await db.collection("room_members").doc(getMemberId(member)).update({
@@ -1434,8 +1576,19 @@ async function setReady(payload, openid) {
 async function claimLobbySeat(payload, openid) {
   const roomId = payload && payload.roomId;
   const targetSeatIndex = Number(payload && payload.targetSeatIndex);
+  const targetMemberType =
+    payload && payload.targetMemberType === MEMBER_TYPE_SPECTATOR
+      ? MEMBER_TYPE_SPECTATOR
+      : MEMBER_TYPE_PLAYER;
   if (!roomId || typeof roomId !== "string") {
     return fail("INVALID_PAYLOAD", "缺少 roomId");
+  }
+  if (
+    payload &&
+    payload.targetMemberType !== undefined &&
+    ![MEMBER_TYPE_PLAYER, MEMBER_TYPE_SPECTATOR].includes(payload.targetMemberType)
+  ) {
+    return fail("INVALID_PAYLOAD", "目标席位类型无效");
   }
   if (!Number.isInteger(targetSeatIndex)) {
     return fail("INVALID_PAYLOAD", "目标座位无效");
@@ -1453,7 +1606,9 @@ async function claimLobbySeat(payload, openid) {
     if (room.status !== "lobby") {
       return fail("GAME_ALREADY_STARTED", "房间已开局");
     }
-    if (targetSeatIndex < 1 || targetSeatIndex > room.targetPlayerCount) {
+    const targetSeatLimit =
+      targetMemberType === MEMBER_TYPE_SPECTATOR ? SPECTATOR_CAPACITY : room.targetPlayerCount;
+    if (targetSeatIndex < 1 || targetSeatIndex > targetSeatLimit) {
       return fail("INVALID_PAYLOAD", "目标座位无效");
     }
 
@@ -1463,17 +1618,34 @@ async function claimLobbySeat(payload, openid) {
       .orderBy("seatIndex", "asc")
       .get();
     const activeMembers = membersRes.data.filter(isActiveMember);
+    const activePlayers = activeMembers.filter(isPlayerMember);
     const member = activeMembers.find((item) => getMemberOpenId(item) === openid) || null;
     if (!member || member.isVirtual) {
       return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
     }
-    if (activeMembers.some((item) => item.seatIndex === targetSeatIndex)) {
+    if (
+      activeMembers.some(
+        (item) =>
+          getMemberType(item) === targetMemberType &&
+          item.seatIndex === targetSeatIndex,
+      )
+    ) {
       return fail("SEAT_OCCUPIED", "目标座位已被占用");
     }
 
     const updatedAt = new Date();
+    const currentMemberType = getMemberType(member);
+    const crossesMemberType = currentMemberType !== targetMemberType;
+    const playerCount =
+      activeMembers.filter(isPlayerMember).length +
+      (crossesMemberType
+        ? targetMemberType === MEMBER_TYPE_PLAYER
+          ? 1
+          : -1
+        : 0);
     const nextRoom = {
       ...room,
+      playerCount,
       version: (room.version || 1) + 1,
       updatedAt,
     };
@@ -1482,6 +1654,8 @@ async function claimLobbySeat(payload, openid) {
         ? {
             ...item,
             seatIndex: targetSeatIndex,
+            memberType: targetMemberType,
+            isReady: crossesMemberType ? false : Boolean(item.isReady),
             updatedAt,
             lastSeenAt: updatedAt,
           }
@@ -1491,12 +1665,15 @@ async function claimLobbySeat(payload, openid) {
     await transaction.collection("room_members").doc(getMemberId(member)).update({
       data: {
         seatIndex: targetSeatIndex,
+        memberType: targetMemberType,
+        isReady: crossesMemberType ? false : Boolean(member.isReady),
         updatedAt,
         lastSeenAt: updatedAt,
       },
     });
     await roomRef.update({
       data: {
+        playerCount,
         version: nextRoom.version,
         updatedAt,
       },
@@ -1539,6 +1716,7 @@ async function updateRoomSettings(payload, openid) {
       .orderBy("seatIndex", "asc")
       .get();
     const activeMembers = membersRes.data.filter(isActiveMember);
+    const activePlayers = activeMembers.filter(isPlayerMember);
     const member = activeMembers.find((item) => getMemberOpenId(item) === openid) || null;
     if (!member) {
       return fail("NOT_ROOM_MEMBER", "当前用户不在房间中");
@@ -1547,11 +1725,11 @@ async function updateRoomSettings(payload, openid) {
       return fail("NOT_ROOM_HOST", "只有房主可以使用房间设置");
     }
 
-    const highestOccupiedSeatIndex = activeMembers.reduce(
+    const highestOccupiedSeatIndex = activePlayers.reduce(
       (highestSeatIndex, activeMember) => Math.max(highestSeatIndex, activeMember.seatIndex || 0),
       0,
     );
-    if (targetPlayerCount < activeMembers.length || targetPlayerCount < highestOccupiedSeatIndex) {
+    if (targetPlayerCount < activePlayers.length || targetPlayerCount < highestOccupiedSeatIndex) {
       return fail("TARGET_COUNT_BELOW_SEATED", "选择人数不能小于当前最高座位号");
     }
 
@@ -1665,16 +1843,17 @@ async function soloFillVirtualPlayers(payload, openid) {
       .orderBy("seatIndex", "asc")
       .get();
     const members = membersRes.data.filter(isActiveMember);
+    const playerMembers = members.filter(isPlayerMember);
     const member = members.find((item) => getMemberOpenId(item) === openid) || null;
     if (!member || getMemberId(member) !== room.hostMemberId) {
       return fail("ACTION_NOT_ALLOWED", "只有房主可以使用单人模式操作");
     }
 
-    if (members.length >= room.targetPlayerCount) {
+    if (playerMembers.length >= room.targetPlayerCount) {
       return ok(buildLobbySnapshotFromData(room, members, openid));
     }
 
-    const occupiedSeats = members.map((member) => member.seatIndex);
+    const occupiedSeats = playerMembers.map((playerMember) => playerMember.seatIndex);
     const createdAt = new Date();
     const virtualMembers = [];
 
@@ -1691,6 +1870,7 @@ async function soloFillVirtualPlayers(payload, openid) {
         displayName: `虚拟玩家${seatIndex}`,
         avatarUrl: "",
         seatIndex,
+        memberType: MEMBER_TYPE_PLAYER,
         isHost: false,
         isReady: false,
         isVirtual: true,
@@ -1712,7 +1892,7 @@ async function soloFillVirtualPlayers(payload, openid) {
 
     const nextRoom = {
       ...room,
-      playerCount: members.length + virtualMembers.length,
+      playerCount: playerMembers.length + virtualMembers.length,
       version: (room.version || 1) + 1,
       updatedAt: createdAt,
     };
@@ -1755,6 +1935,7 @@ async function soloSetVirtualReady(payload, openid) {
       !member ||
       member.roomId !== roomId ||
       !isActiveMember(member) ||
+      !isPlayerMember(member) ||
       !member.isVirtual ||
       member.controlledByOpenId !== openid
     ) {
@@ -1794,8 +1975,9 @@ async function soloReadyAllVirtualPlayers(payload, openid) {
     const members = await getActiveRoomMembers(roomId);
     const readyMembers = members.filter(
       (member) =>
-        getMemberId(member) === resolved.room.hostMemberId ||
-        (member.isVirtual && member.controlledByOpenId === openid),
+        isPlayerMember(member) &&
+        (getMemberId(member) === resolved.room.hostMemberId ||
+          (member.isVirtual && member.controlledByOpenId === openid)),
     );
 
     await Promise.all(

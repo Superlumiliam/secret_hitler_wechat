@@ -102,6 +102,7 @@ function getJoinErrorMessage(err) {
     ROOM_NOT_FOUND: "房间不存在",
     ROOM_EXPIRED: "房间已过期",
     ROOM_FULL: "房间已满",
+    SPECTATOR_SEATS_FULL: "玩家席和观战席均已满",
     ROOM_NOT_JOINABLE: "房间不可加入",
     ACTION_NOT_ALLOWED: "当前账号已有进行中的房间",
     PROFILE_REQUIRED: "请先创建用户资料",
@@ -396,12 +397,20 @@ Page({
       }
 
       const room = result.data || {};
-      cacheInitialLobbySnapshot(room);
       this.setData({
         joinDialogVisible: false,
       });
+      if (room.routeHint === "board" || room.roomStatus === "in_game") {
+        wx.reLaunch({
+          url: `/packageRoom/pages/board/index?roomId=${encodeURIComponent(room.roomId)}`,
+        });
+        return;
+      }
+
+      cacheInitialLobbySnapshot(room);
+      const joinedAsSpectator = room.memberType === "spectator" ? "&joinedAs=spectator" : "";
       wx.redirectTo({
-        url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}`,
+        url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}${joinedAsSpectator}`,
       });
     } catch (err) {
       if (err.isBusinessFailure) {

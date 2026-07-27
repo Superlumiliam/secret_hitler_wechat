@@ -10,6 +10,7 @@ const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const { createRoomSyncSignalWatcher } = require("../../utils/roomSyncSignal");
 const { clearGameSnapshotCache, setGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { buildPageUrl, reLaunchIfPageStacked, reLaunchPage } = require("../../../utils/protectedPageRoute");
+const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
 
 const GAME_POLL_INTERVAL_MS = 4000;
 const GAME_POLL_WITH_TASK_INTERVAL_MS = 1000;
@@ -73,6 +74,7 @@ Page({
   syncSignalCatchUpPromise: null,
   isLeaveConfirming: false,
   lastPresenceTouchAt: 0,
+  boardShareMenuEnabled: false,
 
   data: {
     roomId: "",
@@ -101,6 +103,7 @@ Page({
     confirmedVoteResultKey: "",
     confirmedVoteResultKeyByViewer: {},
     isSoloRoom: false,
+    isSpectatorView: false,
     controlledMemberId: "",
     controlledSeatText: "",
     canNominate: false,
@@ -157,6 +160,12 @@ Page({
     this.identityIntroRevealShownByKey = {};
     this.policyPeekRevealShownByKey = {};
     this.policyPeekAckConfirming = false;
+    this.boardShareMenuEnabled = false;
+    if (wx.hideShareMenu) {
+      wx.hideShareMenu({
+        menus: ["shareAppMessage", "shareTimeline"],
+      });
+    }
     this.setData({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
@@ -168,6 +177,25 @@ Page({
     this.loadGameSnapshot().then((shouldContinuePolling) => {
       this.markInitialSnapshotSettled(shouldContinuePolling);
     });
+  },
+
+  onShareAppMessage() {
+    const roomCode = this.data.board && this.data.board.roomCode;
+    if (!roomCode) {
+      return undefined;
+    }
+    return buildRoomShare(roomCode, this.data.roomId);
+  },
+
+  enableBoardShareMenu(board) {
+    if (this.boardShareMenuEnabled || !board || !board.roomCode) {
+      return false;
+    }
+    enableShareMenu({
+      includeTimeline: false,
+    });
+    this.boardShareMenuEnabled = true;
+    return true;
   },
 
   onShow() {
@@ -649,6 +677,7 @@ Page({
       statusText: this.createStatusText(snapshot, board),
       phaseHintText: this.createPhaseHintText(snapshot, board),
       isSoloRoom: snapshot.roomMode === "solo",
+      isSpectatorView: Boolean(snapshot.viewerState && snapshot.viewerState.isSpectatorView),
       controlledSeatText: this.createControlledSeatText(snapshot),
       canVote,
       voteModalVisible,
@@ -696,6 +725,7 @@ Page({
         ? investigationReveal.resultKey
         : this.data.shownInvestigationRevealKey,
     });
+    this.enableBoardShareMenu(board);
     if (policyPeekReveal && policyPeekReveal.visible && !policyPeekReveal.dismissible) {
       this.schedulePolicyPeekRevealReady(policyPeekReveal.revealKey);
     }
@@ -968,6 +998,10 @@ Page({
   },
 
   createIdentityIntroReveal(snapshot, assets = this.data.policyAssets || {}) {
+    if ((Number(snapshot && snapshot.round) || 1) !== 1) {
+      return null;
+    }
+
     const currentReveal = this.data.identityIntroReveal || null;
     if (currentReveal && (currentReveal.visible || currentReveal.exiting)) {
       return currentReveal;
@@ -1147,6 +1181,14 @@ Page({
   },
 
   onTapIdentity() {
+    if (this.data.isSpectatorView) {
+      wx.showToast({
+        title: "观战视角仅显示公共信息，无法查看玩家身份",
+        icon: "none",
+      });
+      return;
+    }
+
     if (!this.data.roomId) {
       wx.showToast({
         title: "房间信息缺失",
@@ -1180,7 +1222,7 @@ Page({
     });
   },
 
-  onTapSeat(event) {
+  async onTapSeat(event) {
     const memberId = (event.detail && event.detail.memberId) || event.currentTarget.dataset.memberId;
     if (!memberId) {
       return;
@@ -1236,12 +1278,35 @@ Page({
 
     this.lastSeatTap = null;
     const snapshot = this.data.snapshot || {};
-    const nextControlledMemberId = memberId === snapshot.realMemberId ? "" : memberId;
+    const isRealSpectator = snapshot.viewerState && snapshot.viewerState.realMemberType === "spectator";
+    const previousControlledMemberId = this.data.controlledMemberId || "";
+    const nextControlledMemberId =
+      isRealSpectator && previousControlledMemberId === memberId
+        ? ""
+        : memberId === snapshot.realMemberId
+          ? ""
+          : memberId;
+    const crossedMemberType =
+      isRealSpectator &&
+      Boolean(previousControlledMemberId) !== Boolean(nextControlledMemberId);
     this.setData({
       controlledMemberId: nextControlledMemberId,
       errorText: "",
     });
-    this.loadGameSnapshot();
+    await this.loadGameSnapshot();
+    const refreshedSnapshot = this.data.snapshot || {};
+    const refreshedViewerState = refreshedSnapshot.viewerState || {};
+    const viewSwitchSucceeded = nextControlledMemberId
+      ? refreshedSnapshot.myMemberId === nextControlledMemberId &&
+        refreshedViewerState.isSpectatorView === false
+      : refreshedSnapshot.myMemberId === snapshot.realMemberId &&
+        refreshedViewerState.isSpectatorView === true;
+    if (crossedMemberType && viewSwitchSucceeded) {
+      wx.showToast({
+        title: nextControlledMemberId ? "已切换到玩家位" : "已切换到观战位",
+        icon: "none",
+      });
+    }
   },
 
   onTapAvatar(event) {

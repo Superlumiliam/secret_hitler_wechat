@@ -52,6 +52,7 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   drawPileCard: `${CLOUD_ASSET_ROOT}card.webp`,
   discardPileCard: `${CLOUD_ASSET_ROOT}discard.webp`,
   logoSeal: `${CLOUD_ASSET_ROOT}logo-seal.webp`,
+  logoInvite: `${CLOUD_ASSET_ROOT}logo-invite.webp`,
   logoRule: `${CLOUD_ASSET_ROOT}logo-rule.webp`,
 };
 

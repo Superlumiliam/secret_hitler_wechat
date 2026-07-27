@@ -238,6 +238,9 @@ function createSeats(snapshot, options = {}) {
 }
 
 function createControlledSeatText(snapshot) {
+  if (snapshot && snapshot.viewerState && snapshot.viewerState.isSpectatorView) {
+    return "当前视角：公共观战";
+  }
   const publicState = (snapshot && snapshot.publicState) || {};
   const seat = (publicState.seatOrder || []).find((member) => member.memberId === snapshot.myMemberId);
   if (!seat) {

@@ -1,13 +1,13 @@
 const SHARE_MENUS = ["shareAppMessage", "shareTimeline"];
 
-function enableShareMenu() {
+function enableShareMenu(options = {}) {
   if (!wx.showShareMenu) {
     return;
   }
 
   wx.showShareMenu({
     withShareTicket: true,
-    menus: SHARE_MENUS,
+    menus: options.includeTimeline === false ? ["shareAppMessage"] : SHARE_MENUS,
     fail(err) {
       console.error("启用分享菜单失败", err);
     },
