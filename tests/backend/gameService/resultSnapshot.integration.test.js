@@ -335,7 +335,7 @@ async function assertAcceptedVetoChaosClearsTermLimits() {
       roomId: room.roomId,
       expectedVersion: vetoCore.version,
       type: "PRESIDENT_RESPOND_VETO",
-      taskId: `${vetoCore.gameId}:${vetoCore.version}:PRESIDENT_RESPOND_VETO:mem_1`,
+      taskId: `${vetoCore.gameId}:${vetoCore.round}:${vetoCore.phase}:PRESIDENT_RESPOND_VETO:mem_1`,
       body: {
         accepted: true,
       },

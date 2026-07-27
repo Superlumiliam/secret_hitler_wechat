@@ -1,7 +1,7 @@
 ---
 status: active
 authority: api-contract
-last_verified: 2026-07-26
+last_verified: 2026-07-27
 ---
 
 # 《secret dictator》前后端 API
@@ -216,7 +216,7 @@ last_verified: 2026-07-26
   "roomId": "room_...",
   "expectedVersion": 18,
   "type": "SUBMIT_VOTE",
-  "taskId": "game_...:18:SUBMIT_VOTE:mem_...",
+  "taskId": "game_...:1:voting:SUBMIT_VOTE:mem_...",
   "controlledMemberId": "",
   "body": {
     "vote": "JA"
@@ -237,7 +237,7 @@ last_verified: 2026-07-26
 | `EXEC_POLICY_PEEK_ACK` | `{ acknowledged: true }` |
 | `EXECUTE_PLAYER` | `{ targetMemberId }` |
 
-除投票允许兼容无 `taskId` 的当前调用外，其余需要玩家待办的命令必须回传快照给出的 `taskId`。后端仍会独立校验阶段、行动人、目标、版本和房间模式。
+除投票允许兼容无 `taskId` 的当前调用外，其余需要玩家待办的命令必须回传快照给出的 `taskId`。任务 ID 由 `gameId:round:phase:taskType:memberId` 组成，在同一阶段和轮次内不随 `version` 变化；后端仍会独立校验阶段、行动人、目标、版本和房间模式。旧的包含游戏版本的任务 ID 不再接受，客户端应刷新快照获取新任务 ID。
 
 ## 实时同步信号
 

@@ -1422,6 +1422,50 @@ function getTerminalExpirePatch(gameCore, updatedAt) {
   };
 }
 
+function buildTaskId(gameCore, taskType, memberId) {
+  return `${gameCore.gameId}:${gameCore.round}:${gameCore.phase}:${taskType}:${memberId}`;
+}
+
+function getComparablePrivateSnapshotPayload(payload) {
+  if (!payload) {
+    return "";
+  }
+  const { updatedAt, ...comparablePayload } = payload;
+  return JSON.stringify(comparablePayload);
+}
+
+function getPrivateSnapshotExpireAt(gameCore, updatedAt) {
+  const terminalPatch = getTerminalExpirePatch(gameCore, updatedAt);
+  return toIsoString(terminalPatch.expireAt);
+}
+
+function buildChangedPrivateSnapshotPayloads(previousGameCore, nextGameCore, members, updatedAt) {
+  const previousUpdatedAt = toDate(previousGameCore && previousGameCore.updatedAt) || updatedAt;
+  const previousRoomStatus = getRoomStatusForGameCore(previousGameCore);
+  const nextRoomStatus = getRoomStatusForGameCore(nextGameCore);
+  const previousExpireAt = getPrivateSnapshotExpireAt(previousGameCore, previousUpdatedAt);
+  const nextExpireAt = getPrivateSnapshotExpireAt(nextGameCore, updatedAt);
+
+  return members
+    .map((member) => {
+      const previousPayload = buildPrivateSnapshotPayload(previousGameCore, member, members, previousUpdatedAt);
+      const nextPayload = buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt);
+      const payloadChanged =
+        getComparablePrivateSnapshotPayload(previousPayload) !== getComparablePrivateSnapshotPayload(nextPayload);
+      const statusChanged = previousRoomStatus !== nextRoomStatus || previousExpireAt !== nextExpireAt;
+
+      if (!payloadChanged && !statusChanged) {
+        return null;
+      }
+      return {
+        memberId: getMemberId(member),
+        ownerOpenId: getMemberOpenId(member),
+        payload: nextPayload,
+      };
+    })
+    .filter(Boolean);
+}
+
 function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
   const memberId = getMemberId(member);
   const assignment = gameCore.roleAssignments[memberId];
@@ -1434,7 +1478,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
   let pendingTask =
     gameCore.phase === "nomination" && memberId === gameCore.currentPresidentCandidateId
       ? {
-          taskId: `${gameCore.gameId}:${gameCore.version}:NOMINATE_CHANCELLOR:${memberId}`,
+          taskId: buildTaskId(gameCore, "NOMINATE_CHANCELLOR", memberId),
           taskType: "NOMINATE_CHANCELLOR",
           required: true,
           deadline: null,
@@ -1448,7 +1492,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
 
   if (gameCore.phase === "voting" && (gameCore.aliveMemberIds || []).includes(memberId) && !ownBallot) {
     pendingTask = {
-      taskId: `${gameCore.gameId}:${gameCore.version}:SUBMIT_VOTE:${memberId}`,
+      taskId: buildTaskId(gameCore, "SUBMIT_VOTE", memberId),
       taskType: "SUBMIT_VOTE",
       required: true,
       deadline: null,
@@ -1465,7 +1509,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
       (gameCore.phaseData && gameCore.phaseData.cards) ||
       null;
     pendingTask = {
-      taskId: `${gameCore.gameId}:${gameCore.version}:PRESIDENT_DISCARD_POLICY:${memberId}`,
+      taskId: buildTaskId(gameCore, "PRESIDENT_DISCARD_POLICY", memberId),
       taskType: "PRESIDENT_DISCARD_POLICY",
       required: true,
       deadline: null,
@@ -1485,7 +1529,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
       (gameCore.phaseData && gameCore.phaseData.cards) ||
       null;
     pendingTask = {
-      taskId: `${gameCore.gameId}:${gameCore.version}:CHANCELLOR_ENACT_POLICY:${memberId}`,
+      taskId: buildTaskId(gameCore, "CHANCELLOR_ENACT_POLICY", memberId),
       taskType: "CHANCELLOR_ENACT_POLICY",
       required: true,
       deadline: null,
@@ -1502,7 +1546,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
 
   if (gameCore.phase === "veto_response" && memberId === gameCore.currentPresidentId) {
     pendingTask = {
-      taskId: `${gameCore.gameId}:${gameCore.version}:PRESIDENT_RESPOND_VETO:${memberId}`,
+      taskId: buildTaskId(gameCore, "PRESIDENT_RESPOND_VETO", memberId),
       taskType: "PRESIDENT_RESPOND_VETO",
       required: true,
       deadline: null,
@@ -1520,7 +1564,7 @@ function buildPrivateSnapshotPayload(gameCore, member, members, updatedAt) {
     const taskType = getExecutiveTaskType(actionType);
     if (taskType) {
       pendingTask = {
-        taskId: `${gameCore.gameId}:${gameCore.version}:${taskType}:${memberId}`,
+        taskId: buildTaskId(gameCore, taskType, memberId),
         taskType,
         required: true,
         deadline: null,
@@ -1918,7 +1962,7 @@ function validateTaskId(taskId, gameCore, commandType, actorMemberId) {
     return fail("INVALID_PAYLOAD", "缺少 taskId");
   }
 
-  const expectedTaskId = `${gameCore.gameId}:${gameCore.version}:${commandType}:${actorMemberId}`;
+  const expectedTaskId = buildTaskId(gameCore, commandType, actorMemberId);
   if (taskId !== expectedTaskId) {
     return fail("ACTION_NOT_ALLOWED", "待办任务已过期，请刷新后重试");
   }
@@ -2319,11 +2363,7 @@ async function submitCommand(payload, openid) {
         const publicSnapshotPayload = isGameEndedCore(nextGameCore)
           ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
-        const privateSnapshotPayloads = members.map((member) => ({
-          memberId: getMemberId(member),
-          ownerOpenId: getMemberOpenId(member),
-          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
-        }));
+        const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
         await transaction.collection("game_core").doc(gameId).update({
           data: {
@@ -2468,11 +2508,7 @@ async function submitCommand(payload, openid) {
         const publicSnapshotPayload = isGameEndedCore(nextGameCore)
           ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
-        const privateSnapshotPayloads = members.map((member) => ({
-          memberId: getMemberId(member),
-          ownerOpenId: getMemberOpenId(member),
-          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
-        }));
+        const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
         await transaction.collection("game_core").doc(gameId).update({
           data: {
@@ -2682,11 +2718,7 @@ async function submitCommand(payload, openid) {
         const publicSnapshotPayload = isGameEndedCore(nextGameCore)
           ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
-        const privateSnapshotPayloads = members.map((member) => ({
-          memberId: getMemberId(member),
-          ownerOpenId: getMemberOpenId(member),
-          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
-        }));
+        const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
         await transaction.collection("game_core").doc(gameId).update({
           data: {
@@ -2822,11 +2854,7 @@ async function submitCommand(payload, openid) {
         const publicSnapshotPayload = isGameEndedCore(nextGameCore)
           ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
-        const privateSnapshotPayloads = members.map((member) => ({
-          memberId: getMemberId(member),
-          ownerOpenId: getMemberOpenId(member),
-          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
-        }));
+        const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
         await transaction.collection("game_core").doc(gameId).update({
           data: {
@@ -3068,11 +3096,7 @@ async function submitCommand(payload, openid) {
         const publicSnapshotPayload = isGameEndedCore(nextGameCore)
           ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
-        const privateSnapshotPayloads = members.map((member) => ({
-          memberId: getMemberId(member),
-          ownerOpenId: getMemberOpenId(member),
-          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
-        }));
+        const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
         await transaction.collection("game_core").doc(gameId).update({
           data: {
@@ -3339,11 +3363,7 @@ async function submitCommand(payload, openid) {
         const publicSnapshotPayload = isGameEndedCore(nextGameCore)
           ? buildResultSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt)
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
-        const privateSnapshotPayloads = members.map((member) => ({
-          memberId: getMemberId(member),
-          ownerOpenId: getMemberOpenId(member),
-          payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
-        }));
+        const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
         await transaction.collection("game_core").doc(gameId).update({
           data: {
@@ -3483,11 +3503,7 @@ async function submitCommand(payload, openid) {
       });
 
       const publicSnapshotPayload = buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
-      const privateSnapshotPayloads = members.map((member) => ({
-        memberId: getMemberId(member),
-        ownerOpenId: getMemberOpenId(member),
-        payload: buildPrivateSnapshotPayload(nextGameCore, member, members, updatedAt),
-      }));
+      const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
       await transaction.collection("game_core").doc(gameId).update({
         data: {
@@ -3645,6 +3661,8 @@ exports.__testHooks = {
   buildPublicSnapshotPayload,
   buildResultSnapshotPayload,
   buildPrivateSnapshotPayload,
+  buildTaskId,
+  buildChangedPrivateSnapshotPayloads,
   createInitialGameProjection,
   createResultExpireAt,
   drawPolicyCards,
