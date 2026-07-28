@@ -48,21 +48,6 @@
   letter-spacing: 0;
 }
 
-.rules-control {
-  position: absolute;
-  right: 4rpx;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #e0ad69;
-  font-size: 34rpx;
-  font-weight: 800;
-}
-
 .state-panel {
   margin-top: 160rpx;
   padding: 48rpx 28rpx;

@@ -285,13 +285,4 @@ Page({
       url: "/pages/home/index",
     });
   },
-
-  onTapRules() {
-    const timeoutDeadlineAt = this.__pageTimeoutDeadline || Date.now() + RESULT_PAGE_TIMEOUT_MS;
-    wx.navigateTo({
-      url: `/packageRoom/pages/rules/index?roomId=${encodeURIComponent(
-        this.data.roomId || "",
-      )}&timeoutMs=${RESULT_PAGE_TIMEOUT_MS}&timeoutDeadlineAt=${timeoutDeadlineAt}`,
-    });
-  },
 });

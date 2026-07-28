@@ -2,7 +2,6 @@
   <view class="top-bar">
     <view class="back-control" role="button" aria-label="返回首页" bindtap="onBackHome" hover-class="icon-hover">‹</view>
     <view class="page-title">对局结果</view>
-    <view class="rules-control" role="button" aria-label="查看规则" bindtap="onTapRules" hover-class="icon-hover">?</view>
   </view>
 
   <view wx:if="{{loading}}" class="state-panel">正在打开复盘档案...</view>
