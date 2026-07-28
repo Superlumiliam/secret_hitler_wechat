@@ -328,7 +328,9 @@ function assertBoardHeaderReservesSeparateActionColumns() {
   const markup = fs.readFileSync(markupPath, "utf8");
   const roomMetaRule = styles.match(/\.room-meta-row\s*\{([^}]*)\}/);
   const topActionsRule = styles.match(/\.top-actions\s*\{([^}]*)\}/);
-  const toolControlRule = styles.match(/\.tool-control\s*\{([^}]*)\}/);
+  const soloTopActionsRule = styles.match(/\.top-actions\.is-solo\s*\{([^}]*)\}/);
+  const soloToolControlRule = styles.match(/\.top-actions\.is-solo \.tool-control\s*\{([^}]*)\}/);
+  const toolControlRule = styles.match(/(?:^|\n)\.tool-control\s*\{([^}]*)\}/);
   const shareTriggerRule = styles.match(/\.tool-share-trigger\s*\{([^}]*)\}/);
 
   assert.ok(roomMetaRule, "board room meta row style must exist");
@@ -336,6 +338,10 @@ function assertBoardHeaderReservesSeparateActionColumns() {
   assert.match(roomMetaRule[1], /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+220rpx/);
   assert.ok(topActionsRule, "board top actions style must exist");
   assert.match(topActionsRule[1], /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.ok(soloTopActionsRule, "solo board top actions style must exist");
+  assert.match(soloTopActionsRule[1], /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.ok(soloToolControlRule, "solo board rule action position style must exist");
+  assert.match(soloToolControlRule[1], /grid-column:\s*2/);
   assert.ok(toolControlRule, "board tool control style must exist");
   assert.match(toolControlRule[1], /width:\s*100%/);
   assert.match(toolControlRule[1], /min-width:\s*0/);
@@ -344,7 +350,12 @@ function assertBoardHeaderReservesSeparateActionColumns() {
   assert.match(shareTriggerRule[1], /inset:\s*0/);
   assert.match(
     markup,
-    /<view class="tool-control tool-share-control">\s*<button class="tool-share-trigger"[^>]*><\/button>/,
+    /<view class="top-actions \{\{isSoloRoom \? 'is-solo' : ''\}\}">/,
+    "solo board header must preserve the multiplayer action grid",
+  );
+  assert.match(
+    markup,
+    /<view wx:if="\{\{!isSoloRoom\}\}" class="tool-control tool-share-control">\s*<button class="tool-share-trigger"[^>]*><\/button>/,
     "the native share button must not participate directly in the header grid",
   );
 }

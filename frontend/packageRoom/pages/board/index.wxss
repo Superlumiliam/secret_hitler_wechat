@@ -138,6 +138,14 @@
   gap: 0;
 }
 
+.top-actions.is-solo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.top-actions.is-solo .tool-control {
+  grid-column: 2;
+}
+
 .tool-control {
   width: 100%;
   min-width: 0;
