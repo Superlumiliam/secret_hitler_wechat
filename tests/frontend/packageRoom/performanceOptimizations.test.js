@@ -402,6 +402,80 @@ async function assertAppUsesSingleBootstrapCall() {
   assert.deepStrictEqual(actions, ["ensureSession"], "skip-recovery route should only ensure the session");
 }
 
+function assertAppCanonicalizesLobbyShareRecovery() {
+  const appPath = path.resolve(__dirname, "../../../frontend/app.js");
+  const originalWx = global.wx;
+  const originalApp = global.App;
+  const originalGetCurrentPages = global.getCurrentPages;
+  let appDefinition;
+  let currentPage = {
+    route: "packageRoom/pages/lobby/index",
+    options: {
+      roomId: "room_shared",
+      roomCode: "654321",
+    },
+  };
+  const redirects = [];
+  const relaunches = [];
+
+  global.App = (definition) => {
+    appDefinition = definition;
+  };
+  global.getCurrentPages = () => [currentPage];
+  global.wx = {
+    redirectTo({ url }) {
+      redirects.push(url);
+    },
+    reLaunch({ url }) {
+      relaunches.push(url);
+    },
+  };
+  delete require.cache[appPath];
+  require(appPath);
+
+  try {
+    const activeLobby = {
+      roomId: "room_shared",
+      roomCode: "654321",
+      memberId: "mem_shared",
+      routeHint: "lobby",
+    };
+    appDefinition.routeByActiveRoom(activeLobby);
+    assert.deepStrictEqual(redirects, [
+      "/packageRoom/pages/lobby/index?roomId=room_shared&memberId=mem_shared",
+    ]);
+
+    currentPage = {
+      route: "packageRoom/pages/lobby/index",
+      options: {
+        roomId: "room_shared",
+        memberId: "mem_shared",
+      },
+    };
+    appDefinition.routeByActiveRoom(activeLobby);
+    assert.strictEqual(redirects.length, 1, "canonical lobby recovery must not navigate again");
+
+    currentPage = {
+      route: "packageResult/pages/result/index",
+      options: {
+        roomId: "room_result",
+        roomCode: "654321",
+      },
+    };
+    appDefinition.routeByActiveRoom({
+      roomId: "room_result",
+      roomCode: "654321",
+      memberId: "mem_result",
+      routeHint: "result",
+    });
+    assert.strictEqual(relaunches.length, 0, "result roomCode must not be treated as a lobby share entry");
+  } finally {
+    global.wx = originalWx;
+    global.App = originalApp;
+    global.getCurrentPages = originalGetCurrentPages;
+  }
+}
+
 async function assertAppRetriesFailedOverlappingRecoveryOnce() {
   const appPath = path.resolve(__dirname, "../../../frontend/app.js");
   const bootstrapServicePath = path.resolve(__dirname, "../../../frontend/services/bootstrapService.js");
@@ -516,6 +590,7 @@ async function assertAppDoesNotLoopAfterRetryFailure() {
   await assertPollingDoesNotOverlapAndUsesExpectedIntervals();
   await assertLobbySuccessCommandDoesNotPullAgain();
   await assertAppUsesSingleBootstrapCall();
+  assertAppCanonicalizesLobbyShareRecovery();
   await assertAppRetriesFailedOverlappingRecoveryOnce();
   await assertAppDoesNotLoopAfterRetryFailure();
   console.log("frontend performance optimization tests passed");

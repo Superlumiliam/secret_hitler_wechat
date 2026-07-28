@@ -146,6 +146,45 @@ async function assertSoloRoomRejectsRealGuestJoin() {
   assert.strictEqual(Object.keys(db.dump().room_members).length, 1, "solo room should not add guest member");
 }
 
+async function assertSoloHostReusesExistingMembership() {
+  const db = createMemoryDb({
+    rooms: {
+      room_solo: makeRoom({
+        roomId: "room_solo",
+        roomCode: "300002",
+        mode: "solo",
+        hostMemberId: "mem_host",
+        createdByOpenId: "host_openid",
+      }),
+    },
+    room_members: {
+      mem_host: makeMember({
+        memberId: "mem_host",
+        roomId: "room_solo",
+        openId: "host_openid",
+        isHost: true,
+      }),
+    },
+  });
+  const { service } = loadRoomService({ db, openId: "host_openid" });
+
+  const response = await service.main({
+    action: "joinRoom",
+    payload: {
+      commandId: "cmd_rejoin_solo_host",
+      roomId: "room_solo",
+      displayName: "房主",
+      avatarUrl: "",
+    },
+  });
+
+  assert.strictEqual(response.success, true);
+  assert.strictEqual(response.data.memberId, "mem_host");
+  assert.strictEqual(response.data.routeHint, "lobby");
+  assert.strictEqual(response.data.lobbySnapshot.isSoloRoom, true);
+  assert.strictEqual(Object.keys(db.dump().room_members).length, 1, "solo host recovery must reuse the existing member");
+}
+
 async function assertNonControllerRejectsVirtualSeatReady() {
   const db = createMemoryDb({
     rooms: {
@@ -410,6 +449,7 @@ async function assertLobbyReadTouchesPresenceOnlyWhenRequested() {
 (async () => {
   await assertNormalRoomRejectsSoloActions();
   await assertSoloRoomRejectsRealGuestJoin();
+  await assertSoloHostReusesExistingMembership();
   await assertNonControllerRejectsVirtualSeatReady();
   await assertHostCanUpdateRoomSettingsWithoutChangingSeats();
   await assertNonHostCannotUpdateRoomSettings();

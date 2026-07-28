@@ -515,6 +515,86 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
   }
 }
 
+async function assertSharedLobbyRecoveryUsesCanonicalRoute() {
+  const appPath = path.resolve(__dirname, "../../../frontend/app.js");
+  const originalWx = global.wx;
+  const originalApp = global.App;
+  const originalGetApp = global.getApp;
+  const originalGetCurrentPages = global.getCurrentPages;
+  let appDefinition;
+  const redirects = [];
+  let joinAttempts = 0;
+  const activeRoom = {
+    roomId: "room_shared",
+    roomCode: "654321",
+    memberId: "mem_shared",
+    routeHint: "lobby",
+  };
+
+  global.App = (definition) => {
+    appDefinition = definition;
+  };
+  global.getCurrentPages = () => [
+    {
+      route: "packageRoom/pages/lobby/index",
+      options: {
+        roomId: "room_shared",
+        roomCode: "654321",
+      },
+    },
+  ];
+  global.wx = {
+    cloud: {
+      callFunction: async ({ name, data }) => {
+        assert.strictEqual(name, "bootstrapService");
+        assert.strictEqual(data.action, "recoverActiveRoom");
+        return {
+          result: {
+            success: true,
+            data: {
+              activeRoom,
+            },
+          },
+        };
+      },
+    },
+    redirectTo({ url }) {
+      redirects.push(url);
+    },
+    reLaunch() {
+      throw new Error("lobby share recovery must replace the share entry with redirectTo");
+    },
+  };
+  delete require.cache[appPath];
+  require(appPath);
+  global.getApp = () => appDefinition;
+
+  try {
+    const lobby = loadLobbyPage();
+    const context = createContext(lobby, {
+      data: {
+        roomId: "",
+        lobby: null,
+      },
+      callRoomService: async () => {
+        joinAttempts += 1;
+        throw new Error("matching active room must not call joinRoom");
+      },
+    });
+
+    await lobby.joinSharedRoom.call(context, "654321", "room_shared");
+    assert.strictEqual(joinAttempts, 0);
+    assert.deepStrictEqual(redirects, [
+      "/packageRoom/pages/lobby/index?roomId=room_shared&memberId=mem_shared",
+    ]);
+  } finally {
+    global.wx = originalWx;
+    global.App = originalApp;
+    global.getApp = originalGetApp;
+    global.getCurrentPages = originalGetCurrentPages;
+  }
+}
+
 (async () => {
   await assertDoubleTapClaimsExactlyOnce();
   await assertDoubleTapKeyIncludesMemberType();
@@ -527,6 +607,7 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
   assertRoomShareUsesStableRoomId();
   assertSharedLoadTreatsRoomIdAsJoinTarget();
   await assertSharedEntryRecoversMatchingActiveRoomBeforeJoin();
+  await assertSharedLobbyRecoveryUsesCanonicalRoute();
   console.log("lobby seat interaction tests passed");
 })().catch((err) => {
   console.error(err);

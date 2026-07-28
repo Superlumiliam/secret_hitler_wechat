@@ -125,7 +125,8 @@ App({
     const current = getCurrentPageRouteInfo();
     const targetRoute = getRoutePathForHint(activeRoom.routeHint);
     const currentRoomId = current.options.roomId || "";
-    if (current.route === targetRoute && currentRoomId === activeRoom.roomId) {
+    const isLobbyShareEntry = activeRoom.routeHint === "lobby" && Boolean(current.options.roomCode);
+    if (current.route === targetRoute && currentRoomId === activeRoom.roomId && !isLobbyShareEntry) {
       return;
     }
 
