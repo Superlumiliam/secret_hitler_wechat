@@ -131,6 +131,7 @@ function assertPrivateVisibility(projection, playerCount) {
 
 function assertPublicSnapshotSafe(projection) {
   assert.strictEqual(hasSecretKey(projection.publicSnapshotPayload), false, "public snapshot should not contain secrets");
+  assert.deepStrictEqual(projection.gameCore.legislativeHistory, [], "new games should initialize empty legislative history");
   const publicState = projection.publicSnapshotPayload.publicState;
   assert.strictEqual(publicState.liberalPolicyCount, 0, "liberal track should start at 0");
   assert.strictEqual(publicState.fascistPolicyCount, 0, "fascist track should start at 0");

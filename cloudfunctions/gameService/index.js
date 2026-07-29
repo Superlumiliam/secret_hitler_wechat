@@ -133,6 +133,57 @@ function getMemberId(member) {
   return member.memberId || member._id;
 }
 
+function getLegislativeHistory(gameCore) {
+  return Array.isArray(gameCore && gameCore.legislativeHistory) ? gameCore.legislativeHistory : [];
+}
+
+function createLegislativeHistoryRecord(gameCore, presidentDiscardedPolicy) {
+  return {
+    round: gameCore.round,
+    presidentMemberId: gameCore.currentPresidentId,
+    chancellorMemberId: gameCore.currentChancellorId,
+    presidentDiscardedPolicy,
+    chancellorEnactedPolicy: null,
+    chancellorDiscardedPolicies: [],
+  };
+}
+
+function appendLegislativeHistoryRecord(gameCore, presidentDiscardedPolicy) {
+  return getLegislativeHistory(gameCore).concat(createLegislativeHistoryRecord(gameCore, presidentDiscardedPolicy));
+}
+
+function updateLatestLegislativeHistoryRecord(gameCore, patch) {
+  const history = getLegislativeHistory(gameCore).slice();
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index];
+    if (
+      item.round === gameCore.round &&
+      item.presidentMemberId === gameCore.currentPresidentId &&
+      item.chancellorMemberId === gameCore.currentChancellorId
+    ) {
+      history[index] = {
+        ...item,
+        ...patch,
+      };
+      break;
+    }
+  }
+  return history;
+}
+
+function buildLegislativeHistoryPayload(gameCore) {
+  return getLegislativeHistory(gameCore).map((item) => ({
+    round: item.round,
+    presidentMemberId: item.presidentMemberId,
+    chancellorMemberId: item.chancellorMemberId,
+    presidentDiscardedPolicy: item.presidentDiscardedPolicy,
+    chancellorEnactedPolicy: item.chancellorEnactedPolicy,
+    chancellorDiscardedPolicies: Array.isArray(item.chancellorDiscardedPolicies)
+      ? item.chancellorDiscardedPolicies.slice()
+      : [],
+  }));
+}
+
 function getMemberOpenId(member) {
   return member.openId || member.openid;
 }
@@ -1380,6 +1431,7 @@ function buildResultSnapshotPayload(room, gameCore, members, publicHistory, upda
       liberal: gameCore.liberalPolicyCount || 0,
       fascist: gameCore.fascistPolicyCount || 0,
     },
+    legislativeHistory: buildLegislativeHistoryPayload(gameCore),
     finalPlayers: members.map((member) => {
       const memberId = getMemberId(member);
       const assignment = roleAssignments[memberId] || {};
@@ -1696,6 +1748,7 @@ function createInitialGameProjection(room, members, options = {}) {
     liberalPolicyCount: 0,
     fascistPolicyCount: 0,
     vetoUnlocked: false,
+    legislativeHistory: [],
     roleAssignments: buildRoleAssignments(sortedMembers, options),
     aliveMemberIds: sortedMembers.map(getMemberId),
     deadMemberIds: [],
@@ -2498,6 +2551,7 @@ async function submitCommand(payload, openid) {
 
         const discardedPolicy = presidentHand[discardPolicyIndex];
         const chancellorHand = presidentHand.filter((_, index) => index !== discardPolicyIndex);
+        const legislativeHistory = appendLegislativeHistoryRecord(gameCore, discardedPolicy);
         const nextPolicyState = {
           drawPile: ((currentPolicyState && currentPolicyState.drawPile) || []).slice(),
           discardPile: ((currentPolicyState && currentPolicyState.discardPile) || []).concat(discardedPolicy),
@@ -2512,6 +2566,7 @@ async function submitCommand(payload, openid) {
           eventSeq: (gameCore.eventSeq || 0) + 1,
           phase: "legislative_chancellor",
           policyState: nextPolicyState,
+          legislativeHistory,
           phaseData: {
             presidentId: gameCore.currentPresidentId,
             chancellorId: gameCore.currentChancellorId,
@@ -2546,6 +2601,7 @@ async function submitCommand(payload, openid) {
             eventSeq: nextGameCore.eventSeq,
             phase: nextGameCore.phase,
             policyState: replaceFieldValue(nextGameCore.policyState),
+            legislativeHistory: replaceFieldValue(nextGameCore.legislativeHistory),
             phaseData: replaceFieldValue(nextGameCore.phaseData),
             updatedAt,
           },
@@ -2617,6 +2673,10 @@ async function submitCommand(payload, openid) {
 
         const enactedPolicy = chancellorHand[enactPolicyIndex];
         const discardedPolicy = chancellorHand[enactPolicyIndex === 0 ? 1 : 0];
+        const legislativeHistory = updateLatestLegislativeHistoryRecord(gameCore, {
+          chancellorEnactedPolicy: enactedPolicy,
+          chancellorDiscardedPolicies: [discardedPolicy],
+        });
         let liberalPolicyCount = gameCore.liberalPolicyCount || 0;
         let fascistPolicyCount = gameCore.fascistPolicyCount || 0;
         if (enactedPolicy === "LIBERAL") {
@@ -2681,6 +2741,7 @@ async function submitCommand(payload, openid) {
           fascistPolicyCount,
           vetoUnlocked: fascistPolicyCount >= 5,
           policyState: nextPolicyState,
+          legislativeHistory,
           phaseData:
             phase === "nomination"
               ? {
@@ -2768,6 +2829,7 @@ async function submitCommand(payload, openid) {
             fascistPolicyCount: nextGameCore.fascistPolicyCount,
             vetoUnlocked: nextGameCore.vetoUnlocked,
             policyState: replaceFieldValue(nextGameCore.policyState),
+            legislativeHistory: replaceFieldValue(nextGameCore.legislativeHistory),
             phaseData: replaceFieldValue(nextGameCore.phaseData),
             lastLegislativeResult: replaceFieldValue(nextGameCore.lastLegislativeResult),
             winner: nextGameCore.winner,
@@ -3076,6 +3138,10 @@ async function submitCommand(payload, openid) {
             fascistPolicyCount,
             vetoUnlocked: Boolean(gameCore.vetoUnlocked || fascistPolicyCount >= 5),
             policyState: nextPolicyState,
+            legislativeHistory: updateLatestLegislativeHistoryRecord(gameCore, {
+              chancellorEnactedPolicy: null,
+              chancellorDiscardedPolicies: chancellorHand.slice(),
+            }),
             phaseData:
               phase === "nomination"
                 ? {
@@ -3148,6 +3214,7 @@ async function submitCommand(payload, openid) {
             fascistPolicyCount: nextGameCore.fascistPolicyCount,
             vetoUnlocked: nextGameCore.vetoUnlocked,
             policyState: replaceFieldValue(nextGameCore.policyState),
+            legislativeHistory: replaceFieldValue(nextGameCore.legislativeHistory),
             phaseData: replaceFieldValue(nextGameCore.phaseData),
             lastLegislativeResult: replaceFieldValue(nextGameCore.lastLegislativeResult || gameCore.lastLegislativeResult || null),
             winner: nextGameCore.winner,

@@ -86,7 +86,10 @@
         <view wx:for="{{result.timeline}}" wx:key="eventId" class="timeline-item">
           <view class="timeline-meta">{{item.roundText}} · {{item.timeText}}</view>
           <view class="timeline-title">{{item.title}}</view>
-          <view class="timeline-summary">{{item.summary}}</view>
+          <view wx:if="{{item.showSummary}}" class="timeline-summary">{{item.summary}}</view>
+          <block wx:if="{{item.legislativeReview}}">
+            <view wx:for="{{item.legislativeReview.lines}}" wx:for-item="reviewLine" wx:key="*this" class="timeline-summary">{{reviewLine}}</view>
+          </block>
           <view
             wx:if="{{item.showVotePattern}}"
             class="timeline-vote-strip"

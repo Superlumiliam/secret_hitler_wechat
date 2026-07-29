@@ -18,6 +18,11 @@ const ROLE_CHIP_ASSET_KEY = {
   HITLER: "result-role-chip-dictator",
 };
 
+const POLICY_TEXT = {
+  LIBERAL: "自由派政策",
+  FASCIST: "极权派政策",
+};
+
 function formatTime(value) {
   if (!value) {
     return "";
@@ -73,6 +78,77 @@ function createTimelineVoteRows(item, players) {
     .sort((a, b) => a.seatIndex - b.seatIndex);
 }
 
+function mapLegislativeHistoryByRound(history, players) {
+  const playerById = Object.fromEntries(players.map((player) => [player.memberId, player]));
+  return Object.fromEntries((Array.isArray(history) ? history : []).map((item) => {
+    const president = playerById[item.presidentMemberId] || {};
+    const chancellor = playerById[item.chancellorMemberId] || {};
+    const presidentRoleText = president.seatIndex ? `${president.seatIndex}号总统` : "总统";
+    const chancellorRoleText = chancellor.seatIndex ? `${chancellor.seatIndex}号总理` : "总理";
+    const chancellorDiscardedPolicyText = (Array.isArray(item.chancellorDiscardedPolicies)
+      ? item.chancellorDiscardedPolicies
+      : []
+    )
+      .map((policy) => POLICY_TEXT[policy] || "")
+      .filter(Boolean)
+      .join("、");
+    const chancellorEnactedPolicyText = POLICY_TEXT[item.chancellorEnactedPolicy] || "";
+    const chancellorDiscardedPolicies = Array.isArray(item.chancellorDiscardedPolicies)
+      ? item.chancellorDiscardedPolicies
+      : [];
+    const lines = [
+      `${presidentRoleText} 弃掉了 1张${POLICY_TEXT[item.presidentDiscardedPolicy] || "未知政策"}`,
+    ];
+    if (chancellorDiscardedPolicyText) {
+      lines.push(`${chancellorRoleText} 弃掉了 ${chancellorDiscardedPolicies.length}张${chancellorDiscardedPolicyText}`);
+    }
+    if (chancellorEnactedPolicyText) {
+      lines.push(`${chancellorRoleText} 颁布了 1张${chancellorEnactedPolicyText}`);
+    } else {
+      lines.push(`${chancellorRoleText} 未颁布政策`);
+    }
+
+    return [item.round || 1, {
+      round: item.round || 1,
+      lines,
+    }];
+  }));
+}
+
+function attachLegislativeReviews(timeline, historyByRound) {
+  const timelineIndicesByRound = {};
+  timeline.forEach((item, index) => {
+    const round = item.round || 1;
+    if (!timelineIndicesByRound[round]) {
+      timelineIndicesByRound[round] = [];
+    }
+    timelineIndicesByRound[round].push(index);
+  });
+
+  const reviewByTimelineIndex = {};
+  Object.keys(historyByRound).forEach((roundKey) => {
+    const review = historyByRound[roundKey];
+    const indices = timelineIndicesByRound[roundKey] || [];
+    const preferredIndex = indices
+      .slice()
+      .reverse()
+      .find((index) => ["POLICY_ENACTED", "VETO_RESPONDED"].includes(timeline[index].type));
+    const targetIndex = preferredIndex === undefined ? indices[indices.length - 1] : preferredIndex;
+    if (targetIndex !== undefined) {
+      reviewByTimelineIndex[targetIndex] = review;
+    }
+  });
+
+  return timeline.map((item, index) => {
+    const legislativeReview = reviewByTimelineIndex[index] || null;
+    return {
+      ...item,
+      legislativeReview,
+      showSummary: !legislativeReview && Boolean(item.summary),
+    };
+  });
+}
+
 function mapResultSnapshot(snapshot, assets = {}) {
   const policySummary = snapshot.policySummary || {};
   const finalPlayers = snapshot.finalPlayers || [];
@@ -86,6 +162,7 @@ function mapResultSnapshot(snapshot, assets = {}) {
   const targetPlayerCount = finalPlayers.length || 6;
   const liberalPolicyCount = policySummary.liberal || 0;
   const fascistPolicyCount = policySummary.fascist || 0;
+  const legislativeHistoryByRound = mapLegislativeHistoryByRound(snapshot.legislativeHistory, finalPlayers);
 
   return {
     roomId: snapshot.roomId || "",
@@ -124,7 +201,7 @@ function mapResultSnapshot(snapshot, assets = {}) {
           .filter(Boolean)
           .join(" "),
       })),
-    timeline: timeline.map((item) => {
+    timeline: attachLegislativeReviews(timeline.map((item) => {
       const voteRows = createTimelineVoteRows(item, finalPlayers);
       return {
         ...item,
@@ -135,7 +212,7 @@ function mapResultSnapshot(snapshot, assets = {}) {
         showVotePattern: voteRows.length > 0,
         voteRows,
       };
-    }),
+    }), legislativeHistoryByRound),
   };
 }
 

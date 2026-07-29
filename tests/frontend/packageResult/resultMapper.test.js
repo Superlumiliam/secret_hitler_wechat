@@ -77,4 +77,66 @@ assert.strictEqual(
   "player result images must continue to use the player's own faction",
 );
 
+const legislativeResult = mapResultSnapshot({
+  myMemberId: "mem_1",
+  finalPlayers: [
+    { memberId: "mem_1", seatIndex: 1, displayName: "玩家1", role: "LIBERAL", party: "LIBERAL" },
+    { memberId: "mem_4", seatIndex: 4, displayName: "玩家4", role: "FASCIST", party: "FASCIST" },
+  ],
+  timeline: [
+    {
+      eventId: "evt_policy_enacted",
+      round: 3,
+      type: "POLICY_ENACTED",
+      title: "政策颁布",
+      summary: "4号玩家颁布了 1 张自由派政策",
+    },
+    {
+      eventId: "evt_veto_responded",
+      round: 5,
+      type: "VETO_RESPONDED",
+      title: "总统同意否决",
+      summary: "1号玩家同意否决，本轮不颁布政策",
+    },
+  ],
+  legislativeHistory: [
+    {
+      round: 3,
+      presidentMemberId: "mem_1",
+      chancellorMemberId: "mem_4",
+      presidentDiscardedPolicy: "FASCIST",
+      chancellorEnactedPolicy: "LIBERAL",
+      chancellorDiscardedPolicies: ["FASCIST"],
+    },
+    {
+      round: 5,
+      presidentMemberId: "mem_1",
+      chancellorMemberId: "mem_4",
+      presidentDiscardedPolicy: "LIBERAL",
+      chancellorEnactedPolicy: null,
+      chancellorDiscardedPolicies: ["FASCIST", "FASCIST"],
+    },
+  ],
+});
+
+assert.strictEqual(Object.prototype.hasOwnProperty.call(legislativeResult, "legislativeHistory"), false);
+assert.deepStrictEqual(legislativeResult.timeline[0].legislativeReview, {
+  round: 3,
+  lines: [
+    "1号总统 弃掉了 1张极权派政策",
+    "4号总理 弃掉了 1张极权派政策",
+    "4号总理 颁布了 1张自由派政策",
+  ],
+});
+assert.deepStrictEqual(legislativeResult.timeline[1].legislativeReview, {
+  round: 5,
+  lines: [
+    "1号总统 弃掉了 1张自由派政策",
+    "4号总理 弃掉了 2张极权派政策、极权派政策",
+    "4号总理 未颁布政策",
+  ],
+});
+assert.strictEqual(legislativeResult.timeline[0].showSummary, false);
+assert.strictEqual(JSON.stringify(legislativeResult).includes("Seen"), false);
+
 console.log("result mapper tests passed");

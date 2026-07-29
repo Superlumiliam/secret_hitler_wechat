@@ -6,6 +6,7 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const testFiles = [
   "tests/backend/gameService/startGameInit.test.js",
+  "tests/backend/gameService/legislativeHistory.test.js",
   "tests/backend/gameService/ruleScenarios.test.js",
   "tests/backend/gameService/resultSnapshot.integration.test.js",
   "tests/backend/gameService/privateSnapshotOptimization.test.js",

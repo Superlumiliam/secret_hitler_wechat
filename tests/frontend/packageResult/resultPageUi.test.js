@@ -16,5 +16,11 @@ assert.doesNotMatch(
   "result page must not retain a rules-page navigation route",
 );
 assert.doesNotMatch(styles, /\.rules-control\s*\{/, "result page must not retain rules-action styles");
+assert.match(markup, /item\.legislativeReview\.lines/, "timeline must render legislative detail lines");
+assert.match(markup, /wx:for-item="reviewLine"/, "timeline must render each legislative detail with timeline body styling");
+assert.doesNotMatch(markup, /timeline-legislative-review|本轮立法牌面/, "result page must not render a legislative review container or title");
+assert.doesNotMatch(styles, /timeline-legislative|\.legislative-history/, "legislative details must not add a separate container or border");
+assert.doesNotMatch(markup, /showLegislativeHistory|result\.legislativeHistory|legislative-history-section/, "result page must not render a standalone legislative section");
+assert.doesNotMatch(markup, /presidentSeen|chancellorSeen|看到的牌/, "result page must not render seen-card fields");
 
 console.log("result page UI tests passed");

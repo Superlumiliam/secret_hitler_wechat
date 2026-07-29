@@ -1,7 +1,7 @@
 ---
 status: active
 authority: api-contract
-last_verified: 2026-07-27
+last_verified: 2026-07-29
 ---
 
 # 《secret dictator》前后端 API
@@ -212,11 +212,21 @@ last_verified: 2026-07-27
   "expireAt": "...",
   "policySummary": {},
   "finalPlayers": [],
-  "timeline": []
+  "timeline": [],
+  "legislativeHistory": [
+    {
+      "round": 3,
+      "presidentMemberId": "mem_1",
+      "chancellorMemberId": "mem_4",
+      "presidentDiscardedPolicy": "FASCIST",
+      "chancellorEnactedPolicy": "LIBERAL",
+      "chancellorDiscardedPolicies": ["FASCIST"]
+    }
+  ]
 }
 ```
 
-只有终局后且当前 openid 仍属于本局真实成员（玩家或观战者）时可以读取。`finalPlayers` 只列实际玩家并可公开最终身份；`timeline[].votes` 只允许包含已经公开的政府投票。
+只有终局后且当前 openid 仍属于本局真实成员（玩家或观战者）时可以读取。`finalPlayers` 只列实际玩家并可公开最终身份；`timeline[].votes` 只允许包含已经公开的政府投票。`legislativeHistory` 只在结果快照中返回，记录每轮总统弃掉的政策、总理弃掉的政策和总理颁布的政策；总统或总理看到的牌不属于该 DTO。正常颁布时 `chancellorEnactedPolicy` 为政策枚举且弃牌数组有 1 项；否决成功时颁布字段为 `null` 且弃牌数组有 2 项。旧对局没有记录时返回空数组，进行中的 `GameSnapshot` 不包含该字段。
 
 ## 游戏命令
 
