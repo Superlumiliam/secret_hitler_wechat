@@ -43,6 +43,7 @@ const POLICY_TRACK_ASSET_FILE_IDS = {
   modalFrameMobile: `${CLOUD_ASSET_ROOT}modal-frame-mobile.webp`,
   modalFrameButtonMobile: `${CLOUD_ASSET_ROOT}modal-frame-button-mobile.webp`,
   modalCancelButtonMobile: `${CLOUD_ASSET_ROOT}modal-cancel-button-mobile.webp`,
+  voteResultPanel: `${CLOUD_ASSET_ROOT}voting-panel-parliament-notice-v2.webp`,
   defaultAvatar: `${CLOUD_ASSET_ROOT}man-in-black.webp`,
   electionTrackBg: `${CLOUD_ASSET_ROOT}election-track-bg.webp`,
   electionSlotEmpty: `${CLOUD_ASSET_ROOT}election-slot-empty.webp`,

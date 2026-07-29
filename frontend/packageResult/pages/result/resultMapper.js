@@ -1,5 +1,5 @@
 const { createFascistTrack, createLiberalTrack } = require("../../utils/policyTrack");
-const { createVoteGroupRows } = require("../../../utils/voteGroups");
+const { createVoteGroupRows } = require("../../utils/voteGroups");
 
 const WINNER_TEXT = {
   LIBERAL: "自由派胜利",

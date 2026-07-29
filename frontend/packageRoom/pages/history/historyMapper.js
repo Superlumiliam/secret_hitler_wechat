@@ -1,4 +1,4 @@
-const { createVoteGroupRows } = require("../../../utils/voteGroups");
+const { createVoteGroupRows } = require("../../utils/voteGroups");
 
 function createHistoryRoundViews(rounds, seatOrder) {
   const memberById = Object.fromEntries(

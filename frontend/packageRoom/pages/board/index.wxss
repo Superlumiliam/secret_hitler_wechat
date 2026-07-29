@@ -1285,9 +1285,8 @@
   width: 100%;
   max-width: 704rpx;
   box-sizing: border-box;
-  color: #e9bf83;
-  background:
-    linear-gradient(180deg, rgba(31, 18, 14, 0.98) 0%, rgba(13, 8, 7, 0.98) 100%);
+  color: #3d2619;
+  background: #d6c19b;
   box-shadow:
     0 28rpx 72rpx rgba(0, 0, 0, 0.66);
   animation: identityModalIn 150ms ease-out both;
@@ -1309,12 +1308,23 @@
 }
 
 .vote-result-modal .vote-result-title {
+  color: #5b3a27;
   font-size: 34rpx;
+}
+
+.vote-result-modal.is-passed .vote-result-title {
+  color: #0f5c60;
+}
+
+.vote-result-modal.is-failed .vote-result-title {
+  color: #8b2d23;
 }
 
 .vote-result-modal .vote-result-detail {
   margin-top: 12rpx;
+  color: rgba(61, 38, 25, 0.84);
   font-size: 23rpx;
+  text-shadow: none;
 }
 
 .vote-result-modal .vote-group-list {
@@ -1325,6 +1335,7 @@
   grid-template-columns: 112rpx minmax(0, 1fr);
   gap: 22rpx;
   padding: 9rpx 0;
+  border-bottom-color: rgba(93, 57, 31, 0.28);
 }
 
 .vote-result-modal .vote-group-label,

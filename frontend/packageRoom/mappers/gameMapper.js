@@ -2,7 +2,7 @@ const {
   PHASE_NAME_MAP,
   POLICY_TRACK_ASSET_FILE_IDS,
 } = require("../types/game");
-const { createVoteGroupRows } = require("../../utils/voteGroups");
+const { createVoteGroupRows } = require("../utils/voteGroups");
 const { createFascistTrack, createLiberalTrack } = require("../utils/policyTrack");
 const taskMapper = require("./taskMapper");
 

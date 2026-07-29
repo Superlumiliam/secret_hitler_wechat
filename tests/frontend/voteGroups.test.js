@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { createVoteGroupRows } = require("../../frontend/utils/voteGroups");
+const { createVoteGroupRows } = require("../../frontend/packageRoom/utils/voteGroups");
 
 const members = [
   { memberId: "mem_3", seatIndex: 3 },

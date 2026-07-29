@@ -10,6 +10,7 @@ const historyMarkup = fs.readFileSync(path.join(historyDirectory, "index.wxml"),
 const historyStyles = fs.readFileSync(path.join(historyDirectory, "index.wxss"), "utf8");
 
 assert.match(boardMarkup, /voteResult\.voteGroupRows/, "vote result modal should render grouped vote rows");
+assert.match(boardMarkup, /policyAssets\.voteResultPanel/, "vote result modal should use the dedicated notice-board asset");
 assert.match(boardMarkup, /item\.memberCards/, "vote result modal should render seat cards");
 assert.match(boardMarkup, /memberCard\.label/, "vote result modal should use short seat labels");
 assert.doesNotMatch(boardMarkup, /item\.memberText/, "vote result modal should not render long player text");
@@ -17,6 +18,8 @@ assert.doesNotMatch(boardMarkup, /voteResult\.voteRows|vote-reveal-item/, "vote 
 assert.match(boardStyles, /\.vote-group-row\.is-ja \.vote-group-label/);
 assert.match(boardStyles, /\.vote-group-row\.is-nein \.vote-group-label/);
 assert.match(boardStyles, /\.vote-group-member-card/);
+assert.match(boardStyles, /\.vote-result-modal\.is-passed \.vote-result-title[\s\S]*color:\s*#0f5c60/);
+assert.match(boardStyles, /\.vote-result-modal\.is-failed \.vote-result-title[\s\S]*color:\s*#8b2d23/);
 
 assert.match(historyMarkup, /已进行轮次/);
 assert.match(historyMarkup, /自由派/);
