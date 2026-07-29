@@ -41,49 +41,30 @@
     <view class="round-list">
       <view wx:for="{{rounds}}" wx:key="round" class="round-board">
         <image wx:if="{{historyAssets.frame}}" class="round-frame-image" src="{{historyAssets.frame}}" mode="scaleToFill" webp="{{true}}" />
-        <view class="round-divider"></view>
-        <view class="round-side">
-          <view class="round-medal">
-            <image wx:if="{{historyAssets.ring}}" class="round-ring-image" src="{{historyAssets.ring}}" mode="aspectFit" webp="{{true}}" />
-            <view class="round-small">第</view>
-            <view class="round-number">{{item.round}}</view>
-            <view class="round-small">轮</view>
+        <view class="round-header">
+          <view class="round-title">{{item.roundTitle}}</view>
+          <view wx:if="{{item.showGovernmentResult}}" class="{{item.governmentResultClass}}">
+            {{item.governmentResultText}}
           </view>
         </view>
-        <view wx:if="{{item.showPolicyBadge}}" class="round-outcome">
-          <view class="{{item.outcomeClass}}">
-            <image wx:if="{{item.outcomeImageSrc}}" class="outcome-image" src="{{item.outcomeImageSrc}}" mode="scaleToFill" webp="{{true}}" />
+        <view class="round-details">
+          <view wx:for="{{item.detailRows}}" wx:for-item="detailRow" wx:key="key" class="history-detail-row">
+            <view class="{{detailRow.labelClass}}">{{detailRow.label}}</view>
+            <view class="history-player-cards">
+              <view
+                wx:for="{{detailRow.playerCards}}"
+                wx:for-item="playerCard"
+                wx:key="memberId"
+                class="history-player-card {{playerCard.cardClass}}"
+              >
+                {{playerCard.label}}
+              </view>
+            </view>
           </view>
         </view>
-        <view class="round-main">
-          <view class="round-line">
-            <text class="president-text">{{item.presidentText}}</text>
-            <text class="role-text">总统提名了</text>
-            <text class="chancellor-text">{{item.chancellorText}}</text>
-            <text class="role-text">总理</text>
-          </view>
-          <view class="vote-result-line">
-            <text class="vote-result-label">投票结果：</text>
-            <text class="vote-result-text">{{item.voteText}}</text>
-          </view>
-        </view>
-        <view class="vote-strip" style="grid-template-columns: repeat({{item.votes.length}}, minmax(0, 1fr));">
-          <view wx:for="{{item.votes}}" wx:key="memberId" class="{{item.cellClass}}">
-            <view class="seat-no">{{item.seatIndex}}</view>
-            <view class="vote-mark">{{item.mark}}</view>
-          </view>
-        </view>
-        <view wx:if="{{item.executiveResultText}}" class="executive-result">{{item.executiveResultText}}</view>
       </view>
     </view>
 
-    <view class="legend">
-      <view class="legend-item"><text class="legend-dot is-ja">✔</text>赞成</view>
-      <view class="legend-item"><text class="legend-dot is-nein">×</text>反对</view>
-      <view class="legend-item"><text class="legend-dot is-dead">出</text>已出局</view>
-      <view class="legend-item"><text class="legend-dot is-pending">…</text>未公开</view>
-      <view class="legend-item"><text class="legend-dot is-not-started">·</text>未投票</view>
-    </view>
   </block>
 
   <view wx:elif="{{errorText}}" class="history-loading">

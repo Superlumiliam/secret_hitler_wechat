@@ -233,10 +233,23 @@ async function assertFailedElectionKeepsRevealedBallotsInHistory() {
   assert.strictEqual(failedRound.status, "vote_failed", "failed government should remain in round history");
   assert.strictEqual(failedRound.voteSummary.revealed, true, "failed election ballots should stay revealed");
   assert.deepStrictEqual(
-    failedRound.votes.map((vote) => vote.state),
-    ["ja", "ja", "nein", "nein", "nein"],
-    "failed election history should preserve each seat's ballot",
+    failedRound.voteGroups,
+    {
+      jaMemberIds: ["mem_1", "mem_2"],
+      neinMemberIds: ["mem_3", "mem_4", "mem_5"],
+    },
+    "failed election history should preserve grouped ballots in seat order",
   );
+  assert.strictEqual(failedRound.voteSummary.jaCount, 2);
+  assert.strictEqual(failedRound.voteSummary.neinCount, 3);
+  assert.strictEqual(failedRound.voteSummary.submittedCount, 5);
+  assert.strictEqual(failedRound.voteSummary.requiredCount, 5);
+  assert.strictEqual(failedRound.voteSummary.passed, false);
+  assert.strictEqual(failedRound.voteSummary.electionTrackerCount, 1);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(failedRound, "votes"), false);
+  assert.deepStrictEqual(settledCore.lastVoteResult.voteGroups, failedRound.voteGroups);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(settledCore.lastVoteResult, "revealedVotes"), false);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(settledPublicState, "revealedVotes"), false);
   assert.strictEqual(nextRound.status, "nominating", "the next nomination should use a separate round record");
 }
 

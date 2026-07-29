@@ -122,10 +122,40 @@ function assertSubmittedVoteSeatHasArchivedState() {
   assert.strictEqual(pendingSeat.voteStatusLabel, "等待投票");
 }
 
+function assertVoteResultUsesGroupedSeats() {
+  const snapshot = makeSnapshot({
+    role: "LIBERAL",
+    party: "LIBERAL",
+    knownMembers: [],
+  });
+  snapshot.round = 2;
+  snapshot.publicState.voteResult = {
+    round: 2,
+    presidentCandidateId: "viewer",
+    chancellorCandidateId: "dictator",
+    voteGroups: {
+      jaMemberIds: ["other", "viewer", "dictator"],
+      neinMemberIds: [],
+    },
+    passed: true,
+    electionTrackerBefore: 1,
+    electionTrackerAfter: 0,
+  };
+
+  const voteResult = gameMapper.createVoteResult(snapshot);
+  assert.strictEqual(voteResult.detailText, "赞同 3，反对 0；选举计数器 1 → 0");
+  assert.deepStrictEqual(
+    voteResult.voteGroupRows.map((row) => row.memberCards.map((card) => card.label)),
+    [["1号", "2号", "3号"], []],
+    "vote result modal data should expose sorted seat-card labels without 玩家 suffix",
+  );
+}
+
 assertFascistViewerSeesDictatorSeat();
 assertDictatorViewerSeesOwnSeat();
 assertLiberalViewerSeesOnlyNormalSeats();
 assertMissingSpecialAssetFallsBackToNormalSeat();
 assertSubmittedVoteSeatHasArchivedState();
+assertVoteResultUsesGroupedSeats();
 
 console.log("gameMapper seat perspective tests passed");

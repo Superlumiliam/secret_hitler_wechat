@@ -45,6 +45,7 @@ const {
   buildResultSnapshotPayload,
   createInitialGameProjection,
   createResultExpireAt,
+  createVoteResult,
   drawPolicyCards,
   getExecutiveAllowedTargetIds,
   getExecutiveTaskType,
@@ -127,6 +128,45 @@ function assertPrivateVisibility(projection, playerCount) {
       );
     });
   });
+}
+
+function assertVoteGroupConstruction() {
+  const members = makeMembers(5).reverse();
+  const createResult = (ballots) =>
+    createVoteResult(
+      {
+        round: 2,
+        currentPresidentCandidateId: "mem_1",
+        currentChancellorCandidateId: "mem_2",
+        aliveMemberIds: ["mem_1", "mem_2", "mem_3", "mem_4", "mem_5"],
+        electionTracker: 0,
+        phaseData: {
+          votesByMemberId: Object.fromEntries(
+            ballots.map((vote, index) => [
+              `mem_${index + 1}`,
+              { vote, commandId: `cmd_${index + 1}` },
+            ]),
+          ),
+        },
+      },
+      members,
+      ballots.filter((vote) => vote === "JA").length > 2,
+    );
+
+  const splitResult = createResult(["JA", "NEIN", "JA", "NEIN", "JA"]);
+  assert.deepStrictEqual(splitResult.voteGroups, {
+    jaMemberIds: ["mem_1", "mem_3", "mem_5"],
+    neinMemberIds: ["mem_2", "mem_4"],
+  });
+  assert.strictEqual(splitResult.jaCount, splitResult.voteGroups.jaMemberIds.length);
+  assert.strictEqual(splitResult.neinCount, splitResult.voteGroups.neinMemberIds.length);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(splitResult, "revealedVotes"), false);
+
+  const allJaResult = createResult(["JA", "JA", "JA", "JA", "JA"]);
+  assert.deepStrictEqual(allJaResult.voteGroups.neinMemberIds, [], "unanimous JA should keep an empty NEIN group");
+
+  const allNeinResult = createResult(["NEIN", "NEIN", "NEIN", "NEIN", "NEIN"]);
+  assert.deepStrictEqual(allNeinResult.voteGroups.jaMemberIds, [], "unanimous NEIN should keep an empty JA group");
 }
 
 function assertPublicSnapshotSafe(projection) {
@@ -702,22 +742,26 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
   );
   assert.strictEqual(currentRound.status, "voting", "current voting round should be marked voting");
   assert.strictEqual(currentRound.voteSummary.revealed, false, "unrevealed vote summary should remain hidden");
-  assert.strictEqual(currentRound.voteSummary.ja, 0, "unrevealed vote summary should not count JA");
-  assert.strictEqual(currentRound.voteSummary.nein, 0, "unrevealed vote summary should not count NEIN");
+  assert.strictEqual(currentRound.voteSummary.jaCount, 0, "unrevealed vote summary should not count JA");
+  assert.strictEqual(currentRound.voteSummary.neinCount, 0, "unrevealed vote summary should not count NEIN");
   assert.strictEqual(
-    currentRound.votes.some((vote) => vote.state === "ja"),
-    false,
-    "unrevealed history should not expose JA state",
-  );
-  assert.strictEqual(
-    currentRound.votes.some((vote) => vote.state === "nein"),
-    false,
-    "unrevealed history should not expose NEIN state",
-  );
-  assert.strictEqual(
-    currentRound.votes.filter((vote) => vote.state === "pending").length,
+    currentRound.voteSummary.submittedCount,
     2,
-    "submitted unrevealed ballots should only show pending",
+    "unrevealed vote summary should expose only the submitted count",
+  );
+  assert.strictEqual(currentRound.voteSummary.requiredCount, members.length);
+  assert.strictEqual(currentRound.voteSummary.passed, null);
+  assert.strictEqual(currentRound.voteSummary.electionTrackerCount, 0);
+  assert.strictEqual(currentRound.voteGroups, null, "unrevealed history should not expose vote groups");
+  assert.strictEqual(
+    Object.prototype.hasOwnProperty.call(currentRound, "votes"),
+    false,
+    "history rounds should not expose legacy per-player vote states",
+  );
+  assert.strictEqual(
+    Object.prototype.hasOwnProperty.call(votingPayload.publicState, "revealedVotes"),
+    false,
+    "public snapshots should not expose the legacy revealedVotes field",
   );
 
   const legislativeCore = {
@@ -757,11 +801,10 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     round: 1,
     presidentCandidateId: "mem_1",
     chancellorCandidateId: "mem_3",
-    revealedVotes: members.map((member) => ({
-      memberId: member._id,
-      displayName: member.displayName,
-      vote: "JA",
-    })),
+    voteGroups: {
+      jaMemberIds: members.map((member) => member._id),
+      neinMemberIds: [],
+    },
     jaCount: members.length,
     neinCount: 0,
     passed: true,
@@ -784,6 +827,11 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     legislativeVotePayload.publicState.voteResult.presidentCandidateId,
     "mem_1",
     "active legislative snapshot should expose the just-revealed vote result",
+  );
+  assert.deepStrictEqual(
+    legislativeVotePayload.publicState.voteResult.voteGroups,
+    passedVoteResult.voteGroups,
+    "active legislative snapshot should expose grouped revealed votes",
   );
 
   const executionCore = {
@@ -829,9 +877,9 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     "policy-enacted snapshot should not keep exposing the previous vote result",
   );
   assert.strictEqual(
-    executionVotePayload.publicState.revealedVotes,
-    null,
-    "policy-enacted snapshot should not keep exposing the previous revealed votes",
+    Object.prototype.hasOwnProperty.call(executionVotePayload.publicState, "revealedVotes"),
+    false,
+    "public snapshots should not retain the legacy revealedVotes field",
   );
 
   const enactedExecutionCore = {
@@ -1070,6 +1118,83 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
   );
 }
 
+function assertHistoryGovernmentResultSummary() {
+  const members = makeMembers(5);
+  const room = {
+    roomId: "room_history_results",
+    roomCode: "909002",
+  };
+  const projection = createInitialGameProjection(room, members, {
+    gameId: "game_history_results",
+    createdAt: new Date("2026-05-12T00:00:00.000Z"),
+    pickIndex: () => 0,
+  });
+  const voteGroups = {
+    jaMemberIds: ["mem_1", "mem_2", "mem_3"],
+    neinMemberIds: ["mem_4", "mem_5"],
+  };
+  const history = buildPublicHistoryProjection(
+    {
+      ...projection.gameCore,
+      round: 4,
+      phase: "nomination",
+      currentPresidentCandidateId: "mem_4",
+      currentChancellorCandidateId: null,
+      phaseData: {
+        presidentCandidateId: "mem_4",
+        eligibleChancellorIds: [],
+      },
+    },
+    members,
+    [
+      {
+        eventId: "evt_vote_passed",
+        round: 1,
+        phase: "voting",
+        type: "VOTES_REVEALED",
+        createdAt: "2026-05-12T00:01:00.000Z",
+        voteGroups,
+        passed: true,
+        electionTrackerBefore: 1,
+      },
+      {
+        eventId: "evt_vote_failed_once",
+        round: 2,
+        phase: "voting",
+        type: "VOTES_REVEALED",
+        createdAt: "2026-05-12T00:02:00.000Z",
+        voteGroups,
+        passed: false,
+        electionTrackerBefore: 0,
+      },
+      {
+        eventId: "evt_vote_failed_three",
+        round: 3,
+        phase: "voting",
+        type: "VOTES_REVEALED",
+        createdAt: "2026-05-12T00:03:00.000Z",
+        voteGroups,
+        passed: false,
+        electionTrackerBefore: 2,
+        electionTrackerAfter: 0,
+        chaosPolicy: {
+          policy: "LIBERAL",
+        },
+      },
+    ],
+  );
+
+  assert.strictEqual(history.rounds[0].voteSummary.passed, true);
+  assert.strictEqual(history.rounds[0].voteSummary.electionTrackerCount, 0);
+  assert.strictEqual(history.rounds[1].voteSummary.passed, false);
+  assert.strictEqual(history.rounds[1].voteSummary.electionTrackerCount, 1);
+  assert.strictEqual(
+    history.rounds[2].voteSummary.electionTrackerCount,
+    3,
+    "third failed government should retain 3/3 after chaos resets the live tracker",
+  );
+}
+
 function assertResultSnapshotProjection() {
   const members = makeMembers(5);
   const room = {
@@ -1113,15 +1238,34 @@ function assertResultSnapshotProjection() {
         phase: "voting",
         type: "VOTES_REVEALED",
         title: "政府投票揭示",
-        summary: "政府投票公开：2 票赞成，3 票反对，政府未通过",
-        votes: [
-          { memberId: "mem_1", vote: "JA" },
-          { memberId: "mem_2", vote: "JA" },
-          { memberId: "mem_3", vote: "NEIN" },
-          { memberId: "mem_4", vote: "NEIN" },
-          { memberId: "mem_5", vote: "NEIN" },
-        ],
+        summary: "政府投票公开：2 票赞同，3 票反对，政府未通过",
+        voteGroups: {
+          jaMemberIds: ["mem_1", "mem_2"],
+          neinMemberIds: ["mem_3", "mem_4", "mem_5"],
+        },
+        passed: false,
+        electionTrackerBefore: 0,
+        electionTrackerAfter: 1,
         createdAt: "2026-05-12T00:03:00.000Z",
+      },
+      {
+        eventId: "evt_result_3",
+        round: 3,
+        phase: "voting",
+        type: "VOTES_REVEALED",
+        title: "政府投票揭示",
+        summary: "政府投票公开：2 票赞同，3 票反对，政府未通过",
+        voteGroups: {
+          jaMemberIds: ["mem_1", "mem_2"],
+          neinMemberIds: ["mem_3", "mem_4", "mem_5"],
+        },
+        passed: false,
+        electionTrackerBefore: 2,
+        electionTrackerAfter: 0,
+        chaosPolicy: {
+          policy: "LIBERAL",
+        },
+        createdAt: "2026-05-12T00:05:00.000Z",
       },
     ],
     new Date("2026-05-12T00:08:00.000Z"),
@@ -1136,15 +1280,27 @@ function assertResultSnapshotProjection() {
   assert(result.finalPlayers.every((player) => player.role && player.party), "result snapshot should reveal final identities");
   assert.strictEqual(result.timeline[0].type, "EXEC_PLAYER_EXECUTED", "result snapshot should include key timeline events");
   assert.deepStrictEqual(
-    result.timeline[1].votes,
-    [
-      { memberId: "mem_1", vote: "JA" },
-      { memberId: "mem_2", vote: "JA" },
-      { memberId: "mem_3", vote: "NEIN" },
-      { memberId: "mem_4", vote: "NEIN" },
-      { memberId: "mem_5", vote: "NEIN" },
-    ],
-    "result timeline should preserve the revealed vote pattern",
+    result.timeline[1].voteGroups,
+    {
+      jaMemberIds: ["mem_1", "mem_2"],
+      neinMemberIds: ["mem_3", "mem_4", "mem_5"],
+    },
+    "result timeline should preserve grouped revealed votes",
+  );
+  assert.strictEqual(
+    result.timeline[1].summary,
+    "政府未通过1/3",
+    "failed government should append the resulting election tracker count",
+  );
+  assert.strictEqual(
+    result.timeline[2].summary,
+    "政府未通过3/3\n混乱政府 颁布了 自由派法案",
+    "third failed government should preserve 3/3 and add a separate chaos-government policy line",
+  );
+  assert.strictEqual(
+    Object.prototype.hasOwnProperty.call(result.timeline[1], "votes"),
+    false,
+    "result timeline should not expose legacy per-player ballots",
   );
 }
 
@@ -1202,11 +1358,13 @@ Object.keys(ROLE_PRESET_BY_PLAYER_COUNT).forEach((playerCountKey) => {
 });
 
 assertNominationTargetOptions();
+assertVoteGroupConstruction();
 assertLegislativePresidentVisibility();
 assertLegislativeChancellorVisibility();
 assertVetoPrivateAndHistoryProjection();
 assertExecutivePrivateAndPublicProjection();
 assertHistoryProjectionPrivacyAndCurrentRound();
+assertHistoryGovernmentResultSummary();
 assertResultSnapshotProjection();
 assertRoomTtlPolicies();
 

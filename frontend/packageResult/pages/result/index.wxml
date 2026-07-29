@@ -91,18 +91,16 @@
             <view wx:for="{{item.legislativeReview.lines}}" wx:for-item="reviewLine" wx:key="*this" class="timeline-summary">{{reviewLine}}</view>
           </block>
           <view
-            wx:if="{{item.showVotePattern}}"
-            class="timeline-vote-strip"
-            style="grid-template-columns: repeat({{item.voteRows.length}}, minmax(0, 1fr));"
+            wx:if="{{item.showVoteGroups}}"
+            class="timeline-vote-groups"
           >
             <view
-              wx:for="{{item.voteRows}}"
+              wx:for="{{item.voteGroupRows}}"
               wx:for-item="voteItem"
-              wx:key="memberId"
-              class="{{voteItem.cellClass}}"
+              wx:key="key"
+              class="timeline-vote-line"
             >
-              <view class="timeline-vote-seat">{{voteItem.seatIndex}}号</view>
-              <view class="timeline-vote-mark">{{voteItem.mark}}</view>
+              {{voteItem.lineText}}
             </view>
           </view>
         </view>

@@ -771,23 +771,30 @@ function getExecutiveTaskMeta(actionType) {
 
 function createVoteResult(gameCore, members, passed) {
   const votesByMemberId = (gameCore.phaseData && gameCore.phaseData.votesByMemberId) || {};
-  const revealedVotes = getAliveMembers(gameCore, members).map((member) => {
-    const memberId = getMemberId(member);
-    const ballot = votesByMemberId[memberId] || {};
-    return {
-      memberId,
-      displayName: member.displayName,
-      vote: ballot.vote || "",
-    };
-  });
-  const jaCount = revealedVotes.filter((item) => item.vote === "JA").length;
-  const neinCount = revealedVotes.filter((item) => item.vote === "NEIN").length;
+  const voteGroups = {
+    jaMemberIds: [],
+    neinMemberIds: [],
+  };
+  getAliveMembers(gameCore, members)
+    .slice()
+    .sort((a, b) => a.seatIndex - b.seatIndex)
+    .forEach((member) => {
+      const memberId = getMemberId(member);
+      const ballot = votesByMemberId[memberId] || {};
+      if (ballot.vote === "JA") {
+        voteGroups.jaMemberIds.push(memberId);
+      } else if (ballot.vote === "NEIN") {
+        voteGroups.neinMemberIds.push(memberId);
+      }
+    });
+  const jaCount = voteGroups.jaMemberIds.length;
+  const neinCount = voteGroups.neinMemberIds.length;
 
   return {
     round: gameCore.round,
     presidentCandidateId: gameCore.currentPresidentCandidateId,
     chancellorCandidateId: gameCore.currentChancellorCandidateId,
-    revealedVotes,
+    voteGroups,
     jaCount,
     neinCount,
     passed,
@@ -801,26 +808,33 @@ function createVoteResult(gameCore, members, passed) {
   };
 }
 
+function copyVoteGroups(voteGroups) {
+  return {
+    jaMemberIds: Array.isArray(voteGroups && voteGroups.jaMemberIds) ? voteGroups.jaMemberIds.slice() : [],
+    neinMemberIds: Array.isArray(voteGroups && voteGroups.neinMemberIds) ? voteGroups.neinMemberIds.slice() : [],
+  };
+}
+
 function getPolicyLabel(policy) {
   return policy === "LIBERAL" ? "自由派政策" : "极权派政策";
 }
 
-function createEmptyHistoryRound(round, members, aliveMemberIds) {
+function createEmptyHistoryRound(round, aliveMemberIds) {
   return {
     round,
     status: "nominating",
     presidentId: null,
     chancellorId: null,
     voteSummary: {
-      ja: 0,
-      nein: 0,
-      required: aliveMemberIds.length,
+      jaCount: 0,
+      neinCount: 0,
+      submittedCount: 0,
+      requiredCount: aliveMemberIds.length,
       revealed: false,
+      passed: null,
+      electionTrackerCount: 0,
     },
-    votes: members.map((member) => ({
-      memberId: getMemberId(member),
-      state: aliveMemberIds.includes(getMemberId(member)) ? "not_started" : "dead",
-    })),
+    voteGroups: null,
     outcome: {
       type: "pending_nomination",
       label: "等待提名",
@@ -829,48 +843,11 @@ function createEmptyHistoryRound(round, members, aliveMemberIds) {
   };
 }
 
-function getOrCreateHistoryRound(roundsByNo, round, members, aliveMemberIds) {
+function getOrCreateHistoryRound(roundsByNo, round, aliveMemberIds) {
   if (!roundsByNo[round]) {
-    roundsByNo[round] = createEmptyHistoryRound(round, members, aliveMemberIds);
+    roundsByNo[round] = createEmptyHistoryRound(round, aliveMemberIds);
   }
   return roundsByNo[round];
-}
-
-function buildVoteStatesForReveal(members, aliveMemberIds, revealedVotes) {
-  const voteByMemberId = {};
-  (revealedVotes || []).forEach((item) => {
-    voteByMemberId[item.memberId] = item.vote;
-  });
-
-  return members.map((member) => {
-    const memberId = getMemberId(member);
-    if (!aliveMemberIds.includes(memberId) && !voteByMemberId[memberId]) {
-      return {
-        memberId,
-        state: "dead",
-      };
-    }
-    return {
-      memberId,
-      state: voteByMemberId[memberId] === "JA" ? "ja" : voteByMemberId[memberId] === "NEIN" ? "nein" : "dead",
-    };
-  });
-}
-
-function buildCurrentVoteStates(members, aliveMemberIds, submittedVoteMemberIds, phase) {
-  return members.map((member) => {
-    const memberId = getMemberId(member);
-    if (!aliveMemberIds.includes(memberId)) {
-      return {
-        memberId,
-        state: "dead",
-      };
-    }
-    return {
-      memberId,
-      state: phase === "voting" && submittedVoteMemberIds.includes(memberId) ? "pending" : "not_started",
-    };
-  });
 }
 
 function buildHistoryWinLabel(winner, winReason) {
@@ -936,7 +913,7 @@ function buildVetoOutcomeLabel(historyItem) {
   return "否决被拒绝";
 }
 
-function applyPublicHistoryEventToRound(roundItem, historyItem, members, aliveMemberIds) {
+function applyPublicHistoryEventToRound(roundItem, historyItem, members) {
   const type = historyItem.type;
   if (historyItem.presidentId || historyItem.presidentCandidateId) {
     roundItem.presidentId = historyItem.presidentId || historyItem.presidentCandidateId;
@@ -964,14 +941,21 @@ function applyPublicHistoryEventToRound(roundItem, historyItem, members, aliveMe
   }
 
   if (type === "VOTES_REVEALED") {
-    const revealedVotes = historyItem.votes || [];
+    const voteGroups = copyVoteGroups(historyItem.voteGroups);
+    const jaCount = voteGroups.jaMemberIds.length;
+    const neinCount = voteGroups.neinMemberIds.length;
     roundItem.voteSummary = {
-      ja: historyItem.jaCount || 0,
-      nein: historyItem.neinCount || 0,
-      required: aliveMemberIds.length,
+      jaCount,
+      neinCount,
+      submittedCount: jaCount + neinCount,
+      requiredCount: jaCount + neinCount,
       revealed: true,
+      passed: Boolean(historyItem.passed),
+      electionTrackerCount: historyItem.passed
+        ? 0
+        : Math.min(3, (historyItem.electionTrackerBefore || 0) + 1),
     };
-    roundItem.votes = buildVoteStatesForReveal(members, aliveMemberIds, revealedVotes);
+    roundItem.voteGroups = voteGroups;
 
     if (historyItem.chaosPolicy) {
       roundItem.status = "chaos";
@@ -1086,7 +1070,6 @@ function applyCurrentRoundToHistory(roundItem, publicState) {
   const submittedVoteMemberIds = publicState.submittedVoteMemberIds || [];
   const voteProgress = publicState.voteProgress || null;
   const voteResult = publicState.voteResult || null;
-  const members = publicState.members || [];
   const currentPresidentId = publicState.currentPresidentId || publicState.currentPresidentCandidateId || null;
   const currentChancellorId = publicState.currentChancellorId || publicState.currentChancellorCandidateId || null;
 
@@ -1096,25 +1079,34 @@ function applyCurrentRoundToHistory(roundItem, publicState) {
   if (currentPhase === "nomination") {
     roundItem.status = "nominating";
     roundItem.voteSummary = {
-      ja: 0,
-      nein: 0,
-      required: aliveMemberIds.length,
+      jaCount: 0,
+      neinCount: 0,
+      submittedCount: 0,
+      requiredCount: aliveMemberIds.length,
       revealed: false,
+      passed: null,
+      electionTrackerCount: 0,
     };
-    roundItem.votes = buildCurrentVoteStates(members, aliveMemberIds, [], currentPhase);
+    roundItem.voteGroups = null;
     roundItem.outcome = {
       type: "pending_nomination",
       label: "等待提名",
     };
   } else if (currentPhase === "voting") {
     roundItem.status = "voting";
+    const requiredCount = voteProgress
+      ? voteProgress.requiredCount || voteProgress.totalCount || aliveMemberIds.length
+      : aliveMemberIds.length;
     roundItem.voteSummary = {
-      ja: 0,
-      nein: 0,
-      required: voteProgress ? voteProgress.requiredCount || voteProgress.totalCount || aliveMemberIds.length : aliveMemberIds.length,
+      jaCount: 0,
+      neinCount: 0,
+      submittedCount: submittedVoteMemberIds.length,
+      requiredCount,
       revealed: false,
+      passed: null,
+      electionTrackerCount: 0,
     };
-    roundItem.votes = buildCurrentVoteStates(members, aliveMemberIds, submittedVoteMemberIds, currentPhase);
+    roundItem.voteGroups = null;
     roundItem.outcome = {
       type: "pending_vote",
       label: "投票中",
@@ -1158,7 +1150,7 @@ function buildPublicHistoryProjection(gameCore, members, publicHistory = []) {
   const roundsByNo = {};
 
   for (let round = 1; round <= roundsStarted; round += 1) {
-    roundsByNo[round] = createEmptyHistoryRound(round, sortedMembers, aliveMemberIds);
+    roundsByNo[round] = createEmptyHistoryRound(round, aliveMemberIds);
   }
 
   publicHistory
@@ -1170,14 +1162,13 @@ function buildPublicHistoryProjection(gameCore, members, publicHistory = []) {
       return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
     })
     .forEach((historyItem) => {
-      const roundItem = getOrCreateHistoryRound(roundsByNo, historyItem.round || 1, sortedMembers, aliveMemberIds);
-      applyPublicHistoryEventToRound(roundItem, historyItem, sortedMembers, aliveMemberIds);
+      const roundItem = getOrCreateHistoryRound(roundsByNo, historyItem.round || 1, aliveMemberIds);
+      applyPublicHistoryEventToRound(roundItem, historyItem, sortedMembers);
     });
 
-  const currentRound = getOrCreateHistoryRound(roundsByNo, gameCore.round || 1, sortedMembers, aliveMemberIds);
+  const currentRound = getOrCreateHistoryRound(roundsByNo, gameCore.round || 1, aliveMemberIds);
   applyCurrentRoundToHistory(currentRound, {
     currentPhase: gameCore.phase,
-    members: sortedMembers,
     aliveMemberIds,
     submittedVoteMemberIds,
     currentPresidentCandidateId: gameCore.currentPresidentCandidateId || null,
@@ -1321,14 +1312,15 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
     gameCore.phase === "voting"
       ? aliveMemberIds.filter((memberId) => Boolean(votesByMemberId[memberId]))
       : [];
-  const revealedVotes = exposedVoteResult ? exposedVoteResult.revealedVotes || [] : null;
+  const exposedVoteGroups = exposedVoteResult ? copyVoteGroups(exposedVoteResult.voteGroups) : null;
   const voteResult = exposedVoteResult
     ? {
         round: exposedVoteResult.round || gameCore.round,
         presidentCandidateId: exposedVoteResult.presidentCandidateId || null,
         chancellorCandidateId: exposedVoteResult.chancellorCandidateId || null,
-        jaCount: exposedVoteResult.jaCount || 0,
-        neinCount: exposedVoteResult.neinCount || 0,
+        voteGroups: exposedVoteGroups,
+        jaCount: exposedVoteGroups.jaMemberIds.length,
+        neinCount: exposedVoteGroups.neinMemberIds.length,
         passed: Boolean(exposedVoteResult.passed),
         electionTrackerBefore: exposedVoteResult.electionTrackerBefore || 0,
         electionTrackerAfter: exposedVoteResult.electionTrackerAfter || 0,
@@ -1371,7 +1363,6 @@ function buildPublicSnapshotPayload(room, gameCore, members, publicHistory, upda
       nextSpecialPresidentCandidateId: gameCore.forcedNextPresidentId || null,
       voteProgress,
       submittedVoteMemberIds,
-      revealedVotes,
       voteResult,
       history: buildPublicHistoryProjection(gameCore, members, publicHistory),
       publicHistory,
@@ -1401,14 +1392,20 @@ function buildResultTimeline(publicHistory) {
       phase: item.phase || "",
       type: item.type || "",
       title: item.title || "",
-      summary: item.summary || "",
-      votes:
+      summary:
         item.type === "VOTES_REVEALED"
-          ? (item.votes || []).map((vote) => ({
-              memberId: vote.memberId || "",
-              vote: vote.vote || "",
-            }))
-          : [],
+          ? [
+              item.passed
+                ? "政府通过"
+                : `政府未通过${Math.min(3, (item.electionTrackerBefore || 0) + 1)}/3`,
+              item.chaosPolicy && item.chaosPolicy.policy
+                ? `混乱政府 颁布了 ${item.chaosPolicy.policy === "LIBERAL" ? "自由派法案" : "极权派法案"}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n")
+          : item.summary || "",
+      voteGroups: item.type === "VOTES_REVEALED" ? copyVoteGroups(item.voteGroups) : null,
       createdAt: toIsoString(item.createdAt),
     }));
 }
@@ -2261,16 +2258,14 @@ async function submitCommand(payload, openid) {
             nextGameCore,
             "VOTES_REVEALED",
             "政府投票揭示",
-            `政府投票公开：${voteResult.jaCount} 票赞成，${voteResult.neinCount} 票反对，${passed ? "政府通过" : "政府未通过"}`,
+            `政府投票公开：${voteResult.jaCount} 票赞同，${voteResult.neinCount} 票反对，${passed ? "政府通过" : "政府未通过"}`,
             updatedAt,
             {
               presidentId: gameCore.currentPresidentCandidateId,
               chancellorId: gameCore.currentChancellorCandidateId,
               presidentCandidateId: gameCore.currentPresidentCandidateId,
               chancellorCandidateId: gameCore.currentChancellorCandidateId,
-              votes: voteResult.revealedVotes,
-              jaCount: voteResult.jaCount,
-              neinCount: voteResult.neinCount,
+              voteGroups: voteResult.voteGroups,
               passed,
               electionTrackerBefore: voteResult.electionTrackerBefore,
               electionTrackerAfter: voteResult.electionTrackerAfter,
@@ -3763,6 +3758,7 @@ exports.__testHooks = {
   buildChangedPrivateSnapshotPayloads,
   createInitialGameProjection,
   createResultExpireAt,
+  createVoteResult,
   drawPolicyCards,
   getExecutiveAllowedTargetIds,
   getExecutiveTaskType,

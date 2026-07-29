@@ -66,7 +66,6 @@ page {
 .room-strip,
 .summary-board,
 .round-list,
-.legend,
 .history-loading {
   position: relative;
   z-index: 2;
@@ -247,344 +246,195 @@ page {
 }
 
 .round-list {
+  position: relative;
   margin-top: 26rpx;
+  padding-left: 52rpx;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 28rpx;
+}
+
+.round-list::before {
+  content: "";
+  position: absolute;
+  left: 17rpx;
+  top: 42rpx;
+  bottom: 42rpx;
+  width: 3rpx;
+  background: linear-gradient(180deg, rgba(193, 126, 56, 0.36), #c48638 12%, #c48638 88%, rgba(193, 126, 56, 0.36));
+  box-shadow: 0 0 10rpx rgba(194, 126, 53, 0.3);
 }
 
 .round-board {
   position: relative;
-  min-height: 236rpx;
-  padding: 28rpx 26rpx 28rpx 24rpx;
+  min-height: 258rpx;
   box-sizing: border-box;
-  display: grid;
-  grid-template-columns: 168rpx minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
-  column-gap: 22rpx;
-  row-gap: 18rpx;
-  align-items: stretch;
-  overflow: hidden;
+  overflow: visible;
+  border-radius: 22rpx;
   border: 0;
-  background: rgba(3, 16, 18, 0.7);
+  background:
+    linear-gradient(180deg, rgba(6, 27, 28, 0.92), rgba(3, 16, 18, 0.94)),
+    repeating-linear-gradient(0deg, transparent 0, transparent 46rpx, rgba(171, 104, 45, 0.1) 47rpx);
   box-shadow:
-    0 16rpx 40rpx rgba(0, 0, 0, 0.22),
-    inset 0 0 28rpx rgba(222, 132, 52, 0.07);
+    0 18rpx 40rpx rgba(0, 0, 0, 0.28),
+    inset 0 0 34rpx rgba(222, 132, 52, 0.06);
 }
 
-.round-divider {
+.round-board::before {
+  content: "";
   position: absolute;
-  z-index: 1;
-  left: 192rpx;
-  top: 30rpx;
-  bottom: 30rpx;
-  width: 1rpx;
-  background: rgba(159, 91, 44, 0.58);
-}
-
-.round-side {
-  position: relative;
-  z-index: 1;
-  grid-row: 1 / 4;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-right: 10rpx;
-}
-
-.round-medal {
-  position: relative;
-  width: 118rpx;
-  height: 118rpx;
-  display: grid;
-  grid-template-columns: auto auto auto;
-  align-items: center;
-  justify-content: center;
-  border: 0;
+  z-index: 2;
+  left: -48rpx;
+  top: 44rpx;
+  width: 28rpx;
+  height: 28rpx;
+  box-sizing: border-box;
+  border: 5rpx solid #bb7832;
   border-radius: 50%;
-  color: #d7a35d;
-  background: radial-gradient(circle, rgba(8, 28, 30, 0.76), rgba(3, 12, 14, 0.48));
+  background: #071719;
+  box-shadow:
+    0 0 0 4rpx #2d2115,
+    0 0 0 6rpx rgba(199, 138, 63, 0.72),
+    0 0 16rpx rgba(205, 143, 67, 0.46);
 }
 
-.round-ring-image {
-  position: absolute;
-  left: -15rpx;
-  top: -15rpx;
-  width: 148rpx;
-  height: 148rpx;
-  pointer-events: none;
-  opacity: 0.72;
-}
-
-.round-number {
+.round-header {
   position: relative;
   z-index: 1;
-  color: #e3ad6b;
-  font-size: 54rpx;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.round-small {
-  position: relative;
-  z-index: 1;
-  font-size: 24rpx;
-  font-weight: 800;
-}
-
-.round-main {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-  grid-column: 2;
-  grid-row: 1;
-  align-self: end;
-  padding-left: 22rpx;
-  padding-right: 0;
+  min-height: 92rpx;
+  padding: 22rpx 26rpx 18rpx;
+  box-sizing: border-box;
   display: flex;
-  flex-direction: column;
-  gap: 12rpx;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  border-bottom: 1rpx solid rgba(151, 91, 39, 0.42);
 }
 
-.round-line {
+.round-title {
   min-width: 0;
-  color: #d9a25f;
-  font-size: 28rpx;
-  font-weight: 800;
-  line-height: 1.28;
+  color: #e4b36f;
+  font-size: 34rpx;
+  font-weight: 900;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 2rpx 5rpx rgba(0, 0, 0, 0.7);
 }
 
-.president-text {
-  color: #16a5d1;
-}
-
-.chancellor-text {
-  color: #e0a13f;
-}
-
-.role-text {
-  color: #d3a166;
-}
-
-.vote-result-line {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12rpx;
-  color: #d8a05e;
-  font-size: 28rpx;
-  font-weight: 800;
-  line-height: 1.28;
-}
-
-.vote-result-label {
-  color: #d8a05e;
-}
-
-.vote-result-text {
-  color: #e0b26f;
-  max-width: calc(100% - 206rpx);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vote-strip {
-  position: relative;
-  z-index: 1;
-  grid-column: 2;
-  grid-row: 2;
-  margin-left: 22rpx;
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  border-top: 1rpx solid rgba(102, 67, 41, 0.72);
-  border-left: 1rpx solid rgba(102, 67, 41, 0.72);
-}
-
-.vote-cell {
-  min-width: 0;
-  height: 82rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-right: 1rpx solid rgba(102, 67, 41, 0.72);
-  border-bottom: 1rpx solid rgba(102, 67, 41, 0.72);
-  background: rgba(5, 18, 20, 0.46);
-}
-
-.seat-no {
-  color: #dba45f;
-  font-size: 22rpx;
-  font-weight: 800;
-}
-
-.vote-mark {
-  width: 32rpx;
-  height: 32rpx;
-  margin-top: 6rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: #061316;
-  font-size: 24rpx;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.vote-cell.is-ja .vote-mark {
-  background: #108fc0;
-  font-size: 22rpx;
-}
-
-.vote-cell.is-nein .vote-mark {
-  background: #bf382b;
-}
-
-.vote-cell.is-dead .vote-mark {
-  border: 1rpx solid rgba(190, 176, 150, 0.74);
-  color: #d0c2a5;
-  background: rgba(99, 88, 70, 0.28);
-  font-size: 20rpx;
-  box-shadow: inset 0 0 8rpx rgba(0, 0, 0, 0.34);
-}
-
-.vote-cell.is-pending .vote-mark,
-.vote-cell.is-not_started .vote-mark {
-  color: #8c704e;
-  background: rgba(113, 83, 50, 0.18);
-}
-
-.executive-result {
-  position: relative;
-  z-index: 1;
-  grid-column: 2;
-  grid-row: 3;
-  margin-left: 22rpx;
-  padding-top: 12rpx;
-  border-top: 1rpx solid rgba(176, 125, 72, 0.32);
-  color: #d9b178;
-  font-size: 24rpx;
-  line-height: 1.45;
-}
-
-.round-outcome {
-  position: absolute;
-  z-index: 1;
-  right: 14rpx;
-  top: 92rpx;
-  width: 188rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.outcome-badge {
-  position: relative;
-  width: 100%;
-  height: 58rpx;
-  min-height: 58rpx;
-  padding: 0;
+.round-result-badge {
+  flex: 0 0 auto;
+  transform: translateY(10rpx);
+  min-height: 54rpx;
+  padding: 8rpx 20rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.outcome-image {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.96;
-}
-
-.outcome-badge.is-liberal {
-  box-shadow: none;
-}
-
-.outcome-badge.is-fascist {
-  box-shadow: none;
-}
-
-.outcome-badge.is-failed,
-.outcome-badge.is-veto,
-.outcome-badge.is-chaos,
-.outcome-badge.is-power,
-.outcome-badge.is-win {
-  border-color: rgba(210, 150, 64, 0.82);
-  color: #e2b572;
-}
-
-.legend {
-  min-height: 74rpx;
-  margin-top: 22rpx;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: center;
-  justify-content: stretch;
-  gap: 0;
-  color: #d5a062;
-  font-size: 21rpx;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10rpx;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.legend-dot {
-  width: 34rpx;
-  height: 34rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: #061316;
-  font-size: 24rpx;
+  border: 1rpx solid rgba(191, 129, 56, 0.72);
+  color: #edc993;
+  font-size: 25rpx;
   font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.74);
+  box-shadow:
+    inset 0 0 14rpx rgba(0, 0, 0, 0.28),
+    0 5rpx 10rpx rgba(0, 0, 0, 0.2);
 }
 
-.legend-dot.is-ja {
-  background: #108fc0;
-  font-size: 22rpx;
+.round-result-badge.is-passed {
+  border-color: rgba(31, 146, 181, 0.82);
+  background: linear-gradient(180deg, rgba(16, 99, 126, 0.92), rgba(9, 58, 76, 0.94));
 }
 
-.legend-dot.is-nein {
-  background: #bf382b;
+.round-result-badge.is-failed {
+  border-color: rgba(172, 60, 46, 0.88);
+  background: linear-gradient(180deg, rgba(127, 42, 34, 0.94), rgba(77, 24, 22, 0.96));
 }
 
-.legend-dot.is-dead {
-  border: 1rpx solid rgba(190, 176, 150, 0.74);
-  color: #d0c2a5;
-  background: rgba(99, 88, 70, 0.28);
-  font-size: 22rpx;
+.round-details {
+  position: relative;
+  z-index: 1;
+  padding: 12rpx 26rpx 24rpx;
 }
 
-.legend-dot.is-pending {
-  color: #d5a062;
-  background: rgba(113, 83, 50, 0.24);
+.history-detail-row {
+  min-height: 66rpx;
+  padding: 9rpx 0;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 108rpx minmax(0, 1fr);
+  align-items: start;
+  gap: 22rpx;
+  border-bottom: 1rpx solid rgba(142, 86, 38, 0.26);
 }
 
-.legend-dot.is-not-started {
-  color: #8c704e;
-  background: rgba(113, 83, 50, 0.18);
+.history-detail-row:last-child {
+  border-bottom: 0;
+}
+
+.history-detail-label {
+  min-height: 50rpx;
+  padding: 6rpx 10rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(186, 125, 55, 0.72);
+  color: #e7c18a;
+  font-size: 26rpx;
+  font-weight: 900;
+  line-height: 1.2;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.72);
+  box-shadow: inset 0 0 12rpx rgba(0, 0, 0, 0.28);
+}
+
+.history-detail-label.is-president,
+.history-detail-label.is-chancellor {
+  background: linear-gradient(180deg, rgba(124, 83, 19, 0.92), rgba(75, 48, 10, 0.94));
+}
+
+.history-detail-label.is-ja {
+  border-color: rgba(28, 127, 160, 0.86);
+  background: linear-gradient(180deg, rgba(19, 101, 132, 0.94), rgba(9, 57, 78, 0.96));
+}
+
+.history-detail-label.is-nein {
+  border-color: rgba(171, 59, 45, 0.9);
+  background: linear-gradient(180deg, rgba(133, 43, 35, 0.94), rgba(79, 24, 22, 0.96));
+}
+
+.history-player-cards {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.history-player-card {
+  min-width: 74rpx;
+  min-height: 50rpx;
+  padding: 6rpx 14rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(181, 124, 61, 0.62);
+  border-radius: 8rpx;
+  color: #e5c18b;
+  font-size: 25rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  background: rgba(7, 28, 28, 0.82);
+  box-shadow:
+    inset 0 0 10rpx rgba(0, 0, 0, 0.26),
+    0 3rpx 7rpx rgba(0, 0, 0, 0.18);
+}
+
+.history-player-card.is-empty {
+  color: rgba(224, 193, 145, 0.62);
 }
 
 .history-loading {

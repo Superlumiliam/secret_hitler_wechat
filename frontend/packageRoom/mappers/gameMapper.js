@@ -2,6 +2,7 @@ const {
   PHASE_NAME_MAP,
   POLICY_TRACK_ASSET_FILE_IDS,
 } = require("../types/game");
+const { createVoteGroupRows } = require("../../utils/voteGroups");
 const { createFascistTrack, createLiberalTrack } = require("../utils/policyTrack");
 const taskMapper = require("./taskMapper");
 
@@ -411,18 +412,15 @@ function createPhaseHintText(snapshot, board) {
 
 function createVoteResult(snapshot) {
   const publicState = (snapshot && snapshot.publicState) || {};
-  const revealedVotes = Array.isArray(publicState.revealedVotes) ? publicState.revealedVotes : null;
   const result = publicState.voteResult || {};
-  if (!revealedVotes) {
+  const voteGroups = result.voteGroups;
+  if (!voteGroups) {
     return null;
   }
-  const voteRows = revealedVotes.map((item) => ({
-    memberId: item.memberId,
-    name: item.displayName || "玩家",
-    voteText: item.vote === "JA" ? "JA" : "NEIN",
-    voteClass: item.vote === "JA" ? "is-ja" : "is-nein",
-  }));
-  let detailText = `赞成 ${result.jaCount || 0}，反对 ${result.neinCount || 0}`;
+  const jaCount = Array.isArray(voteGroups.jaMemberIds) ? voteGroups.jaMemberIds.length : 0;
+  const neinCount = Array.isArray(voteGroups.neinMemberIds) ? voteGroups.neinMemberIds.length : 0;
+  const voteGroupRows = createVoteGroupRows(voteGroups, publicState.seatOrder || []);
+  let detailText = `赞同 ${jaCount}，反对 ${neinCount}`;
   if (result.chaosPolicy) {
     const policyName = result.chaosPolicy.policy === "LIBERAL" ? "自由派政策" : "极权派政策";
     detailText = `${detailText}；三轮未通过，混乱政策颁布：${policyName}`;
@@ -441,8 +439,8 @@ function createVoteResult(snapshot) {
       result.round || snapshot.round || 1,
       result.presidentCandidateId || publicState.currentPresidentCandidateId || "",
       result.chancellorCandidateId || publicState.currentChancellorCandidateId || "",
-      result.jaCount || 0,
-      result.neinCount || 0,
+      jaCount,
+      neinCount,
       result.electionTrackerBefore || 0,
       result.electionTrackerAfter || 0,
       result.passed ? "passed" : "failed",
@@ -450,7 +448,7 @@ function createVoteResult(snapshot) {
     title: result.passed ? "投票通过" : "投票未通过",
     resultClass: result.passed ? "is-passed" : "is-failed",
     detailText,
-    voteRows,
+    voteGroupRows,
   };
 }
 

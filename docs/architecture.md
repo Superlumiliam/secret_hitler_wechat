@@ -59,7 +59,7 @@ flowchart LR
 | `command_records` | 写操作幂等记录，短期保留 | 服务端 |
 | `maintenance_state` | 维护初始化节流状态 | 服务端 |
 
-大厅没有公共或私密快照文档；`getLobbySnapshot` 从 `rooms + room_members` 即时构建视图。`room_members.memberType` 区分 `player` 与 `spectator`，历史记录缺失时按玩家解释；两类席位分别编号，`rooms.playerCount` 只统计玩家。开局后，玩家名单冻结，`game_core` 是真相源，每次成功状态迁移同步更新核心状态、公共投影、受影响的私密投影、事件和同步信号。`game_core.legislativeHistory` 只保存结果复盘所需的总统弃牌、总理弃牌和总理颁布牌事实，不保存双方看到的牌或其他可推导字段；总统弃牌、总理颁布和总统同意否决与对应状态迁移在同一事务内写入。私密投影在事务内使用迁移前后的 `game_core` 在内存中比较，只写入身份、投票、手牌、调查结果、政策预览、待办任务或终局状态实际变化的玩家席，不读取 `player_private_snapshots` 做比较；开局初始化也只为玩家创建私密文档。
+大厅没有公共或私密快照文档；`getLobbySnapshot` 从 `rooms + room_members` 即时构建视图。`room_members.memberType` 区分 `player` 与 `spectator`，历史记录缺失时按玩家解释；两类席位分别编号，`rooms.playerCount` 只统计玩家。开局后，玩家名单冻结，`game_core` 是真相源，每次成功状态迁移同步更新核心状态、公共投影、受影响的私密投影、事件和同步信号。投票未揭示时，`game_core.phaseData.votesByMemberId` 保留逐玩家票型和命令元数据；全部存活玩家提交后，公开结果、公开历史和结果时间线只保存按席位排序的 `voteGroups.jaMemberIds / neinMemberIds`。`game_core.legislativeHistory` 只保存结果复盘所需的总统弃牌、总理弃牌和总理颁布牌事实，不保存双方看到的牌或其他可推导字段；总统弃牌、总理颁布和总统同意否决与对应状态迁移在同一事务内写入。私密投影在事务内使用迁移前后的 `game_core` 在内存中比较，只写入身份、投票、手牌、调查结果、政策预览、待办任务或终局状态实际变化的玩家席，不读取 `player_private_snapshots` 做比较；开局初始化也只为玩家创建私密文档。
 
 ## 状态与命令处理
 
@@ -95,7 +95,7 @@ nomination
 ## 公开、私密与真相隔离
 
 - `game_core` 包含身份映射、牌堆、手牌和未公开投票等完整真相，永不下发。
-- 公共快照只含所有玩家都能看到的信息，包括座位、政府、政策轨、公开票型和公共历史；进行中的快照不包含 `legislativeHistory`。
+- 公共快照只含所有玩家都能看到的信息，包括座位、政府、政策轨、按赞同/反对分组的公开票型和公共历史；进行中的快照不包含 `legislativeHistory`。
 - 私密快照按席位生成，只含该席位可见的身份、手牌、个人投票、调查结果、政策预览和待办。
 - 观战者只读取公共投影，不生成或读取私密快照，没有待办和游戏命令权限；终局结果仍只列实际玩家。
 - 结果阶段才能公开全部身份和终局复盘；结果投影只下发 `legislativeHistory` 的六个原始字段，旧对局缺失时为空数组。

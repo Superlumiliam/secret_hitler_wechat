@@ -1,22 +1,8 @@
-const OUTCOME_CLASS_BY_TYPE = {
-  pending_nomination: "is-pending",
-  pending_vote: "is-pending",
-  vote_failed: "is-failed",
-  pending_legislation: "is-pending",
-  liberal_policy: "is-liberal",
-  fascist_policy: "is-fascist",
-  vetoed: "is-veto",
-  chaos_policy: "is-chaos",
-  win: "is-win",
-};
 const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
 const HISTORY_ASSET_FILE_IDS = {
   background: `${CLOUD_ASSET_ROOT}background-room-prepare.webp`,
-  frame: `${CLOUD_ASSET_ROOT}history-frame.webp`,
-  ring: `${CLOUD_ASSET_ROOT}history-ring.webp`,
-  liberal: `${CLOUD_ASSET_ROOT}history-liberal.webp`,
-  fascist: `${CLOUD_ASSET_ROOT}history-fascist.webp`,
+  frame: `${CLOUD_ASSET_ROOT}history-frame-v2.webp`,
 };
 const {
   GAME_PAGE_TIMEOUT_MS,
@@ -28,16 +14,10 @@ const {
 } = require("../../../utils/pageTimeout");
 const { getGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { reLaunchPage } = require("../../../utils/protectedPageRoute");
+const { createHistoryRoundViews } = require("./historyMapper");
 
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
-}
-
-function getSeatLabel(member, fallback = "待定") {
-  if (!member) {
-    return fallback;
-  }
-  return `${member.seatIndex}号`;
 }
 
 Page({
@@ -153,10 +133,6 @@ Page({
       rounds: [],
     };
     const seatOrder = publicState.seatOrder || [];
-    const memberById = {};
-    seatOrder.forEach((member) => {
-      memberById[member.memberId] = member;
-    });
 
     const historyAssets = await this.loadHistoryAssets();
 
@@ -174,7 +150,7 @@ Page({
         electionTracker: publicState.electionTracker || 0,
         electionDots: this.createElectionDots(publicState.electionTracker || 0),
       },
-      rounds: this.createRoundViews(history.rounds || [], seatOrder, memberById, historyAssets),
+      rounds: createHistoryRoundViews(history.rounds || [], seatOrder),
     });
   },
 
@@ -217,89 +193,6 @@ Page({
       slot,
       dotClass: `tracker-dot ${slot <= electionTracker ? "is-active" : ""}`,
     }));
-  },
-
-  createRoundViews(rounds, seatOrder, memberById, historyAssets = {}) {
-    return rounds.map((round) => {
-      const president = memberById[round.presidentId] || null;
-      const chancellor = memberById[round.chancellorId] || null;
-      const outcome = round.outcome || {};
-      const voteSummary = round.voteSummary || {};
-      const executiveResult = round.executiveResult || null;
-
-      return {
-        round: round.round,
-        presidentText: getSeatLabel(president),
-        chancellorText: getSeatLabel(chancellor, "等待提名"),
-        voteText: voteSummary.revealed
-          ? `${voteSummary.ja || 0}赞成/${voteSummary.nein || 0}反对`
-          : this.getHiddenVoteText(round.status),
-        outcomeText: this.createOutcomeText(outcome),
-        outcomeClass: `outcome-badge ${OUTCOME_CLASS_BY_TYPE[outcome.type] || "is-pending"}`,
-        showPolicyBadge: outcome.type === "liberal_policy" || outcome.type === "fascist_policy",
-        outcomeImageSrc: this.getOutcomeImageSrc(outcome, historyAssets),
-        executiveResultText: executiveResult && executiveResult.text ? executiveResult.text : "",
-        votes: this.createVoteRows(round.votes || [], seatOrder),
-      };
-    });
-  },
-
-  getOutcomeImageSrc(outcome, historyAssets = {}) {
-    if (outcome.type === "liberal_policy") {
-      return historyAssets.liberal || "";
-    }
-    if (outcome.type === "fascist_policy") {
-      return historyAssets.fascist || "";
-    }
-    return "";
-  },
-
-  getHiddenVoteText(status) {
-    if (status === "nominating") {
-      return "尚未开始";
-    }
-    if (status === "voting") {
-      return "投票未公开";
-    }
-    return "未公开";
-  },
-
-  createOutcomeText(outcome) {
-    return outcome.label || "等待进展";
-  },
-
-  createVoteRows(votes, seatOrder) {
-    const voteByMemberId = {};
-    votes.forEach((vote) => {
-      voteByMemberId[vote.memberId] = vote.state;
-    });
-
-    return seatOrder.map((member) => {
-      const state = voteByMemberId[member.memberId] || (member.isAlive === false ? "dead" : "not_started");
-      return {
-        memberId: member.memberId,
-        seatIndex: member.seatIndex,
-        state,
-        mark: this.getVoteMark(state),
-        cellClass: `vote-cell is-${state}`,
-      };
-    });
-  },
-
-  getVoteMark(state) {
-    if (state === "ja") {
-      return "✔";
-    }
-    if (state === "nein") {
-      return "×";
-    }
-    if (state === "dead") {
-      return "出";
-    }
-    if (state === "pending") {
-      return "…";
-    }
-    return "·";
   },
 
   createServiceError(result, fallbackMessage) {

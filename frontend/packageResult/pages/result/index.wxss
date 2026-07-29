@@ -223,54 +223,23 @@
   color: rgba(243, 228, 200, 0.74);
   font-size: 24rpx;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
-.timeline-vote-strip {
-  margin-top: 14rpx;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  border-top: 1rpx solid rgba(102, 67, 41, 0.72);
-  border-left: 1rpx solid rgba(102, 67, 41, 0.72);
-}
-
-.timeline-vote-cell {
-  min-width: 0;
-  height: 76rpx;
+.timeline-vote-groups {
+  margin-top: 10rpx;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-right: 1rpx solid rgba(102, 67, 41, 0.72);
-  border-bottom: 1rpx solid rgba(102, 67, 41, 0.72);
-  background: rgba(5, 18, 20, 0.46);
+  gap: 4rpx;
 }
 
-.timeline-vote-seat {
-  color: #dba45f;
-  font-size: 20rpx;
-  font-weight: 800;
-}
-
-.timeline-vote-mark {
-  width: 30rpx;
-  height: 30rpx;
-  margin-top: 4rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: #061316;
-  font-size: 22rpx;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.timeline-vote-cell.is-ja .timeline-vote-mark {
-  background: #108fc0;
-}
-
-.timeline-vote-cell.is-nein .timeline-vote-mark {
-  background: #bf382b;
+.timeline-vote-line {
+  min-width: 0;
+  color: rgba(243, 228, 200, 0.74);
+  font-size: 24rpx;
+  line-height: 1.5;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .bottom-actions {

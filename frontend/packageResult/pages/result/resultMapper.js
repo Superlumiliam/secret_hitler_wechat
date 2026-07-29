@@ -1,4 +1,5 @@
 const { createFascistTrack, createLiberalTrack } = require("../../utils/policyTrack");
+const { createVoteGroupRows } = require("../../../utils/voteGroups");
 
 const WINNER_TEXT = {
   LIBERAL: "自由派胜利",
@@ -57,25 +58,20 @@ function createTimelineNameReplacer(players) {
   };
 }
 
-function createTimelineVoteRows(item, players) {
-  if (!item || item.type !== "VOTES_REVEALED") {
+function createTimelineVoteGroupRows(item, players) {
+  if (!item || item.type !== "VOTES_REVEALED" || !item.voteGroups) {
     return [];
   }
-
-  const playerById = Object.fromEntries(players.map((player) => [player.memberId, player]));
-  return (item.votes || [])
-    .filter((ballot) => ballot.vote === "JA" || ballot.vote === "NEIN")
-    .map((ballot) => {
-      const player = playerById[ballot.memberId] || {};
-      const vote = ballot.vote;
-      return {
-        memberId: ballot.memberId,
-        seatIndex: player.seatIndex || 0,
-        mark: vote === "JA" ? "✔" : "×",
-        cellClass: `timeline-vote-cell is-${vote.toLowerCase()}`,
-      };
-    })
-    .sort((a, b) => a.seatIndex - b.seatIndex);
+  return createVoteGroupRows(item.voteGroups, players).map((row) => {
+    const memberText = row.memberCards.length
+      ? row.memberCards.map((member) => member.label).join("、")
+      : "无";
+    return {
+      ...row,
+      memberText,
+      lineText: `${row.label}：${memberText}`,
+    };
+  });
 }
 
 function mapLegislativeHistoryByRound(history, players) {
@@ -202,15 +198,15 @@ function mapResultSnapshot(snapshot, assets = {}) {
           .join(" "),
       })),
     timeline: attachLegislativeReviews(timeline.map((item) => {
-      const voteRows = createTimelineVoteRows(item, finalPlayers);
+      const voteGroupRows = createTimelineVoteGroupRows(item, finalPlayers);
       return {
         ...item,
         title: replaceTimelineNames(item.title),
         summary: replaceTimelineNames(item.summary),
         timeText: formatTime(item.createdAt),
         roundText: `第 ${item.round || 1} 轮`,
-        showVotePattern: voteRows.length > 0,
-        voteRows,
+        showVoteGroups: voteGroupRows.length > 0,
+        voteGroupRows,
       };
     }), legislativeHistoryByRound),
   };

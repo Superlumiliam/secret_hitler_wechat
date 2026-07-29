@@ -1628,7 +1628,7 @@ Page({
       return;
     }
 
-    const voteText = vote === "JA" ? "赞成 JA" : "反对 NEIN";
+    const voteText = vote === "JA" ? "赞同 JA" : "反对 NEIN";
     const confirmRes = await new Promise((resolve) => {
       wx.showModal({
         title: "确认投票",

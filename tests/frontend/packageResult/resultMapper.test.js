@@ -15,28 +15,27 @@ const result = mapResultSnapshot({
       round: 1,
       type: "VOTES_REVEALED",
       title: "政府投票揭示",
-      summary: "政府投票公开：1 票赞成，2 票反对，政府未通过",
-      votes: [
-        { memberId: "mem_3", vote: "NEIN" },
-        { memberId: "mem_1", vote: "JA" },
-        { memberId: "mem_2", vote: "NEIN" },
-      ],
+      summary: "政府投票公开：1 票赞同，2 票反对，政府未通过",
+      voteGroups: {
+        jaMemberIds: ["mem_1"],
+        neinMemberIds: ["mem_3", "mem_2"],
+      },
     },
   ],
 });
 
-assert.strictEqual(result.timeline[0].showVotePattern, true);
+assert.strictEqual(result.timeline[0].showVoteGroups, true);
 assert.deepStrictEqual(
-  result.timeline[0].voteRows.map((vote) => ({
-    seatIndex: vote.seatIndex,
-    mark: vote.mark,
+  result.timeline[0].voteGroupRows.map((row) => ({
+    label: row.label,
+    memberText: row.memberText,
+    lineText: row.lineText,
   })),
   [
-    { seatIndex: 1, mark: "✔" },
-    { seatIndex: 2, mark: "×" },
-    { seatIndex: 3, mark: "×" },
+    { label: "赞同", memberText: "1号", lineText: "赞同：1号" },
+    { label: "反对", memberText: "2号、3号", lineText: "反对：2号、3号" },
   ],
-  "result mapper should render failed election ballots in seat order",
+  "result mapper should render grouped election ballots as short seat text in seat order",
 );
 
 const fascistObserverResult = mapResultSnapshot({

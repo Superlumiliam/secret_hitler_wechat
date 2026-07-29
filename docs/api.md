@@ -178,6 +178,27 @@ last_verified: 2026-07-29
 - 普通观战视图强制返回 `privateState: {}` 和 `pendingTask: null`。单人观战房主只有在选择其控制的虚拟玩家后，`hasPrivateView` 才为 `true`。
 - 前端不得从其他字段推导无权限信息。
 
+投票未揭示时，`voteProgress` 只包含已提交数和应提交数，`submittedVoteMemberIds` 只表示哪些席位已经提交，不包含票型。全部存活玩家提交后，公开结果使用：
+
+```json
+{
+  "voteResult": {
+    "round": 3,
+    "presidentCandidateId": "mem_1",
+    "chancellorCandidateId": "mem_4",
+    "voteGroups": {
+      "jaMemberIds": ["mem_1", "mem_2"],
+      "neinMemberIds": ["mem_3", "mem_4", "mem_5"]
+    },
+    "jaCount": 2,
+    "neinCount": 3,
+    "passed": false
+  }
+}
+```
+
+`voteGroups` 两组成员 ID 按席位升序排列，互斥且并集等于本轮全部存活投票玩家；票数与对应数组长度一致。`history.rounds[].voteGroups` 在未揭示时为 `null`，揭示后使用相同结构；`voteSummary` 包含 `revealed`、`submittedCount`、`requiredCount`、`jaCount`、`neinCount`、`passed` 和 `electionTrackerCount`。未揭示时 `passed` 为 `null` 且计数为 `0`；揭示后 `passed` 表示该轮政府是否通过，未通过轮次的 `electionTrackerCount` 为该次失败后的历史计数，第三次失败即使触发混乱政策并重置实时计数器仍保留 `3`。公开 DTO 不再提供逐玩家 `votes` 或 `revealedVotes`。
+
 ### `CommandAccepted`
 
 ```json
@@ -226,7 +247,7 @@ last_verified: 2026-07-29
 }
 ```
 
-只有终局后且当前 openid 仍属于本局真实成员（玩家或观战者）时可以读取。`finalPlayers` 只列实际玩家并可公开最终身份；`timeline[].votes` 只允许包含已经公开的政府投票。`legislativeHistory` 只在结果快照中返回，记录每轮总统弃掉的政策、总理弃掉的政策和总理颁布的政策；总统或总理看到的牌不属于该 DTO。正常颁布时 `chancellorEnactedPolicy` 为政策枚举且弃牌数组有 1 项；否决成功时颁布字段为 `null` 且弃牌数组有 2 项。旧对局没有记录时返回空数组，进行中的 `GameSnapshot` 不包含该字段。
+只有终局后且当前 openid 仍属于本局真实成员（玩家或观战者）时可以读取。`finalPlayers` 只列实际玩家并可公开最终身份；只有政府投票揭示事件的 `timeline[].voteGroups` 包含上述两组成员 ID，其他事件为 `null`。`legislativeHistory` 只在结果快照中返回，记录每轮总统弃掉的政策、总理弃掉的政策和总理颁布的政策；总统或总理看到的牌不属于该 DTO。正常颁布时 `chancellorEnactedPolicy` 为政策枚举且弃牌数组有 1 项；否决成功时颁布字段为 `null` 且弃牌数组有 2 项。旧对局没有记录时返回空数组，进行中的 `GameSnapshot` 不包含该字段。
 
 ## 游戏命令
 

@@ -273,10 +273,20 @@
         <view class="vote-result-modal-content">
           <view class="vote-result-title">{{voteResult.title}}</view>
           <view class="vote-result-detail">{{voteResult.detailText}}</view>
-          <view class="vote-reveal-row">
-            <view wx:for="{{voteResult.voteRows}}" wx:key="memberId" class="vote-reveal-item {{item.voteClass}}">
-              <text class="vote-reveal-name">{{item.name}}</text>
-              <text class="vote-reveal-mark">{{item.voteText}}</text>
+          <view class="vote-group-list">
+            <view wx:for="{{voteResult.voteGroupRows}}" wx:key="key" class="{{item.rowClass}}">
+              <view class="vote-group-label">{{item.label}}</view>
+              <view class="vote-group-cards">
+                <view
+                  wx:for="{{item.memberCards}}"
+                  wx:for-item="memberCard"
+                  wx:key="memberId"
+                  class="vote-group-member-card"
+                >
+                  {{memberCard.label}}
+                </view>
+                <view wx:if="{{!item.memberCards.length}}" class="vote-group-member-card is-empty">无</view>
+              </view>
             </view>
           </view>
           <view class="vote-result-confirm" catchtap="onConfirmVoteResult" hover-class="action-hover" role="button" aria-label="确认投票结果">
