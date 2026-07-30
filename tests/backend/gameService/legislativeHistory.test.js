@@ -76,6 +76,17 @@ async function seedGame(db, service, room, members, gameCore) {
   });
   for (const member of members) {
     await db.collection("room_members").doc(member.memberId).set({ data: member });
+    await db.collection("user_profiles").doc(member.openId).set({
+      data: {
+        openid: member.openId,
+        activeRoomId: room.roomId,
+        activeMemberId: member.memberId,
+        activeRoomStatus: "in_game",
+        multiplayerGameCount: 0,
+        multiplayerWinCount: 0,
+        multiplayerLossCount: 0,
+      },
+    });
   }
 }
 
@@ -163,6 +174,11 @@ async function assertNormalEnactmentAndIdempotency() {
     db.dump().game_core[gameCore.gameId].legislativeHistory,
     settledCore.legislativeHistory,
     "idempotent retry must not duplicate the legislative record",
+  );
+  assert.deepStrictEqual(
+    Object.values(db.dump().user_profiles).map((profile) => profile.multiplayerGameCount),
+    [1, 1, 1, 1, 1],
+    "idempotent retry must not count the completed game twice",
   );
 }
 

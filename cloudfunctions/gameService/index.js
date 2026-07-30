@@ -1447,7 +1447,66 @@ function buildResultSnapshotPayload(room, gameCore, members, publicHistory, upda
   };
 }
 
-async function persistEndedRoomProjection(transaction, roomId, members, endedAt, updatedAt) {
+function getMultiplayerStatCount(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+async function prepareCompletedMultiplayerStatUpdates(transaction, room, gameCore, members) {
+  if ((room.mode || ROOM_MODE_NORMAL) !== ROOM_MODE_NORMAL || !isGameEndedCore(gameCore)) {
+    return [];
+  }
+  if (!["LIBERAL", "FASCIST"].includes(gameCore.winner)) {
+    throw new Error("COMPLETED_MULTIPLAYER_GAME_MISSING_WINNER");
+  }
+
+  const updates = [];
+  const seenOpenIds = new Set();
+  for (const member of members) {
+    const openid = getMemberOpenId(member);
+    if (
+      !openid ||
+      seenOpenIds.has(openid) ||
+      !isGameParticipantMember(member) ||
+      !isPlayerMember(member) ||
+      member.isVirtual
+    ) {
+      continue;
+    }
+
+    const memberId = getMemberId(member);
+    const assignment = (gameCore.roleAssignments || {})[memberId] || {};
+    const party = assignment.party || (assignment.role ? getPartyForRole(assignment.role) : "");
+    if (!["LIBERAL", "FASCIST"].includes(party)) {
+      throw new Error(`COMPLETED_MULTIPLAYER_GAME_MISSING_PARTY:${memberId}`);
+    }
+
+    const profileRef = transaction.collection("user_profiles").doc(openid);
+    const profileRes = await profileRef.get();
+    const profile = profileRes.data;
+    if (!profile) {
+      console.warn("completed multiplayer game profile missing", {
+        roomId: room.roomId || room._id || "",
+        memberId,
+      });
+      seenOpenIds.add(openid);
+      continue;
+    }
+
+    const didWin = party === gameCore.winner;
+    updates.push({
+      profileRef,
+      data: {
+        multiplayerGameCount: getMultiplayerStatCount(profile.multiplayerGameCount) + 1,
+        multiplayerWinCount: getMultiplayerStatCount(profile.multiplayerWinCount) + (didWin ? 1 : 0),
+        multiplayerLossCount: getMultiplayerStatCount(profile.multiplayerLossCount) + (didWin ? 0 : 1),
+      },
+    });
+    seenOpenIds.add(openid);
+  }
+  return updates;
+}
+
+async function persistEndedRoomProjection(transaction, roomId, endedAt, updatedAt, multiplayerStatUpdates = []) {
   const expireAt = createResultExpireAt(endedAt || updatedAt);
   await transaction.collection("rooms").doc(roomId).update({
     data: {
@@ -1470,6 +1529,15 @@ async function persistEndedRoomProjection(transaction, roomId, members, endedAt,
         updatedAt,
       },
     });
+
+  for (const statUpdate of multiplayerStatUpdates) {
+    await statUpdate.profileRef.update({
+      data: {
+        ...statUpdate.data,
+        updatedAt,
+      },
+    });
+  }
 }
 
 function getTerminalExpirePatch(gameCore, updatedAt) {
@@ -2443,6 +2511,13 @@ async function submitCommand(payload, openid) {
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
+        const multiplayerStatUpdates = await prepareCompletedMultiplayerStatUpdates(
+          transaction,
+          room,
+          nextGameCore,
+          members,
+        );
+
         await transaction.collection("game_core").doc(gameId).update({
           data: {
             status: nextGameCore.status,
@@ -2513,7 +2588,13 @@ async function submitCommand(payload, openid) {
         }
 
         if (isGameEndedCore(nextGameCore)) {
-          await persistEndedRoomProjection(transaction, roomId, members, nextGameCore.endedAt || updatedAt, updatedAt);
+          await persistEndedRoomProjection(
+            transaction,
+            roomId,
+            nextGameCore.endedAt || updatedAt,
+            updatedAt,
+            multiplayerStatUpdates,
+          );
         }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
@@ -2806,6 +2887,13 @@ async function submitCommand(payload, openid) {
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
+        const multiplayerStatUpdates = await prepareCompletedMultiplayerStatUpdates(
+          transaction,
+          room,
+          nextGameCore,
+          members,
+        );
+
         await transaction.collection("game_core").doc(gameId).update({
           data: {
             status: nextGameCore.status,
@@ -2876,7 +2964,13 @@ async function submitCommand(payload, openid) {
         });
 
         if (isGameEndedCore(nextGameCore)) {
-          await persistEndedRoomProjection(transaction, roomId, members, nextGameCore.endedAt || updatedAt, updatedAt);
+          await persistEndedRoomProjection(
+            transaction,
+            roomId,
+            nextGameCore.endedAt || updatedAt,
+            updatedAt,
+            multiplayerStatUpdates,
+          );
         }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
@@ -3189,6 +3283,13 @@ async function submitCommand(payload, openid) {
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
+        const multiplayerStatUpdates = await prepareCompletedMultiplayerStatUpdates(
+          transaction,
+          room,
+          nextGameCore,
+          members,
+        );
+
         await transaction.collection("game_core").doc(gameId).update({
           data: {
             status: nextGameCore.status,
@@ -3261,7 +3362,13 @@ async function submitCommand(payload, openid) {
         });
 
         if (isGameEndedCore(nextGameCore)) {
-          await persistEndedRoomProjection(transaction, roomId, members, nextGameCore.endedAt || updatedAt, updatedAt);
+          await persistEndedRoomProjection(
+            transaction,
+            roomId,
+            nextGameCore.endedAt || updatedAt,
+            updatedAt,
+            multiplayerStatUpdates,
+          );
         }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
@@ -3457,6 +3564,13 @@ async function submitCommand(payload, openid) {
           : buildPublicSnapshotPayload(room, nextGameCore, members, publicHistory, updatedAt);
         const privateSnapshotPayloads = buildChangedPrivateSnapshotPayloads(gameCore, nextGameCore, members, updatedAt);
 
+        const multiplayerStatUpdates = await prepareCompletedMultiplayerStatUpdates(
+          transaction,
+          room,
+          nextGameCore,
+          members,
+        );
+
         await transaction.collection("game_core").doc(gameId).update({
           data: {
             status: nextGameCore.status,
@@ -3523,7 +3637,13 @@ async function submitCommand(payload, openid) {
         }
 
         if (isGameEndedCore(nextGameCore)) {
-          await persistEndedRoomProjection(transaction, roomId, members, nextGameCore.endedAt || updatedAt, updatedAt);
+          await persistEndedRoomProjection(
+            transaction,
+            roomId,
+            nextGameCore.endedAt || updatedAt,
+            updatedAt,
+            multiplayerStatUpdates,
+          );
         }
 
         return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
@@ -3770,6 +3890,8 @@ exports.__testHooks = {
   getCommandTimestamp,
   getRoomMember,
   isDocumentNotFoundError,
+  persistEndedRoomProjection,
+  prepareCompletedMultiplayerStatUpdates,
   saveCommandRecord,
   shouldQueryLegacyCommandRecord,
 };

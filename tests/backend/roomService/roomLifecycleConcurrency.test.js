@@ -98,6 +98,9 @@ async function assertSameCommandCreatesOneRoom() {
   assert.strictEqual(Object.keys(dump.rooms).length, 1, "same command must create only one room");
   assert.strictEqual(Object.keys(dump.room_members).length, 1, "same command must create only one host member");
   assert.strictEqual(dump.user_profiles.same_openid.activeRoomId, first.data.roomId);
+  assert.strictEqual(dump.user_profiles.same_openid.multiplayerGameCount, 0);
+  assert.strictEqual(dump.user_profiles.same_openid.multiplayerWinCount, 0);
+  assert.strictEqual(dump.user_profiles.same_openid.multiplayerLossCount, 0);
   assert.strictEqual(Object.keys(dump.command_records).length, 1, "command result must be committed once");
 }
 

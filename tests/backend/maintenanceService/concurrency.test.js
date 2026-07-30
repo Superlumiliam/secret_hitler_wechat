@@ -248,6 +248,142 @@ async function assertCommandRecordCleanupIsBoundedAndOrdered() {
   assert.deepStrictEqual(result.removedRecordIds, records.map((record) => record._id));
 }
 
+async function assertUserProfileStatsMigrationIsIdempotent() {
+  const profiles = Object.fromEntries(
+    Array.from({ length: 101 }, (_, index) => {
+      const id = `profile_${String(index + 1).padStart(3, "0")}`;
+      return [
+        id,
+        {
+          _id: id,
+          openid: id,
+          defaultDisplayName: `旧玩家${index + 1}`,
+        },
+      ];
+    }),
+  );
+  profiles.profile_050 = {
+    ...profiles.profile_050,
+    multiplayerGameCount: 8,
+    multiplayerWinCount: 5,
+    multiplayerLossCount: 3,
+  };
+  let migrationState = null;
+  const db = {
+    command: {
+      gt(value) {
+        return { gt: value };
+      },
+    },
+    collection(name) {
+      if (name === "maintenance_state") {
+        return {
+          doc() {
+            return {
+              async get() {
+                if (!migrationState) {
+                  const err = new Error("document not exist");
+                  err.errCode = -502005;
+                  throw err;
+                }
+                return { data: migrationState };
+              },
+              async set({ data }) {
+                migrationState = data;
+              },
+            };
+          },
+        };
+      }
+      assert.strictEqual(name, "user_profiles");
+      const buildQuery = (afterId = "") => ({
+        orderBy() {
+          return {
+            limit(limitCount) {
+              return {
+                async get() {
+                  return {
+                    data: Object.values(profiles)
+                      .filter((profile) => profile._id > afterId)
+                      .sort((left, right) => left._id.localeCompare(right._id))
+                      .slice(0, limitCount),
+                  };
+                },
+              };
+            },
+          };
+        },
+      });
+      return {
+        ...buildQuery(),
+        where(query) {
+          return buildQuery(query._id.gt);
+        },
+        doc(id) {
+          return {
+            async update({ data }) {
+              profiles[id] = {
+                ...profiles[id],
+                ...data,
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const service = loadMaintenanceService({
+    db,
+    deleteFile: async () => ({ fileList: [] }),
+  });
+
+  const first = await service.__testHooks.migrateUserProfileStatsBatch(
+    new Date("2026-07-30T12:00:00.000Z"),
+  );
+  assert.strictEqual(first.completed, false);
+  assert.strictEqual(first.scannedProfiles, 100);
+  assert.strictEqual(first.migratedProfiles, 99);
+  assert.deepStrictEqual(
+    [
+      profiles.profile_001.multiplayerGameCount,
+      profiles.profile_001.multiplayerWinCount,
+      profiles.profile_001.multiplayerLossCount,
+    ],
+    [0, 0, 0],
+  );
+  assert.deepStrictEqual(
+    [
+      profiles.profile_050.multiplayerGameCount,
+      profiles.profile_050.multiplayerWinCount,
+      profiles.profile_050.multiplayerLossCount,
+    ],
+    [8, 5, 3],
+    "migration must not overwrite existing statistics",
+  );
+
+  const second = await service.__testHooks.migrateUserProfileStatsBatch(
+    new Date("2026-07-30T12:01:00.000Z"),
+  );
+  assert.strictEqual(second.skipped, false);
+  assert.strictEqual(second.completed, true);
+  assert.strictEqual(second.scannedProfiles, 1);
+  assert.strictEqual(second.migratedProfiles, 1);
+
+  const third = await service.__testHooks.migrateUserProfileStatsBatch(
+    new Date("2026-07-30T12:02:00.000Z"),
+  );
+  assert.strictEqual(third.skipped, true);
+  assert.strictEqual(third.migratedProfiles, 0);
+  assert.deepStrictEqual(
+    [
+      profiles.profile_101.multiplayerGameCount,
+      profiles.profile_101.multiplayerWinCount,
+      profiles.profile_101.multiplayerLossCount,
+    ],
+    [0, 0, 0],
+  );
+}
+
 (async () => {
   await assertConcurrencyLimit();
   await assertAssetFailurePreservesRoomData();
@@ -255,6 +391,7 @@ async function assertCommandRecordCleanupIsBoundedAndOrdered() {
   await assertExplicitSyncSignalReleasePreparation();
   await assertIndependentRoomDataCleanupIsBounded();
   await assertCommandRecordCleanupIsBoundedAndOrdered();
+  await assertUserProfileStatsMigrationIsIdempotent();
   console.log("maintenance concurrency tests passed");
 })().catch((err) => {
   console.error(err);

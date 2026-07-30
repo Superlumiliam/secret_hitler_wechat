@@ -559,6 +559,9 @@ async function upsertProfileInTransaction(transaction, openid, profile, data, cr
     data: {
       openid,
       defaultDisplayName: `玩家${openid.slice(-4)}`,
+      multiplayerGameCount: 0,
+      multiplayerWinCount: 0,
+      multiplayerLossCount: 0,
       ...data,
       createdAt,
     },

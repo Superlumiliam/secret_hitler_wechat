@@ -25,11 +25,13 @@ const ROOM_TTL_ACTIVE_MS = 3 * 60 * 60 * 1000;
 const ROOM_TTL_RESULT_MS = 30 * 60 * 1000;
 const MAINTENANCE_STATE_COLLECTION = "maintenance_state";
 const COLLECTION_INIT_STATE_DOC_ID = "collection_init_daily";
+const USER_PROFILE_STATS_MIGRATION_STATE_DOC_ID = "user_profile_stats_v1";
 const PREPARE_ROOM_SYNC_SIGNALS_ACTION = "prepareRoomSyncSignals";
 const CHINA_TIMEZONE_OFFSET_MS = 8 * 60 * 60 * 1000;
 const ROOM_CLEANUP_CONCURRENCY = 3;
 const ROOM_DATA_CLEANUP_CONCURRENCY = 3;
 const COMMAND_RECORD_CLEANUP_CONCURRENCY = 5;
+const USER_PROFILE_MIGRATION_CONCURRENCY = 5;
 
 async function mapWithConcurrency(items, concurrency, worker) {
   const list = Array.from(items || []);
@@ -522,6 +524,99 @@ async function cleanupCommandRecords(now) {
   };
 }
 
+function buildMissingUserProfileStats(profile) {
+  const patch = {};
+  if (!Object.prototype.hasOwnProperty.call(profile, "multiplayerGameCount")) {
+    patch.multiplayerGameCount = 0;
+  }
+  if (!Object.prototype.hasOwnProperty.call(profile, "multiplayerWinCount")) {
+    patch.multiplayerWinCount = 0;
+  }
+  if (!Object.prototype.hasOwnProperty.call(profile, "multiplayerLossCount")) {
+    patch.multiplayerLossCount = 0;
+  }
+  return patch;
+}
+
+async function readUserProfileStatsMigrationState() {
+  try {
+    const res = await db
+      .collection(MAINTENANCE_STATE_COLLECTION)
+      .doc(USER_PROFILE_STATS_MIGRATION_STATE_DOC_ID)
+      .get();
+    return res.data || null;
+  } catch (err) {
+    if (isDocumentNotFoundError(err)) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+async function migrateUserProfileStatsBatch(now) {
+  const state = await readUserProfileStatsMigrationState();
+  if (state && state.completed) {
+    return {
+      skipped: true,
+      completed: true,
+      scannedProfiles: 0,
+      migratedProfiles: 0,
+      lastProfileId: state.lastProfileId || "",
+    };
+  }
+
+  let query = db.collection("user_profiles");
+  if (state && state.lastProfileId) {
+    query = query.where({
+      _id: _.gt(state.lastProfileId),
+    });
+  }
+  const res = await query.orderBy("_id", "asc").limit(BATCH_LIMIT).get();
+  const profiles = res.data || [];
+  const migrationResults = await mapWithConcurrency(
+    profiles,
+    USER_PROFILE_MIGRATION_CONCURRENCY,
+    async (profile) => {
+      const patch = buildMissingUserProfileStats(profile);
+      if (!Object.keys(patch).length) {
+        return false;
+      }
+      await db.collection("user_profiles").doc(profile._id).update({
+        data: {
+          ...patch,
+          updatedAt: now,
+        },
+      });
+      return true;
+    },
+  );
+
+  const lastProfileId = profiles.length ? profiles[profiles.length - 1]._id : (state && state.lastProfileId) || "";
+  const completed = profiles.length < BATCH_LIMIT;
+  await db
+    .collection(MAINTENANCE_STATE_COLLECTION)
+    .doc(USER_PROFILE_STATS_MIGRATION_STATE_DOC_ID)
+    .set({
+      data: {
+        migrationId: USER_PROFILE_STATS_MIGRATION_STATE_DOC_ID,
+        lastProfileId,
+        completed,
+        migratedProfileCount:
+          ((state && state.migratedProfileCount) || 0) + migrationResults.filter(Boolean).length,
+        updatedAt: now,
+        completedAt: completed ? now : null,
+      },
+    });
+
+  return {
+    skipped: false,
+    completed,
+    scannedProfiles: profiles.length,
+    migratedProfiles: migrationResults.filter(Boolean).length,
+    lastProfileId,
+  };
+}
+
 exports.main = async (event = {}) => {
   const startedAt = new Date();
   if (event.action === PREPARE_ROOM_SYNC_SIGNALS_ACTION) {
@@ -535,6 +630,7 @@ exports.main = async (event = {}) => {
   }
 
   const collectionInitResult = await ensureCollectionsDaily(startedAt);
+  const userProfileStatsMigration = await migrateUserProfileStatsBatch(startedAt);
   const roomResult = await cleanupRooms(startedAt);
   const commandRecordResult = await cleanupCommandRecords(startedAt);
 
@@ -542,9 +638,10 @@ exports.main = async (event = {}) => {
     success: true,
     serverTime: new Date().toISOString(),
     ...collectionInitResult,
+    userProfileStatsMigration,
     ...roomResult,
     ...commandRecordResult,
-    pendingWork: [],
+    pendingWork: userProfileStatsMigration.completed ? [] : [USER_PROFILE_STATS_MIGRATION_STATE_DOC_ID],
   };
 };
 
@@ -553,8 +650,12 @@ exports.__testHooks = {
   PREPARE_ROOM_SYNC_SIGNALS_ACTION,
   ROOM_CLEANUP_CONCURRENCY,
   ROOM_DATA_CLEANUP_CONCURRENCY,
+  USER_PROFILE_MIGRATION_CONCURRENCY,
+  USER_PROFILE_STATS_MIGRATION_STATE_DOC_ID,
+  buildMissingUserProfileStats,
   cleanupCommandRecords,
   ensureCollectionsDaily,
   mapWithConcurrency,
+  migrateUserProfileStatsBatch,
   removeRoomData,
 };
