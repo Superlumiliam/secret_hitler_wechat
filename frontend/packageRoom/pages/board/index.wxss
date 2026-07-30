@@ -1326,7 +1326,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 42rpx 26rpx;
+  padding: 28rpx 26rpx;
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0.64);
 }
@@ -1334,13 +1334,20 @@
 .vote-result-modal {
   position: relative;
   width: 100%;
-  max-width: 704rpx;
+  max-width: 720rpx;
+  height: 0;
+  padding-bottom: 61.5%;
   box-sizing: border-box;
   color: #3d2619;
-  background: #d6c19b;
+  background: transparent;
+  overflow: hidden;
   box-shadow:
     0 28rpx 72rpx rgba(0, 0, 0, 0.66);
   animation: identityModalIn 150ms ease-out both;
+}
+
+.vote-result-modal.has-wrapped-votes {
+  padding-bottom: 69%;
 }
 
 .vote-result-modal-frame {
@@ -1352,15 +1359,18 @@
 }
 
 .vote-result-modal-content {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 1;
-  padding: 38rpx 34rpx 36rpx;
+  padding: 68rpx 82rpx 20rpx;
   box-sizing: border-box;
 }
 
 .vote-result-modal .vote-result-title {
+  transform: translateY(8rpx);
   color: #5b3a27;
-  font-size: 34rpx;
+  font-size: 32rpx;
+  line-height: 1.1;
 }
 
 .vote-result-modal.is-passed .vote-result-title {
@@ -1372,40 +1382,41 @@
 }
 
 .vote-result-modal .vote-result-detail {
-  margin-top: 12rpx;
+  margin-top: 8rpx;
   color: rgba(61, 38, 25, 0.84);
-  font-size: 23rpx;
+  font-size: 22rpx;
   text-shadow: none;
 }
 
 .vote-result-modal .vote-group-list {
-  margin-top: 16rpx;
+  margin-top: 12rpx;
 }
 
 .vote-result-modal .vote-group-row {
-  grid-template-columns: 112rpx minmax(0, 1fr);
-  gap: 22rpx;
-  padding: 9rpx 0;
+  grid-template-columns: 96rpx minmax(0, 1fr);
+  gap: 14rpx;
+  padding: 7rpx 0;
   border-bottom-color: rgba(93, 57, 31, 0.28);
 }
 
 .vote-result-modal .vote-group-label,
 .vote-result-modal .vote-group-member-card {
-  min-height: 54rpx;
-  padding: 9rpx 12rpx;
-  font-size: 24rpx;
+  min-height: 48rpx;
+  padding: 7rpx 10rpx;
+  font-size: 22rpx;
 }
 
 .vote-result-confirm {
   position: relative;
-  width: 238rpx;
-  height: 66rpx;
-  margin: 22rpx auto 0;
+  transform: translateY(10rpx);
+  width: 212rpx;
+  height: 56rpx;
+  margin: 24rpx auto 0;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #e9bf83;
-  font-size: 26rpx;
+  font-size: 24rpx;
   font-weight: 900;
   line-height: 1;
   text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.48);

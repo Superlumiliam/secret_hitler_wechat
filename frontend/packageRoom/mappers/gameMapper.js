@@ -420,6 +420,7 @@ function createVoteResult(snapshot) {
   const jaCount = Array.isArray(voteGroups.jaMemberIds) ? voteGroups.jaMemberIds.length : 0;
   const neinCount = Array.isArray(voteGroups.neinMemberIds) ? voteGroups.neinMemberIds.length : 0;
   const voteGroupRows = createVoteGroupRows(voteGroups, publicState.seatOrder || []);
+  const hasWrappedVoteGroup = voteGroupRows.some((row) => row.memberCards.length > 5);
   let detailText = `赞同 ${jaCount}，反对 ${neinCount}`;
   if (result.chaosPolicy) {
     const policyName = result.chaosPolicy.policy === "LIBERAL" ? "自由派政策" : "极权派政策";
@@ -446,7 +447,12 @@ function createVoteResult(snapshot) {
       result.passed ? "passed" : "failed",
     ].join(":"),
     title: result.passed ? "投票通过" : "投票未通过",
-    resultClass: result.passed ? "is-passed" : "is-failed",
+    resultClass: [
+      result.passed ? "is-passed" : "is-failed",
+      hasWrappedVoteGroup ? "has-wrapped-votes" : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
     detailText,
     voteGroupRows,
   };

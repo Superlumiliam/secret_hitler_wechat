@@ -151,11 +151,37 @@ function assertVoteResultUsesGroupedSeats() {
   );
 }
 
+function assertVoteResultExpandsForWrappedVoteGroups() {
+  const snapshot = makeSnapshot({
+    role: "LIBERAL",
+    party: "LIBERAL",
+    knownMembers: [],
+  });
+  snapshot.publicState.seatOrder = Array.from({ length: 9 }, (_, index) => ({
+    memberId: `member-${index + 1}`,
+    displayName: `玩家${index + 1}`,
+    seatIndex: index + 1,
+    isAlive: true,
+  }));
+  snapshot.publicState.voteResult = {
+    round: 2,
+    voteGroups: {
+      jaMemberIds: [],
+      neinMemberIds: snapshot.publicState.seatOrder.map((member) => member.memberId),
+    },
+    passed: false,
+  };
+
+  const voteResult = gameMapper.createVoteResult(snapshot);
+  assert.match(voteResult.resultClass, /has-wrapped-votes/);
+}
+
 assertFascistViewerSeesDictatorSeat();
 assertDictatorViewerSeesOwnSeat();
 assertLiberalViewerSeesOnlyNormalSeats();
 assertMissingSpecialAssetFallsBackToNormalSeat();
 assertSubmittedVoteSeatHasArchivedState();
 assertVoteResultUsesGroupedSeats();
+assertVoteResultExpandsForWrappedVoteGroups();
 
 console.log("gameMapper seat perspective tests passed");
