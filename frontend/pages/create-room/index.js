@@ -100,6 +100,7 @@ const ALL_ROOM_AVATAR_FILE_IDS = [
 ];
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const INITIAL_LOBBY_SNAPSHOT_TTL_MS = 30 * 1000;
+const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const userProfileStore = require("../../utils/userProfileStore");
 
 function createCommandId(prefix = "create_room") {
@@ -228,28 +229,22 @@ Page({
       return;
     }
 
-    wx.cloud.getTempFileURL({
-      fileList: ALL_ROOM_AVATAR_FILE_IDS,
-      success: (res) => {
-        const urlByFileId = {};
-        (res.fileList || []).forEach((file) => {
-          if (file.status === 0 && file.tempFileURL) {
-            urlByFileId[file.fileID] = file.tempFileURL;
-          } else {
-            console.error("创建房间头像云存储临时链接获取失败", file);
+    resolveTempFileUrls(ALL_ROOM_AVATAR_FILE_IDS)
+      .then((urlByFileId) => {
+        ALL_ROOM_AVATAR_FILE_IDS.forEach((fileId) => {
+          if (!urlByFileId[fileId]) {
+            console.error("创建房间头像云存储临时链接获取失败", fileId);
           }
         });
-
         this.avatarUrlByFileId = urlByFileId;
         this.setData({
           ...buildRoleData(this.data.selectedCount, this.avatarUrlByFileId),
           preloadedAvatars: Object.keys(urlByFileId).map((fileId) => urlByFileId[fileId]),
         });
-      },
-      fail: (err) => {
+      })
+      .catch((err) => {
         console.error("创建房间头像云存储临时链接获取失败", err);
-      },
-    });
+      });
   },
 
   async uploadRoomAvatarIfNeeded(profile, commandId) {

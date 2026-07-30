@@ -14,6 +14,7 @@ const {
 } = require("../../../utils/pageTimeout");
 const { getGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { reLaunchPage } = require("../../../utils/protectedPageRoute");
+const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
 const { createHistoryRoundViews } = require("./historyMapper");
 
 function isCloudFileId(fileId) {
@@ -157,22 +158,18 @@ Page({
   async loadHistoryAssets() {
     const cachedAssets = this.data.historyAssets || {};
     const hasCachedAssets = Object.keys(HISTORY_ASSET_FILE_IDS).every((key) => Boolean(cachedAssets[key]));
-    if (hasCachedAssets || !wx.cloud || !wx.cloud.getTempFileURL) {
+    if (hasCachedAssets || !wx.cloud) {
       return cachedAssets;
     }
 
     const urlByKey = { ...cachedAssets };
     const fileIds = Object.values(HISTORY_ASSET_FILE_IDS).filter(isCloudFileId);
     try {
-      const tempRes = await wx.cloud.getTempFileURL({
-        fileList: Array.from(new Set(fileIds)),
-      });
-      const urlByFileId = {};
-      (tempRes.fileList || []).forEach((file) => {
-        if (file.status === 0 && file.tempFileURL) {
-          urlByFileId[file.fileID] = file.tempFileURL;
-        } else {
-          console.error("历史记录页云存储临时链接获取失败", file);
+      const uniqueFileIds = Array.from(new Set(fileIds));
+      const urlByFileId = await resolveTempFileUrls(uniqueFileIds);
+      uniqueFileIds.forEach((fileId) => {
+        if (!urlByFileId[fileId]) {
+          console.error("历史记录页云存储临时链接获取失败", fileId);
         }
       });
       Object.keys(HISTORY_ASSET_FILE_IDS).forEach((key) => {

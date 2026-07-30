@@ -4,6 +4,7 @@ const IDENTITY_BACKGROUND_FILE_ID = `${CLOUD_ASSET_ROOT}background-identity.webp
 const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const DISPLAY_NAME_MIN_LENGTH = 2;
 const DISPLAY_NAME_MAX_LENGTH = 12;
+const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const userProfileStore = require("../../utils/userProfileStore");
 
 function isCloudFileId(fileId) {
@@ -55,32 +56,26 @@ Page({
       fileList.push(cloudAvatarUrl);
     }
 
-    wx.cloud.getTempFileURL({
-      fileList,
-      success: (res) => {
-        const urlByFileId = {};
-        (res.fileList || []).forEach((file) => {
-          if (file.status === 0 && file.tempFileURL) {
-            urlByFileId[file.fileID] = file.tempFileURL;
-          } else {
-            console.error("创建用户页云存储临时链接获取失败", file);
+    resolveTempFileUrls(fileList)
+      .then((urlByFileId) => {
+        fileList.forEach((fileId) => {
+          if (!urlByFileId[fileId]) {
+            console.error("创建用户页云存储临时链接获取失败", fileId);
           }
         });
-
         this.setData({
           backgroundSrc: urlByFileId[IDENTITY_BACKGROUND_FILE_ID] || "",
           backgroundVisible: Boolean(urlByFileId[IDENTITY_BACKGROUND_FILE_ID]),
           defaultAvatarSrc: urlByFileId[DEFAULT_AVATAR_FILE_ID] || "",
           avatarPreviewSrc: cloudAvatarUrl ? urlByFileId[cloudAvatarUrl] || "" : this.data.avatarPreviewSrc,
         });
-      },
-      fail: (err) => {
+      })
+      .catch((err) => {
         console.error("创建用户页云存储临时链接获取失败", err);
         this.setData({
           backgroundVisible: false,
         });
-      },
-    });
+      });
   },
 
   onBackgroundError() {

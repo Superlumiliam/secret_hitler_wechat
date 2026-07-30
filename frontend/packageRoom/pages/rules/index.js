@@ -15,6 +15,7 @@ const {
   setupPageTimeout,
 } = require("../../../utils/pageTimeout");
 const { reLaunchPage } = require("../../../utils/protectedPageRoute");
+const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
 
 function normalizeTimeoutMs(value) {
   const timeoutMs = Number(value);
@@ -130,31 +131,22 @@ Page({
   },
 
   loadRuleAssets() {
-    if (!wx.cloud || !wx.cloud.getTempFileURL) {
+    if (!wx.cloud) {
       return;
     }
 
-    wx.cloud
-      .getTempFileURL({
-        fileList: Object.keys(RULE_ASSET_FILE_IDS_BY_KEY).reduce(
-          (fileList, key) => fileList.concat(RULE_ASSET_FILE_IDS_BY_KEY[key]),
-          [],
-        ),
-      })
-      .then((res) => {
+    const fileIds = Object.keys(RULE_ASSET_FILE_IDS_BY_KEY).reduce(
+      (fileList, key) => fileList.concat(RULE_ASSET_FILE_IDS_BY_KEY[key]),
+      [],
+    );
+    resolveTempFileUrls(fileIds)
+      .then((urlByFileId) => {
         const srcByKey = {};
-        (res.fileList || []).forEach((file) => {
-          const assetKey = Object.keys(RULE_ASSET_FILE_IDS_BY_KEY).find((key) =>
-            RULE_ASSET_FILE_IDS_BY_KEY[key].includes(file.fileID),
-          );
-          if (!assetKey) {
-            return;
-          }
-          if (file.status !== 0 || !file.tempFileURL) {
-            return;
-          }
-          if (!srcByKey[assetKey]) {
-            srcByKey[assetKey] = file.tempFileURL;
+        Object.keys(RULE_ASSET_FILE_IDS_BY_KEY).forEach((assetKey) => {
+          const assetFileIds = RULE_ASSET_FILE_IDS_BY_KEY[assetKey];
+          const resolvedUrl = assetFileIds.map((fileId) => urlByFileId[fileId]).find(Boolean);
+          if (resolvedUrl) {
+            srcByKey[assetKey] = resolvedUrl;
           }
         });
         Object.keys(RULE_ASSET_FILE_IDS_BY_KEY).forEach((key) => {

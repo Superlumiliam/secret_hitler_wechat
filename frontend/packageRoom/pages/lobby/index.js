@@ -25,7 +25,7 @@ const {
 const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { reLaunchPage } = require("../../../utils/protectedPageRoute");
 const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
-const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
+const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
 const { createRoomSyncSignalWatcher } = require("../../utils/roomSyncSignal");
 const userProfileStore = require("../../../utils/userProfileStore");
 const bootstrapService = require("../../../services/bootstrapService");

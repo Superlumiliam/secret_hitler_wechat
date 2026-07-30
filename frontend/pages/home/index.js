@@ -5,6 +5,7 @@ const DEFAULT_AVATAR_FILE_ID =
 const INITIAL_LOBBY_SNAPSHOT_TTL_MS = 30 * 1000;
 const { showTimeoutModalIfNeeded } = require("../../utils/pageTimeout");
 const { buildHomeShare, enableShareMenu } = require("../../utils/share");
+const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
 const userProfileStore = require("../../utils/userProfileStore");
 
 function createCommandId(prefix) {
@@ -158,12 +159,11 @@ Page({
       return;
     }
 
-    wx.cloud.getTempFileURL({
-      fileList: [HOME_BACKGROUND_FILE_ID],
-      success: (res) => {
-        const file = res.fileList && res.fileList[0];
-        if (!file || file.status !== 0 || !file.tempFileURL) {
-          console.error("首页背景图云存储临时链接获取失败", file);
+    resolveTempFileUrls([HOME_BACKGROUND_FILE_ID])
+      .then((urlByFileId) => {
+        const backgroundSrc = urlByFileId[HOME_BACKGROUND_FILE_ID] || "";
+        if (!backgroundSrc) {
+          console.error("首页背景图云存储临时链接获取失败", HOME_BACKGROUND_FILE_ID);
           this.setData({
             homeBackgroundVisible: false,
           });
@@ -171,17 +171,16 @@ Page({
         }
 
         this.setData({
-          homeBackgroundSrc: file.tempFileURL,
+          homeBackgroundSrc: backgroundSrc,
           homeBackgroundVisible: true,
         });
-      },
-      fail: (err) => {
+      })
+      .catch((err) => {
         console.error("首页背景图云存储临时链接获取失败", err);
         this.setData({
           homeBackgroundVisible: false,
         });
-      },
-    });
+      });
   },
 
   onBackgroundError() {
@@ -212,12 +211,11 @@ Page({
       return;
     }
 
-    wx.cloud.getTempFileURL({
-      fileList: [avatarUrl],
-      success: (res) => {
-        const file = res.fileList && res.fileList[0];
-        if (!file || file.status !== 0 || !file.tempFileURL) {
-          console.error("首页头像云存储临时链接获取失败", file);
+    resolveTempFileUrls([avatarUrl])
+      .then((urlByFileId) => {
+        const profileAvatarSrc = urlByFileId[avatarUrl] || "";
+        if (!profileAvatarSrc) {
+          console.error("首页头像云存储临时链接获取失败", avatarUrl);
           if (canFallbackToDefault) {
             this.loadCloudAvatar(DEFAULT_AVATAR_FILE_ID, false);
             return;
@@ -229,10 +227,10 @@ Page({
         }
 
         this.setData({
-          profileAvatarSrc: file.tempFileURL,
+          profileAvatarSrc,
         });
-      },
-      fail: (err) => {
+      })
+      .catch((err) => {
         console.error("首页头像云存储临时链接获取失败", err);
         if (canFallbackToDefault) {
           this.loadCloudAvatar(DEFAULT_AVATAR_FILE_ID, false);
@@ -241,8 +239,7 @@ Page({
         this.setData({
           profileAvatarSrc: "",
         });
-      },
-    });
+      });
   },
 
   onProfileEntry() {

@@ -1,7 +1,7 @@
 const assert = require("assert");
 const path = require("path");
 
-const cachePath = path.resolve(__dirname, "../../../frontend/packageRoom/utils/tempFileUrlCache.js");
+const cachePath = path.resolve(__dirname, "../../../frontend/utils/tempFileUrlCache.js");
 
 async function assertTempFileUrlCache() {
   delete require.cache[cachePath];
@@ -60,6 +60,37 @@ async function assertTempFileUrlCache() {
     expiringResult["cloud://avatar-b"],
     "expired cache entry should degrade to its stale URL when refresh fails",
   );
+}
+
+async function assertPartialBatchFailureKeepsSuccessfulUrls() {
+  delete require.cache[cachePath];
+  const fileIds = Array.from({ length: 60 }, (_, index) => `cloud://batch-${index}`);
+  const requestSizes = [];
+  global.wx = {
+    cloud: {
+      async getTempFileURL({ fileList }) {
+        requestSizes.push(fileList.length);
+        if (fileList[0] === fileIds[50]) {
+          throw new Error("second batch failed");
+        }
+        return {
+          fileList: fileList.map((fileID) => ({
+            fileID,
+            status: 0,
+            tempFileURL: `https://temp.example/${encodeURIComponent(fileID)}`,
+          })),
+        };
+      },
+    },
+  };
+
+  const { clearTempFileUrlCache, resolveTempFileUrls } = require(cachePath);
+  clearTempFileUrlCache();
+  const resolved = await resolveTempFileUrls(fileIds);
+  assert.deepStrictEqual(requestSizes, [50, 10], "large requests should remain isolated by batch");
+  assert.strictEqual(Object.keys(resolved).length, 50, "successful batches should keep their resolved URLs");
+  assert(resolved[fileIds[0]], "the first successful batch should remain available");
+  assert.strictEqual(resolved[fileIds[50]], undefined, "failed batch entries should remain unresolved");
 }
 
 function loadPageDefinition(relativePath) {
@@ -586,6 +617,7 @@ async function assertAppDoesNotLoopAfterRetryFailure() {
 
 (async () => {
   await assertTempFileUrlCache();
+  await assertPartialBatchFailureKeepsSuccessfulUrls();
   await assertStablePollSkipsHydrate();
   await assertPollingDoesNotOverlapAndUsesExpectedIntervals();
   await assertLobbySuccessCommandDoesNotPullAgain();

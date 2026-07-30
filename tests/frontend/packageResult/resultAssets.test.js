@@ -5,6 +5,7 @@ const resultPagePath = path.resolve(
   __dirname,
   "../../../frontend/packageResult/pages/result/index.js",
 );
+const cachePath = path.resolve(__dirname, "../../../frontend/utils/tempFileUrlCache.js");
 
 function loadResultPage() {
   let definition = null;
@@ -35,6 +36,8 @@ function createPageContext(page) {
 }
 
 function installCloudMock(requestSizes) {
+  const { clearTempFileUrlCache } = require(cachePath);
+  clearTempFileUrlCache();
   global.wx = {
     cloud: {
       async getTempFileURL({ fileList }) {

@@ -24,6 +24,7 @@ const {
 } = require("../../../utils/pageTimeout");
 const { getGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { reLaunchPage } = require("../../../utils/protectedPageRoute");
+const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
 
 const ROLE_META = {
   LIBERAL: {
@@ -238,17 +239,12 @@ Page({
       }
     });
 
-    return wx.cloud
-      .getTempFileURL({
-        fileList: Array.from(new Set(fileList)),
-      })
-      .then((res) => {
-        const urlByFileId = {};
-        (res.fileList || []).forEach((file) => {
-          if (file.status === 0 && file.tempFileURL) {
-            urlByFileId[file.fileID] = file.tempFileURL;
-          } else {
-            console.error("身份页云存储临时链接获取失败", file);
+    const uniqueFileList = Array.from(new Set(fileList));
+    return resolveTempFileUrls(uniqueFileList)
+      .then((urlByFileId) => {
+        uniqueFileList.forEach((fileId) => {
+          if (!urlByFileId[fileId]) {
+            console.error("身份页云存储临时链接获取失败", fileId);
           }
         });
 

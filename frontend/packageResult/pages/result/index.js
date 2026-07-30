@@ -12,6 +12,7 @@ const {
 } = require("../../../utils/pageTimeout");
 const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
 const { buildPageUrl, reLaunchIfPageStacked } = require("../../../utils/protectedPageRoute");
+const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
 
 const CLOUD_ASSET_ROOT =
   "cloud://cloud1-9gcbbsjv4ce11da4.636c-cloud1-9gcbbsjv4ce11da4-1421865979/processed_images/";
@@ -39,33 +40,8 @@ const RESULT_POLICY_ASSET_KEYS = [
   "policyPeek",
   "specialElection",
 ];
-const TEMP_FILE_URL_BATCH_SIZE = 50;
-
 function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
-}
-
-async function resolveTempFileUrlsInBatches(fileIds) {
-  const uniqueFileIds = Array.from(new Set(fileIds));
-  const urlByFileId = {};
-
-  for (let start = 0; start < uniqueFileIds.length; start += TEMP_FILE_URL_BATCH_SIZE) {
-    const fileList = uniqueFileIds.slice(start, start + TEMP_FILE_URL_BATCH_SIZE);
-    try {
-      const res = await wx.cloud.getTempFileURL({
-        fileList,
-      });
-      (res.fileList || []).forEach((file) => {
-        if (file.status === 0 && file.tempFileURL) {
-          urlByFileId[file.fileID] = file.tempFileURL;
-        }
-      });
-    } catch (err) {
-      console.error("结果页图片临时链接获取失败", err);
-    }
-  }
-
-  return urlByFileId;
 }
 
 function clearRuntimeActiveRoomState() {
@@ -203,7 +179,12 @@ Page({
       };
     }
 
-    const urlByFileId = await resolveTempFileUrlsInBatches(fileIds);
+    let urlByFileId = {};
+    try {
+      urlByFileId = await resolveTempFileUrls(fileIds);
+    } catch (err) {
+      console.error("结果页图片临时链接获取失败", err);
+    }
     const policyAssets = { ...cachedPolicyAssets };
     const resultAssets = { ...cachedResultAssets };
     if (!hasCachedPolicyAssets) {
