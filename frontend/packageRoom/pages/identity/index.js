@@ -191,6 +191,7 @@ Page({
     }
 
     const knownMembers = rawIdentity.knownMembers || [];
+    const seatOrder = ((snapshot && snapshot.publicState) || {}).seatOrder || [];
     const roleMeta = getRoleMeta(rawIdentity.role);
     const cardFileId = IDENTITY_CARD_FILE_ID_BY_ROLE[rawIdentity.role] || IDENTITY_CARD_FILE_ID_BY_ROLE.LIBERAL;
     const tempUrlByFileId = await this.loadCloudAssets(knownMembers, cardFileId);
@@ -207,7 +208,7 @@ Page({
 
     this.setData({
       identity: viewIdentity,
-      knownMembers: this.createKnownMembers(knownMembers, tempUrlByFileId),
+      knownMembers: this.createKnownMembers(knownMembers, tempUrlByFileId, seatOrder),
       infoLines: this.createInfoLines(rawIdentity),
       actionTips: ACTION_TIPS[rawIdentity.role] || ACTION_TIPS.LIBERAL,
     });
@@ -287,17 +288,24 @@ Page({
     return ["保护独裁者，并推动 6 项极权派政策。", "或在 3 项极权派政策后让独裁者当选总理。"];
   },
 
-  createKnownMembers(knownMembers, tempUrlByFileId) {
+  createKnownMembers(knownMembers, tempUrlByFileId, seatOrder = []) {
     const defaultAvatarSrc = tempUrlByFileId[DEFAULT_AVATAR_FILE_ID] || "";
+    const seatIndexByMemberId = seatOrder.reduce((result, member) => {
+      if (member && member.memberId) {
+        result[member.memberId] = member.seatIndex;
+      }
+      return result;
+    }, {});
     return (knownMembers || []).map((member) => {
       const meta = getRoleMeta(member.role);
       const avatarSrc = isCloudFileId(member.avatarUrl)
         ? tempUrlByFileId[member.avatarUrl] || defaultAvatarSrc
         : member.avatarUrl || defaultAvatarSrc;
+      const seatIndex = Number(member.seatIndex || seatIndexByMemberId[member.memberId]);
       return {
         memberId: member.memberId,
-        displayName: member.displayName || "未知玩家",
-        initial: String(member.displayName || "？").slice(0, 1),
+        displayName: seatIndex > 0 ? `${seatIndex}号玩家` : "未知玩家",
+        initial: seatIndex > 0 ? String(seatIndex) : "？",
         roleLabel: meta.roleLabel,
         knownLabel: member.role === "HITLER" ? "独裁者" : "极权派队友",
         avatarSrc,
