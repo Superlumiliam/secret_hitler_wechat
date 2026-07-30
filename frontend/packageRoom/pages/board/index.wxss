@@ -1336,7 +1336,7 @@
   width: 100%;
   max-width: 720rpx;
   height: 0;
-  padding-bottom: 61.5%;
+  padding-bottom: 65%;
   box-sizing: border-box;
   color: #3d2619;
   background: transparent;
@@ -1347,7 +1347,7 @@
 }
 
 .vote-result-modal.has-wrapped-votes {
-  padding-bottom: 69%;
+  padding-bottom: 72%;
 }
 
 .vote-result-modal-frame {
@@ -1367,6 +1367,7 @@
 }
 
 .vote-result-modal .vote-result-title {
+  margin-top: 14rpx;
   transform: translateY(8rpx);
   color: #5b3a27;
   font-size: 32rpx;
@@ -1382,7 +1383,7 @@
 }
 
 .vote-result-modal .vote-result-detail {
-  margin-top: 8rpx;
+  margin-top: 20rpx;
   color: rgba(61, 38, 25, 0.84);
   font-size: 22rpx;
   text-shadow: none;
