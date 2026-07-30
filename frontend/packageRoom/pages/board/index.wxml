@@ -70,13 +70,27 @@
 
       </view>
 
-      <seat-list
-        assets="{{policyAssets}}"
-        seats="{{seats}}"
-        bind:tapseat="onTapSeat"
-        bind:tapavatar="onTapAvatar"
-        bind:tapidentitymark="onTapIdentityMark"
-      ></seat-list>
+      <view class="seat-section">
+        <view
+          class="seat-section-toggle {{seatSectionCollapsed ? 'is-collapsed' : 'is-expanded'}}"
+          bindtap="onToggleSeatSection"
+          hover-class="seat-section-toggle-hover"
+          role="button"
+          aria-label="{{seatSectionCollapsed ? '展开玩家席位' : '收起玩家席位'}}"
+        >
+          <view class="seat-section-toggle-label">玩家席位</view>
+          <view class="seat-section-toggle-action">{{seatSectionCollapsed ? '展开' : '收起'}}</view>
+          <view class="seat-section-toggle-arrow" aria-hidden="true">{{seatSectionCollapsed ? '⌄' : '⌃'}}</view>
+        </view>
+        <seat-list
+          wx:if="{{!seatSectionCollapsed}}"
+          assets="{{policyAssets}}"
+          seats="{{seats}}"
+          bind:tapseat="onTapSeat"
+          bind:tapavatar="onTapAvatar"
+          bind:tapidentitymark="onTapIdentityMark"
+        ></seat-list>
+      </view>
 
       <view class="action-dock">
         <view wx:if="{{canAckPolicyPeek}}" class="policy-peek-action-panel">

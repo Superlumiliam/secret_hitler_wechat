@@ -84,6 +84,7 @@ Page({
     snapshot: null,
     board: null,
     seats: [],
+    seatSectionCollapsed: false,
     avatarTempUrlByFileId: {},
     policyAssets: {},
     activePowerTipSlot: 0,
@@ -1219,6 +1220,12 @@ Page({
       url: `/packageRoom/pages/history/index?roomId=${encodeURIComponent(this.data.roomId)}&controlledMemberId=${encodeURIComponent(
         this.data.controlledMemberId || "",
       )}&timeoutDeadlineAt=${timeoutDeadlineAt}`,
+    });
+  },
+
+  onToggleSeatSection() {
+    this.setData({
+      seatSectionCollapsed: !this.data.seatSectionCollapsed,
     });
   },
 
