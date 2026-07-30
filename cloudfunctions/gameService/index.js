@@ -2072,6 +2072,8 @@ async function getGameSnapshot(payload, openid) {
 
   const publicPayload = publicSnapshot.payload || {};
   const privatePayload = (privateSnapshot && privateSnapshot.payload) || {};
+  const clientPublicState = { ...(publicPayload.publicState || {}) };
+  delete clientPublicState.publicHistory;
   return ok({
     roomId,
     roomCode: publicPayload.roomCode || room.roomCode,
@@ -2088,7 +2090,7 @@ async function getGameSnapshot(payload, openid) {
     version: publicPayload.version || publicSnapshot.version || GAME_INITIAL_VERSION,
     round: publicPayload.round || 1,
     currentPhase: publicPayload.currentPhase || "nomination",
-    publicState: publicPayload.publicState || {},
+    publicState: clientPublicState,
     privateState: hasPrivateView ? privatePayload.privateState || {} : {},
     pendingTask: hasPrivateView
       ? privatePayload.pendingTask || (privateSnapshot && privateSnapshot.pendingTask) || null

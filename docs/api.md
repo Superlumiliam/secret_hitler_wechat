@@ -1,7 +1,7 @@
 ---
 status: active
 authority: api-contract
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 ---
 
 # 《secret dictator》前后端 API
@@ -172,7 +172,8 @@ last_verified: 2026-07-30
 }
 ```
 
-- `publicState` 只含全体成员可见的座位、政府、政策轨、选举计数器、公开票型和公共历史。
+- `publicState` 只含全体成员可见的座位、政府、政策轨、选举计数器、公开票型和公共历史；`getGameSnapshot` 响应中的公共历史使用 `history`，不包含服务端维护的原始事件数组 `publicHistory`。
+- 服务端 `room_public_snapshots` 暂时保留 `publicHistory`，用于后续状态变化时增量构建公共投影；该内部字段不属于客户端 DTO，也不会为此在请求中重新读取整张事件表。
 - `privateState` 只含当前席位的身份、手牌、个人投票、调查结果、政策预览等私密信息。
 - `pendingTask` 是当前席位的权威待办；目标选择不得超出其中的 `allowedTargets`。
 - 普通观战视图强制返回 `privateState: {}` 和 `pendingTask: null`。单人观战房主只有在选择其控制的虚拟玩家后，`hasPrivateView` 才为 `true`。

@@ -1,7 +1,7 @@
 ---
 status: active
 authority: architecture
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 ---
 
 # 《secret dictator》当前架构
@@ -97,7 +97,7 @@ nomination
 ## 公开、私密与真相隔离
 
 - `game_core` 包含身份映射、牌堆、手牌和未公开投票等完整真相，永不下发。
-- 公共快照只含所有玩家都能看到的信息，包括座位、政府、政策轨、按赞同/反对分组的公开票型和公共历史；进行中的快照不包含 `legislativeHistory`。
+- 公共快照只含所有玩家都能看到的信息，包括座位、政府、政策轨、按赞同/反对分组的公开票型和公共历史；进行中的快照不包含 `legislativeHistory`。服务端公共快照文档当前同时保留面向投影构建的原始 `publicHistory` 和面向客户端的 `history`，但 `getGameSnapshot` 响应只下发 `history`，不下发 `publicHistory`。
 - 私密快照按席位生成，只含该席位可见的身份、手牌、个人投票、调查结果、政策预览和待办。
 - 观战者只读取公共投影，不生成或读取私密快照，没有待办和游戏命令权限；终局结果仍只列实际玩家。
 - 结果阶段才能公开全部身份和终局复盘；结果投影只下发 `legislativeHistory` 的六个原始字段，旧对局缺失时为空数组。

@@ -50,7 +50,18 @@ async function assertGameSnapshotPresenceReusesResolvedMember() {
           version: 3,
           round: 1,
           currentPhase: "nomination",
-          publicState: {},
+          publicState: {
+            history: {
+              rounds: [{ round: 1, status: "nominating" }],
+            },
+            publicHistory: [
+              {
+                eventId: "evt_internal_1",
+                type: "GAME_STARTED",
+                summary: "内部公共事件",
+              },
+            ],
+          },
           expireAt: FUTURE_EXPIRE_AT,
         },
       },
@@ -89,6 +100,25 @@ async function assertGameSnapshotPresenceReusesResolvedMember() {
   const afterConcurrentTouch = db.stats();
 
   assert.strictEqual(first.success, true);
+  assert.deepStrictEqual(first.data.publicState.history, {
+    rounds: [{ round: 1, status: "nominating" }],
+  });
+  assert.strictEqual(
+    Object.prototype.hasOwnProperty.call(first.data.publicState, "publicHistory"),
+    false,
+    "client game snapshot should omit the server-only raw public history",
+  );
+  assert.deepStrictEqual(
+    db.dump().room_public_snapshots.room_1.payload.publicState.publicHistory,
+    [
+      {
+        eventId: "evt_internal_1",
+        type: "GAME_STARTED",
+        summary: "内部公共事件",
+      },
+    ],
+    "server snapshot should retain raw public history for projection updates",
+  );
   assert.strictEqual(touched.success, true);
   assert.strictEqual(concurrentTouch.success, true);
   assert.strictEqual(afterFirst.docUpdates.room_members || 0, 0, "ordinary snapshots must not write presence");
