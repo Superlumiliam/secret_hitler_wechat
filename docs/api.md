@@ -108,7 +108,7 @@ last_verified: 2026-07-31
 
 ### `maintenanceService`
 
-该函数不对客户端开放。定时或维护调用默认执行集合初始化、旧 `user_profiles` 多人统计字段的分批补零迁移、过期房间清理和幂等记录清理；迁移完成后只读取完成状态，不再扫描资料集合。维护 action `prepareRoomSyncSignals` 只用于显式准备同步信号集合。个人统计字段不进入当前客户端 DTO。
+该函数不对客户端开放。定时或维护调用默认执行集合初始化、过期房间清理和幂等记录清理。维护 action `prepareRoomSyncSignals` 只用于显式准备同步信号集合。个人统计字段不进入当前客户端 DTO。
 
 ## 主要 DTO
 
