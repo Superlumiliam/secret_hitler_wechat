@@ -1,8 +1,9 @@
 ---
-status: implemented
+status: superseded
 type: rfc
 owners: []
 created_at: 2026-07-30
+superseded_by: 0008-async-multiplayer-stats-events.md
 ---
 
 # RFC-0007：多人对局个人统计
@@ -48,4 +49,4 @@ created_at: 2026-07-30
 
 ## 决策
 
-需求于 2026-07-30 确认并完成实现；旧资料只补 `0`，不追溯历史战绩。该方案不需要 ADR。
+需求于 2026-07-30 确认并完成实现；旧资料只补 `0`，不追溯历史战绩。2026-08-02 起，终局事务直接累计统计的方案由 [`RFC-0008`](0008-async-multiplayer-stats-events.md) 取代；字段与产品范围保持不变。

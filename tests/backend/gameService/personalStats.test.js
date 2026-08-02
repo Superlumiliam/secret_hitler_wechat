@@ -14,7 +14,7 @@ function makeMember(memberId, openId, overrides = {}) {
   };
 }
 
-async function assertCompletedNormalGameUpdatesOnlyRealPlayers() {
+async function assertCompletedNormalGameWritesOneEventWithoutUpdatingProfiles() {
   const db = createMemoryDb({
     rooms: {
       room_stats: {
@@ -53,6 +53,7 @@ async function assertCompletedNormalGameUpdatesOnlyRealPlayers() {
   ];
   const room = db.dump().rooms.room_stats;
   const gameCore = {
+    gameId: "game_stats",
     status: "ended",
     phase: "game_ended",
     winner: "LIBERAL",
@@ -64,21 +65,15 @@ async function assertCompletedNormalGameUpdatesOnlyRealPlayers() {
     },
   };
   const updatedAt = new Date("2026-07-30T12:00:00.000Z");
+  const statEvent = service.__testHooks.buildCompletedMultiplayerStatEvent(room, gameCore, members, updatedAt);
 
   await db.runTransaction(async (transaction) => {
-    const statUpdates = await service.__testHooks.prepareCompletedMultiplayerStatUpdates(
-      transaction,
-      room,
-      gameCore,
-      members,
-    );
-    assert.strictEqual(statUpdates.length, 2);
     await service.__testHooks.persistEndedRoomProjection(
       transaction,
       room.roomId,
       updatedAt,
       updatedAt,
-      statUpdates,
+      statEvent,
     );
   });
 
@@ -89,7 +84,8 @@ async function assertCompletedNormalGameUpdatesOnlyRealPlayers() {
       profiles.openid_1.multiplayerWinCount,
       profiles.openid_1.multiplayerLossCount,
     ],
-    [5, 4, 1],
+    [4, 3, 1],
+    "terminal persistence must not update existing personal statistics",
   );
   assert.deepStrictEqual(
     [
@@ -97,18 +93,30 @@ async function assertCompletedNormalGameUpdatesOnlyRealPlayers() {
       profiles.openid_2.multiplayerWinCount,
       profiles.openid_2.multiplayerLossCount,
     ],
-    [1, 0, 1],
-    "offline players must still receive the completed-game result",
+    [undefined, undefined, undefined],
+    "offline players must be deferred to the maintenance event",
   );
   assert.strictEqual(profiles.openid_spectator.multiplayerGameCount, undefined);
   assert.strictEqual(profiles.openid_virtual.multiplayerGameCount, undefined);
+  assert.strictEqual(db.stats().docGets.user_profiles || 0, 0, "terminal persistence must not read profile documents");
+
+  const storedEvent = db.dump().multiplayer_stat_events.game_stats;
+  assert.strictEqual(storedEvent.gameId, "game_stats");
+  assert.strictEqual(storedEvent.roomId, "room_stats");
+  assert.strictEqual(storedEvent.status, "pending");
+  assert.strictEqual(storedEvent.failureCount, 0);
+  assert.deepStrictEqual(storedEvent.players, [
+    { memberId: "mem_1", openId: "openid_1", didWin: true },
+    { memberId: "mem_2", openId: "openid_2", didWin: false },
+  ]);
 }
 
-async function assertSoloAndUnfinishedGamesDoNotPrepareStats() {
+async function assertSoloAndUnfinishedGamesDoNotBuildEvents() {
   const db = createMemoryDb();
   const { service } = loadGameService({ db });
   const member = makeMember("mem_1", "openid_1");
   const endedCore = {
+    gameId: "game_stats",
     status: "ended",
     phase: "game_ended",
     winner: "LIBERAL",
@@ -117,27 +125,26 @@ async function assertSoloAndUnfinishedGamesDoNotPrepareStats() {
     },
   };
 
-  await db.runTransaction(async (transaction) => {
-    const soloUpdates = await service.__testHooks.prepareCompletedMultiplayerStatUpdates(
-      transaction,
-      { roomId: "room_solo", mode: "solo" },
-      endedCore,
-      [member],
-    );
-    const unfinishedUpdates = await service.__testHooks.prepareCompletedMultiplayerStatUpdates(
-      transaction,
-      { roomId: "room_normal", mode: "normal" },
-      { ...endedCore, status: "in_game", phase: "nomination", winner: null },
-      [member],
-    );
-    assert.deepStrictEqual(soloUpdates, []);
-    assert.deepStrictEqual(unfinishedUpdates, []);
-  });
+  const now = new Date("2026-07-30T12:00:00.000Z");
+  const soloEvent = service.__testHooks.buildCompletedMultiplayerStatEvent(
+    { roomId: "room_solo", mode: "solo" },
+    endedCore,
+    [member],
+    now,
+  );
+  const unfinishedEvent = service.__testHooks.buildCompletedMultiplayerStatEvent(
+    { roomId: "room_normal", mode: "normal" },
+    { ...endedCore, status: "in_game", phase: "nomination", winner: null },
+    [member],
+    now,
+  );
+  assert.strictEqual(soloEvent, null);
+  assert.strictEqual(unfinishedEvent, null);
 }
 
 (async () => {
-  await assertCompletedNormalGameUpdatesOnlyRealPlayers();
-  await assertSoloAndUnfinishedGamesDoNotPrepareStats();
+  await assertCompletedNormalGameWritesOneEventWithoutUpdatingProfiles();
+  await assertSoloAndUnfinishedGamesDoNotBuildEvents();
   console.log("personal stats tests passed");
 })().catch((err) => {
   console.error(err);

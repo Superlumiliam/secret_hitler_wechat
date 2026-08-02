@@ -1,7 +1,7 @@
 const Module = require("module");
 const path = require("path");
 
-function createMemoryDb(initialData = {}) {
+function createMemoryDb(initialData = {}, options = {}) {
   const collections = {};
   let transactionQueue = Promise.resolve();
   const stats = {
@@ -56,16 +56,29 @@ function createMemoryDb(initialData = {}) {
         return { data: clone(ensureCollection(name).get(id)) };
       },
       async set({ data }) {
+        if (options.beforeDocOperation) {
+          await options.beforeDocOperation({ type: "set", collection: name, id, data });
+        }
         incrementStat(stats.docSets, name);
         ensureCollection(name).set(id, clone({ ...data, _id: id }));
         return {};
       },
       async update({ data }) {
+        if (options.beforeDocOperation) {
+          await options.beforeDocOperation({ type: "update", collection: name, id, data });
+        }
         incrementStat(stats.docUpdates, name);
         const collection = ensureCollection(name);
         const existing = collection.get(id) || { _id: id };
         collection.set(id, clone({ ...existing, ...data }));
         return {};
+      },
+      async remove() {
+        if (options.beforeDocOperation) {
+          await options.beforeDocOperation({ type: "remove", collection: name, id });
+        }
+        ensureCollection(name).delete(id);
+        return { stats: { removed: 1 } };
       },
     };
   }
@@ -131,7 +144,21 @@ function createMemoryDb(initialData = {}) {
     runTransaction(handler) {
       const execute = async () => {
         stats.transactions += 1;
-        return await handler({ collection: collectionApi });
+        const snapshot = {};
+        for (const [name, collection] of Object.entries(collections)) {
+          snapshot[name] = new Map(Array.from(collection.entries()).map(([id, value]) => [id, clone(value)]));
+        }
+        try {
+          return await handler({ collection: collectionApi });
+        } catch (err) {
+          for (const name of Object.keys(collections)) {
+            delete collections[name];
+          }
+          for (const [name, collection] of Object.entries(snapshot)) {
+            collections[name] = collection;
+          }
+          throw err;
+        }
       };
       const result = transactionQueue.then(execute, execute);
       transactionQueue = result.then(

@@ -17,6 +17,7 @@ const COLLECTIONS = [
   "game_core",
   "player_private_snapshots",
   "game_events",
+  "multiplayer_stat_events",
   "maintenance_state",
 ];
 const BATCH_LIMIT = 100;
@@ -30,6 +31,7 @@ const CHINA_TIMEZONE_OFFSET_MS = 8 * 60 * 60 * 1000;
 const ROOM_CLEANUP_CONCURRENCY = 3;
 const ROOM_DATA_CLEANUP_CONCURRENCY = 3;
 const COMMAND_RECORD_CLEANUP_CONCURRENCY = 5;
+const MULTIPLAYER_STAT_EVENT_CONCURRENCY = 3;
 
 async function mapWithConcurrency(items, concurrency, worker) {
   const list = Array.from(items || []);
@@ -522,6 +524,168 @@ async function cleanupCommandRecords(now) {
   };
 }
 
+function getMultiplayerStatCount(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+function getMultiplayerStatEventId(event) {
+  return (event && (event._id || event.gameId)) || "";
+}
+
+function validateMultiplayerStatEvent(event, eventId) {
+  if (
+    !event ||
+    event.gameId !== eventId ||
+    event.status !== "pending" ||
+    !Array.isArray(event.players) ||
+    !event.players.length
+  ) {
+    throw new Error("INVALID_MULTIPLAYER_STAT_EVENT");
+  }
+
+  const seenOpenIds = new Set();
+  for (const player of event.players) {
+    if (
+      !player ||
+      !player.memberId ||
+      !player.openId ||
+      typeof player.didWin !== "boolean" ||
+      seenOpenIds.has(player.openId)
+    ) {
+      throw new Error("INVALID_MULTIPLAYER_STAT_EVENT_PLAYER");
+    }
+    seenOpenIds.add(player.openId);
+  }
+}
+
+async function readTransactionDocument(ref) {
+  try {
+    const res = await ref.get();
+    return res.data || null;
+  } catch (err) {
+    if (isDocumentNotFoundError(err)) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+async function applyMultiplayerStatEvent(eventId, now) {
+  return await db.runTransaction(async (transaction) => {
+    const eventRef = transaction.collection("multiplayer_stat_events").doc(eventId);
+    const event = await readTransactionDocument(eventRef);
+    if (!event || event.status !== "pending") {
+      return { status: "missing" };
+    }
+
+    validateMultiplayerStatEvent(event, eventId);
+    for (const player of event.players) {
+      const profileRef = transaction.collection("user_profiles").doc(player.openId);
+      const profile = await readTransactionDocument(profileRef);
+      if (!profile) {
+        console.warn("multiplayer stat event profile missing", {
+          gameId: eventId,
+          memberId: player.memberId,
+        });
+        continue;
+      }
+
+      await profileRef.update({
+        data: {
+          multiplayerGameCount: getMultiplayerStatCount(profile.multiplayerGameCount) + 1,
+          multiplayerWinCount: getMultiplayerStatCount(profile.multiplayerWinCount) + (player.didWin ? 1 : 0),
+          multiplayerLossCount: getMultiplayerStatCount(profile.multiplayerLossCount) + (player.didWin ? 0 : 1),
+          updatedAt: now,
+        },
+      });
+    }
+
+    await eventRef.remove();
+    return { status: "processed" };
+  });
+}
+
+async function recordMultiplayerStatEventFailure(eventId, now) {
+  return await db.runTransaction(async (transaction) => {
+    const eventRef = transaction.collection("multiplayer_stat_events").doc(eventId);
+    const event = await readTransactionDocument(eventRef);
+    if (!event || event.status !== "pending") {
+      return { status: "missing" };
+    }
+
+    const failureCount = Number.isInteger(event.failureCount) && event.failureCount >= 0 ? event.failureCount : 0;
+    if (failureCount >= 2) {
+      await eventRef.remove();
+      return { status: "dropped" };
+    }
+
+    await eventRef.update({
+      data: {
+        failureCount: failureCount + 1,
+        lastFailedAt: now,
+        updatedAt: now,
+      },
+    });
+    return { status: "retryScheduled" };
+  });
+}
+
+async function processMultiplayerStatEvent(event, now) {
+  const eventId = getMultiplayerStatEventId(event);
+  if (!eventId) {
+    return { status: "missing" };
+  }
+
+  try {
+    return await applyMultiplayerStatEvent(eventId, now);
+  } catch (err) {
+    const errorCode = String((err && (err.errCode || err.code)) || "MULTIPLAYER_STAT_EVENT_PROCESSING_FAILED");
+    console.error("multiplayer stat event processing failed", {
+      gameId: eventId,
+      errorCode,
+    });
+    try {
+      const failureResult = await recordMultiplayerStatEventFailure(eventId, now);
+      if (failureResult.status === "dropped") {
+        console.error("multiplayer stat event dropped after three failed attempts", {
+          gameId: eventId,
+          errorCode,
+        });
+      }
+      return failureResult;
+    } catch (recordErr) {
+      console.error("multiplayer stat event failure could not be recorded", {
+        gameId: eventId,
+        errorCode: String(
+          (recordErr && (recordErr.errCode || recordErr.code)) || "MULTIPLAYER_STAT_EVENT_FAILURE_RECORD_FAILED",
+        ),
+      });
+      return { status: "retryScheduled" };
+    }
+  }
+}
+
+async function processPendingMultiplayerStatEvents(now) {
+  const res = await db
+    .collection("multiplayer_stat_events")
+    .where({
+      status: "pending",
+    })
+    .limit(BATCH_LIMIT)
+    .get();
+  const events = res.data || [];
+  const results = await mapWithConcurrency(events, MULTIPLAYER_STAT_EVENT_CONCURRENCY, async (event) => {
+    return await processMultiplayerStatEvent(event, now);
+  });
+
+  return {
+    scanned: events.length,
+    processed: results.filter((result) => result.status === "processed").length,
+    retryScheduled: results.filter((result) => result.status === "retryScheduled").length,
+    dropped: results.filter((result) => result.status === "dropped").length,
+  };
+}
+
 exports.main = async (event = {}) => {
   const startedAt = new Date();
   if (event.action === PREPARE_ROOM_SYNC_SIGNALS_ACTION) {
@@ -535,6 +699,20 @@ exports.main = async (event = {}) => {
   }
 
   const collectionInitResult = await ensureCollectionsDaily(startedAt);
+  let multiplayerStatEventResult;
+  try {
+    multiplayerStatEventResult = await processPendingMultiplayerStatEvents(startedAt);
+  } catch (err) {
+    console.error("multiplayer stat event batch failed", {
+      errorCode: String((err && (err.errCode || err.code)) || "MULTIPLAYER_STAT_EVENT_BATCH_FAILED"),
+    });
+    multiplayerStatEventResult = {
+      scanned: 0,
+      processed: 0,
+      retryScheduled: 0,
+      dropped: 0,
+    };
+  }
   const roomResult = await cleanupRooms(startedAt);
   const commandRecordResult = await cleanupCommandRecords(startedAt);
 
@@ -542,6 +720,7 @@ exports.main = async (event = {}) => {
     success: true,
     serverTime: new Date().toISOString(),
     ...collectionInitResult,
+    multiplayerStatEventResult,
     ...roomResult,
     ...commandRecordResult,
   };
@@ -549,11 +728,14 @@ exports.main = async (event = {}) => {
 
 exports.__testHooks = {
   COMMAND_RECORD_CLEANUP_CONCURRENCY,
+  MULTIPLAYER_STAT_EVENT_CONCURRENCY,
   PREPARE_ROOM_SYNC_SIGNALS_ACTION,
   ROOM_CLEANUP_CONCURRENCY,
   ROOM_DATA_CLEANUP_CONCURRENCY,
   cleanupCommandRecords,
   ensureCollectionsDaily,
   mapWithConcurrency,
+  processMultiplayerStatEvent,
+  processPendingMultiplayerStatEvents,
   removeRoomData,
 };

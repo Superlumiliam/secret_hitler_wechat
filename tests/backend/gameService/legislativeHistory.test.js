@@ -177,9 +177,12 @@ async function assertNormalEnactmentAndIdempotency() {
   );
   assert.deepStrictEqual(
     Object.values(db.dump().user_profiles).map((profile) => profile.multiplayerGameCount),
-    [1, 1, 1, 1, 1],
-    "idempotent retry must not count the completed game twice",
+    [0, 0, 0, 0, 0],
+    "terminal persistence must defer personal statistics to maintenance",
   );
+  const statEvents = db.dump().multiplayer_stat_events;
+  assert.deepStrictEqual(Object.keys(statEvents), [gameCore.gameId], "idempotent retry must keep one game event");
+  assert.strictEqual(statEvents[gameCore.gameId].players.length, 5);
 }
 
 async function assertVetoRequestAndRejectionDoNotCompleteRecord() {

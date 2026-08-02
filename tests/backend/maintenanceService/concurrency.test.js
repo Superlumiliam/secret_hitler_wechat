@@ -1,6 +1,7 @@
 const assert = require("assert");
 const Module = require("module");
 const path = require("path");
+const { createMemoryDb } = require("../helpers/loadGameService");
 
 const servicePath = path.resolve(__dirname, "../../../cloudfunctions/maintenanceService/index.js");
 
@@ -90,6 +91,7 @@ async function assertNewCollectionIsInitializedWithinSameDay() {
                     "rooms",
                     "room_members",
                     "room_public_snapshots",
+                    "room_sync_signals",
                     "user_profiles",
                     "command_records",
                     "game_core",
@@ -114,9 +116,9 @@ async function assertNewCollectionIsInitializedWithinSameDay() {
   });
   const result = await service.__testHooks.ensureCollectionsDaily(now);
 
-  assert.deepStrictEqual(createdCollections, ["room_sync_signals"]);
+  assert.deepStrictEqual(createdCollections, ["multiplayer_stat_events"]);
   assert.strictEqual(result.collectionInitSkipped, false);
-  assert(savedState.checkedCollections.includes("room_sync_signals"));
+  assert(savedState.checkedCollections.includes("multiplayer_stat_events"));
 }
 
 async function assertExplicitSyncSignalReleasePreparation() {
@@ -248,6 +250,202 @@ async function assertCommandRecordCleanupIsBoundedAndOrdered() {
   assert.deepStrictEqual(result.removedRecordIds, records.map((record) => record._id));
 }
 
+function createStatEvent(gameId, players, failureCount = 0) {
+  return {
+    gameId,
+    roomId: `room_${gameId}`,
+    status: "pending",
+    failureCount,
+    players,
+    createdAt: new Date("2026-08-02T08:00:00.000Z"),
+    updatedAt: new Date("2026-08-02T08:00:00.000Z"),
+  };
+}
+
+async function assertStatUpdateAndEventDeleteAreAtomic() {
+  let failEventDelete = true;
+  const db = createMemoryDb(
+    {
+      multiplayer_stat_events: {
+        game_atomic: createStatEvent("game_atomic", [
+          { memberId: "mem_atomic", openId: "openid_atomic", didWin: true },
+        ]),
+      },
+      user_profiles: {
+        openid_atomic: {
+          openid: "openid_atomic",
+          multiplayerGameCount: 4,
+          multiplayerWinCount: 2,
+          multiplayerLossCount: 2,
+        },
+      },
+    },
+    {
+      beforeDocOperation({ type, collection }) {
+        if (failEventDelete && type === "remove" && collection === "multiplayer_stat_events") {
+          const err = new Error("injected event delete failure");
+          err.code = "INJECTED_DELETE_FAILURE";
+          throw err;
+        }
+      },
+    },
+  );
+  const service = loadMaintenanceService({ db, deleteFile: async () => ({ fileList: [] }) });
+  const now = new Date("2026-08-02T09:00:00.000Z");
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const failedResult = await service.__testHooks.processMultiplayerStatEvent(
+      db.dump().multiplayer_stat_events.game_atomic,
+      now,
+    );
+    assert.strictEqual(failedResult.status, "retryScheduled");
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  let dump = db.dump();
+  assert.deepStrictEqual(
+    [
+      dump.user_profiles.openid_atomic.multiplayerGameCount,
+      dump.user_profiles.openid_atomic.multiplayerWinCount,
+      dump.user_profiles.openid_atomic.multiplayerLossCount,
+    ],
+    [4, 2, 2],
+    "a failed event delete must roll back profile updates",
+  );
+  assert.strictEqual(dump.multiplayer_stat_events.game_atomic.failureCount, 1);
+
+  failEventDelete = false;
+  const retryResult = await service.__testHooks.processMultiplayerStatEvent(
+    dump.multiplayer_stat_events.game_atomic,
+    new Date("2026-08-02T10:00:00.000Z"),
+  );
+  assert.strictEqual(retryResult.status, "processed");
+  dump = db.dump();
+  assert.deepStrictEqual(
+    [
+      dump.user_profiles.openid_atomic.multiplayerGameCount,
+      dump.user_profiles.openid_atomic.multiplayerWinCount,
+      dump.user_profiles.openid_atomic.multiplayerLossCount,
+    ],
+    [5, 3, 2],
+  );
+  assert.strictEqual(dump.multiplayer_stat_events.game_atomic, undefined);
+}
+
+async function assertStatEventIsDroppedAfterThreeFailedAttempts() {
+  const db = createMemoryDb({
+    multiplayer_stat_events: {
+      game_invalid: createStatEvent("game_invalid", []),
+    },
+  });
+  const service = loadMaintenanceService({ db, deleteFile: async () => ({ fileList: [] }) });
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const first = await service.__testHooks.processMultiplayerStatEvent(
+      db.dump().multiplayer_stat_events.game_invalid,
+      new Date("2026-08-02T09:00:00.000Z"),
+    );
+    assert.strictEqual(first.status, "retryScheduled");
+    assert.strictEqual(db.dump().multiplayer_stat_events.game_invalid.failureCount, 1);
+
+    const second = await service.__testHooks.processMultiplayerStatEvent(
+      db.dump().multiplayer_stat_events.game_invalid,
+      new Date("2026-08-02T10:00:00.000Z"),
+    );
+    assert.strictEqual(second.status, "retryScheduled");
+    assert.strictEqual(db.dump().multiplayer_stat_events.game_invalid.failureCount, 2);
+
+    const third = await service.__testHooks.processMultiplayerStatEvent(
+      db.dump().multiplayer_stat_events.game_invalid,
+      new Date("2026-08-02T11:00:00.000Z"),
+    );
+    assert.strictEqual(third.status, "dropped");
+    assert.strictEqual(db.dump().multiplayer_stat_events.game_invalid, undefined);
+  } finally {
+    console.error = originalConsoleError;
+  }
+}
+
+async function assertStatEventBatchIsIsolatedAndIdempotent() {
+  const db = createMemoryDb({
+    multiplayer_stat_events: {
+      game_valid: createStatEvent("game_valid", [
+        { memberId: "mem_valid", openId: "openid_valid", didWin: false },
+        { memberId: "mem_missing", openId: "openid_missing", didWin: true },
+      ]),
+      game_invalid: createStatEvent("game_invalid", []),
+    },
+    user_profiles: {
+      openid_valid: {
+        openid: "openid_valid",
+      },
+    },
+  });
+  const service = loadMaintenanceService({ db, deleteFile: async () => ({ fileList: [] }) });
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+  console.error = () => {};
+  console.warn = () => {};
+  try {
+    const result = await service.__testHooks.processPendingMultiplayerStatEvents(
+      new Date("2026-08-02T09:00:00.000Z"),
+    );
+    assert.deepStrictEqual(result, {
+      scanned: 2,
+      processed: 1,
+      retryScheduled: 1,
+      dropped: 0,
+    });
+  } finally {
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+  }
+
+  let dump = db.dump();
+  assert.deepStrictEqual(
+    [
+      dump.user_profiles.openid_valid.multiplayerGameCount,
+      dump.user_profiles.openid_valid.multiplayerWinCount,
+      dump.user_profiles.openid_valid.multiplayerLossCount,
+    ],
+    [1, 0, 1],
+  );
+  assert.strictEqual(dump.multiplayer_stat_events.game_valid, undefined);
+  assert.strictEqual(dump.multiplayer_stat_events.game_invalid.failureCount, 1);
+
+  const concurrentDb = createMemoryDb({
+    multiplayer_stat_events: {
+      game_concurrent: createStatEvent("game_concurrent", [
+        { memberId: "mem_concurrent", openId: "openid_concurrent", didWin: true },
+      ]),
+    },
+    user_profiles: {
+      openid_concurrent: { openid: "openid_concurrent" },
+    },
+  });
+  const concurrentService = loadMaintenanceService({
+    db: concurrentDb,
+    deleteFile: async () => ({ fileList: [] }),
+  });
+  const event = concurrentDb.dump().multiplayer_stat_events.game_concurrent;
+  const concurrentResults = await Promise.all([
+    concurrentService.__testHooks.processMultiplayerStatEvent(event, new Date("2026-08-02T09:00:00.000Z")),
+    concurrentService.__testHooks.processMultiplayerStatEvent(event, new Date("2026-08-02T09:00:00.000Z")),
+  ]);
+  assert.deepStrictEqual(
+    concurrentResults.map((result) => result.status).sort(),
+    ["missing", "processed"],
+  );
+  dump = concurrentDb.dump();
+  assert.strictEqual(dump.user_profiles.openid_concurrent.multiplayerGameCount, 1);
+  assert.strictEqual(dump.user_profiles.openid_concurrent.multiplayerWinCount, 1);
+  assert.strictEqual(dump.user_profiles.openid_concurrent.multiplayerLossCount, 0);
+  assert.strictEqual(dump.multiplayer_stat_events.game_concurrent, undefined);
+}
+
 (async () => {
   await assertConcurrencyLimit();
   await assertAssetFailurePreservesRoomData();
@@ -255,6 +453,9 @@ async function assertCommandRecordCleanupIsBoundedAndOrdered() {
   await assertExplicitSyncSignalReleasePreparation();
   await assertIndependentRoomDataCleanupIsBounded();
   await assertCommandRecordCleanupIsBoundedAndOrdered();
+  await assertStatUpdateAndEventDeleteAreAtomic();
+  await assertStatEventIsDroppedAfterThreeFailedAttempts();
+  await assertStatEventBatchIsIsolatedAndIdempotent();
   console.log("maintenance concurrency tests passed");
 })().catch((err) => {
   console.error(err);

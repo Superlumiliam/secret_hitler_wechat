@@ -1,7 +1,7 @@
 ---
 status: active
 authority: roadmap
-last_verified: 2026-07-30
+last_verified: 2026-08-02
 ---
 
 # 《secret dictator》1→100 路线图
@@ -39,7 +39,7 @@ MVP 功能闭环已经完成。本页只记录候选需求和工程改进，不�
 | 可选阶段倒计时 | `candidate` | 先决定超时后的服务端规则，不能由客户端自行结算 |
 | 新手主持提示增强 | `candidate` | 可折叠、低打扰，不能改变标准规则 |
 | 对局结果分享图 | `candidate` | 不泄露未公开信息；临时生成并控制云存储生命周期 |
-| 多人个人对局统计（仅后端） | `done` | 已按 [`RFC-0007`](rfcs/0007-multiplayer-personal-stats.md) 在正常终局事务中累计；新资料创建时初始化统计字段 |
+| 多人个人对局统计（仅后端） | `done` | 已按 [`RFC-0008`](rfcs/0008-async-multiplayer-stats-events.md) 由终局幂等事件异步累计；新资料创建时初始化统计字段 |
 | 投票记录按票型分组 | `done` | 已按 [`RFC-0005`](rfcs/0005-grouped-vote-records.md) 统一公开契约与三个页面展示 |
 | 历史轮次档案卡布局 | `done` | 已按 [`RFC-0006`](rfcs/0006-history-round-card-layout.md) 参考页面视觉基调实现四行轮次档案卡 |
 

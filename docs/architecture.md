@@ -1,7 +1,7 @@
 ---
 status: active
 authority: architecture
-last_verified: 2026-07-31
+last_verified: 2026-08-02
 ---
 
 # 《secret dictator》当前架构
@@ -42,7 +42,7 @@ flowchart LR
 - `bootstrapService` 只负责会话初始化、活跃房间恢复和清除恢复锚点。
 - `roomService` 负责大厅生命周期、席位、准备、房间设置和单人模式虚拟席位。
 - `gameService` 负责开局、游戏命令、快照读取、胜负和结果。
-- `maintenanceService` 负责集合初始化、过期房间清理、临时资源清理和幂等记录清理，不对客户端开放。
+- `maintenanceService` 负责集合初始化、多人统计事件消费、过期房间清理、临时资源清理和幂等记录清理，不对客户端开放。
 
 ## 数据模型
 
@@ -56,6 +56,7 @@ flowchart LR
 | `player_private_snapshots` | 单个席位的私密投影和待办 | 经鉴权云函数读取 |
 | `room_sync_signals` | `roomId`、房间状态和版本等无敏感通知 | 当前房间成员只读监听 |
 | `game_events` | 公开事件及内部排障所需事件数据 | 服务端 |
+| `multiplayer_stat_events` | 以 gameId 幂等标识的多人统计待处理事件 | 服务端 |
 | `command_records` | 写操作幂等记录，短期保留 | 服务端 |
 | `maintenance_state` | 维护初始化节流状态 | 服务端 |
 
@@ -92,7 +93,9 @@ nomination
 
 前端不能根据按钮点击结果推演下一状态；视图始终以最新服务端快照为准。
 
-普通多人房间进入合法终局时，服务端在同一事务中按冻结玩家名单、最终身份阵营和胜方更新 `user_profiles` 的 `multiplayerGameCount`、`multiplayerWinCount`、`multiplayerLossCount`。只统计真实玩家；观战者、虚拟席位、单人房间以及未进入终局的过期或中断房间不统计。局中离线玩家仍属于冻结玩家名单，若对局最终正常结束则照常累计。三个字段保持“对局数 = 胜局数 + 败局数”，终局状态和命令幂等共同防止重复累计。
+普通多人房间进入合法终局时，终局事务按 `gameId` 向 `multiplayer_stat_events` 写入一条 `pending` 事件，冻结真实玩家及其胜负，不读取或直接更新个人统计。观战者、虚拟席位、单人房间以及未进入终局的过期或中断房间不产生统计事件；局中离线玩家仍在事件中。维护链路对单条事件开启事务，重新读取事件和现有资料，更新 `user_profiles` 的 `multiplayerGameCount`、`multiplayerWinCount`、`multiplayerLossCount` 后在同一事务内删除事件。并发消费者以事件存在性裁决，保证同一事件最多累计一次，三个字段保持“对局数 = 胜局数 + 败局数”。
+
+统计消费失败时，统计写入和事件删除一并回滚；独立失败记录事务将 `failureCount` 从 `0` 递增到 `1`、`2`，第三次处理仍失败时删除事件并停止重试。整份资料缺失时跳过对应玩家并记录不含 openid 的诊断，不算处理失败。单条事件或批次查询失败不阻塞结果页、其他统计事件、房间清理和幂等记录清理；待处理事件不随房间数据删除。
 
 ## 公开、私密与真相隔离
 
@@ -131,6 +134,7 @@ nomination
 - 普通游戏操作不延长上述阶段过期时间。
 - 房间头像是临时资源，随房间清理。
 - `command_records` 按过期时间批量清理。
+- `multiplayer_stat_events` 成功处理后立即删除，不保留 processed 记录或 TTL；失败三次的事件也删除。
 - 维护任务使用有限并发，避免一次清理产生无界请求。
 
 集合初始化只允许出现在维护和发布初始化链路。`ensureCollectionsDaily()` 将“集合已存在”视为成功；业务 action 不得检查缺集合后创建并重试。新增集合时必须更新维护清单、部署并触发初始化。

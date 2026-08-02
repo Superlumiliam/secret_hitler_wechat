@@ -1,7 +1,7 @@
 ---
 status: active
 authority: api-contract
-last_verified: 2026-07-31
+last_verified: 2026-08-02
 ---
 
 # 《secret dictator》前后端 API
@@ -108,7 +108,7 @@ last_verified: 2026-07-31
 
 ### `maintenanceService`
 
-该函数不对客户端开放。定时或维护调用默认执行集合初始化、过期房间清理和幂等记录清理。维护 action `prepareRoomSyncSignals` 只用于显式准备同步信号集合。个人统计字段不进入当前客户端 DTO。
+该函数不对客户端开放。定时或维护调用默认执行集合初始化、多人统计待处理事件消费、过期房间清理和幂等记录清理。维护 action `prepareRoomSyncSignals` 只用于显式准备同步信号集合。默认结果中的 `multiplayerStatEventResult` 返回 `scanned`、`processed`、`retryScheduled` 和 `dropped` 计数，不包含玩家标识；个人统计字段不进入当前客户端 DTO。
 
 ## 主要 DTO
 
