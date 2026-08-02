@@ -839,7 +839,9 @@ function createEmptyHistoryRound(round, aliveMemberIds) {
       type: "pending_nomination",
       label: "等待提名",
     },
+    policyResult: null,
     executiveResult: null,
+    vetoResult: null,
   };
 }
 
@@ -996,6 +998,10 @@ function applyPublicHistoryEventToRound(roundItem, historyItem, members) {
 
   if (type === "VETO_REQUESTED") {
     roundItem.status = "legislating";
+    roundItem.vetoResult = {
+      status: "pending",
+      accepted: null,
+    };
     roundItem.outcome = {
       type: "vetoed",
       label: "否决待确认",
@@ -1004,6 +1010,10 @@ function applyPublicHistoryEventToRound(roundItem, historyItem, members) {
   }
 
   if (type === "VETO_RESPONDED") {
+    roundItem.vetoResult = {
+      status: historyItem.accepted ? "accepted" : "rejected",
+      accepted: Boolean(historyItem.accepted),
+    };
     if (historyItem.accepted) {
       roundItem.status = historyItem.winner ? "game_ended" : "completed";
       roundItem.outcome = {
@@ -1024,6 +1034,10 @@ function applyPublicHistoryEventToRound(roundItem, historyItem, members) {
 
   if (type === "POLICY_ENACTED") {
     const policyType = historyItem.enactedPolicy === "LIBERAL" ? "liberal_policy" : "fascist_policy";
+    roundItem.policyResult = {
+      type: policyType,
+      label: getPolicyLabel(historyItem.enactedPolicy),
+    };
     roundItem.status = historyItem.winner ? "game_ended" : historyItem.executiveActionType ? "executing" : "completed";
     roundItem.outcome = {
       type: historyItem.winner ? "win" : policyType,

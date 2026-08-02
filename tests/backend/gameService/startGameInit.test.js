@@ -522,6 +522,21 @@ function assertVetoPrivateAndHistoryProjection() {
     "否决通过",
     "accepted veto should use compact public label",
   );
+  assert.deepStrictEqual(acceptedHistory.rounds[3].vetoResult, { status: "accepted", accepted: true });
+
+  const rejectedHistory = buildPublicHistoryProjection(vetoCore, members, [
+    {
+      eventId: "evt_game_veto_3",
+      round: 4,
+      phase: "veto_response",
+      type: "VETO_RESPONDED",
+      createdAt: "2026-05-12T00:11:00.000Z",
+      presidentId: "mem_1",
+      chancellorId: "mem_2",
+      accepted: false,
+    },
+  ]);
+  assert.deepStrictEqual(rejectedHistory.rounds[3].vetoResult, { status: "rejected", accepted: false });
 }
 
 function makeExecutiveCore(actionType, overrides = {}) {
@@ -919,6 +934,10 @@ function assertHistoryProjectionPrivacyAndCurrentRound() {
     "极权派政策",
     "executive action should preserve enacted policy label",
   );
+  assert.deepStrictEqual(enactedExecutionHistory.rounds[0].policyResult, {
+    type: "fascist_policy",
+    label: "极权派政策",
+  });
   assert.strictEqual(
     enactedExecutionHistory.rounds[0].executiveResult,
     null,

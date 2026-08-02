@@ -200,6 +200,8 @@ last_verified: 2026-08-02
 
 `voteGroups` 两组成员 ID 按席位升序排列，互斥且并集等于本轮全部存活投票玩家；票数与对应数组长度一致。`history.rounds[].voteGroups` 在未揭示时为 `null`，揭示后使用相同结构；`voteSummary` 包含 `revealed`、`submittedCount`、`requiredCount`、`jaCount`、`neinCount`、`passed` 和 `electionTrackerCount`。未揭示时 `passed` 为 `null` 且计数为 `0`；揭示后 `passed` 表示该轮政府是否通过，未通过轮次的 `electionTrackerCount` 为该次失败后的历史计数，第三次失败即使触发混乱政策并重置实时计数器仍保留 `3`。公开 DTO 不再提供逐玩家 `votes` 或 `revealedVotes`。
 
+`history.rounds[]` 还包含公开复盘字段：总理颁布政策时 `policyResult` 为 `{ type: "liberal_policy" | "fascist_policy", label: "自由派政策" | "极权派政策" }`；总统完成权力时 `executiveResult` 记录权力类型与公开目标席位；总理提出或完成否决时 `vetoResult` 为 `{ status: "pending" | "accepted" | "rejected", accepted: boolean | null }`。这些字段只包含公开动作结果，不包含政策手牌或调查党派。
+
 ### `CommandAccepted`
 
 ```json

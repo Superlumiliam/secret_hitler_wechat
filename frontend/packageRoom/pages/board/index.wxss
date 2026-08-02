@@ -1582,13 +1582,13 @@
   position: relative;
   width: 100%;
   max-width: 244rpx;
-  height: 62rpx;
-  margin: 18rpx auto 0;
+  height: 70rpx;
+  margin: 34rpx auto 0;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #e9bf83;
-  font-size: 24rpx;
+  font-size: 30rpx;
   font-weight: 900;
   line-height: 1;
   text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.58);

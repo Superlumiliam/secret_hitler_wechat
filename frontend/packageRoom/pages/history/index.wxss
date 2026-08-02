@@ -308,7 +308,17 @@ page {
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+  flex-wrap: wrap;
   border-bottom: 1rpx solid rgba(151, 91, 39, 0.42);
+}
+
+.round-result-group {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10rpx;
 }
 
 .round-title {
@@ -352,6 +362,16 @@ page {
 .round-result-badge.is-failed {
   border-color: rgba(172, 60, 46, 0.88);
   background: linear-gradient(180deg, rgba(127, 42, 34, 0.94), rgba(77, 24, 22, 0.96));
+}
+
+.round-result-badge.is-liberal {
+  border-color: rgba(28, 127, 160, 0.86);
+  background: linear-gradient(180deg, rgba(19, 101, 132, 0.94), rgba(9, 57, 78, 0.96));
+}
+
+.round-result-badge.is-fascist {
+  border-color: rgba(171, 59, 45, 0.9);
+  background: linear-gradient(180deg, rgba(133, 43, 35, 0.94), rgba(79, 24, 22, 0.96));
 }
 
 .round-details {
@@ -409,6 +429,29 @@ page {
 .history-player-cards {
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.history-detail-content {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.history-action-text {
+  color: #e4c28f;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.history-action-content {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 10rpx;
 }

@@ -43,22 +43,45 @@
         <image wx:if="{{historyAssets.frame}}" class="round-frame-image" src="{{historyAssets.frame}}" mode="scaleToFill" webp="{{true}}" />
         <view class="round-header">
           <view class="round-title">{{item.roundTitle}}</view>
-          <view wx:if="{{item.showGovernmentResult}}" class="{{item.governmentResultClass}}">
-            {{item.governmentResultText}}
+          <view class="round-result-group">
+            <view wx:if="{{item.policyResult}}" class="{{item.policyResult.className}}">
+              {{item.policyResult.text}}
+            </view>
+            <view wx:if="{{item.showGovernmentResult}}" class="{{item.governmentResultClass}}">
+              {{item.governmentResultText}}
+            </view>
           </view>
         </view>
         <view class="round-details">
           <view wx:for="{{item.detailRows}}" wx:for-item="detailRow" wx:key="key" class="history-detail-row">
             <view class="{{detailRow.labelClass}}">{{detailRow.label}}</view>
-            <view class="history-player-cards">
-              <view
-                wx:for="{{detailRow.playerCards}}"
-                wx:for-item="playerCard"
-                wx:key="memberId"
-                class="history-player-card {{playerCard.cardClass}}"
-              >
-                {{playerCard.label}}
+            <view class="history-detail-content">
+              <view class="history-player-cards">
+                <view
+                  wx:for="{{detailRow.playerCards}}"
+                  wx:for-item="playerCard"
+                  wx:key="memberId"
+                  class="history-player-card {{playerCard.cardClass}}"
+                >
+                  {{playerCard.label}}
+                </view>
               </view>
+              <view wx:if="{{detailRow.actionSegments.length}}" class="history-action-content">
+                <block
+                  wx:for="{{detailRow.actionSegments}}"
+                  wx:for-item="actionSegment"
+                  wx:key="index"
+                >
+                  <view
+                    wx:if="{{actionSegment.isCard}}"
+                    class="history-player-card {{actionSegment.cardClass}}"
+                  >
+                    {{actionSegment.text}}
+                  </view>
+                  <text wx:else class="history-action-text">{{actionSegment.text}}</text>
+                </block>
+              </view>
+              <view wx:elif="{{detailRow.actionText}}" class="history-action-text">{{detailRow.actionText}}</view>
             </view>
           </view>
         </view>
