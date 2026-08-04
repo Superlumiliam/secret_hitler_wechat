@@ -268,7 +268,7 @@ async function assertStatUpdateAndEventDeleteAreAtomic() {
     {
       multiplayer_stat_events: {
         game_atomic: createStatEvent("game_atomic", [
-          { memberId: "mem_atomic", openId: "openid_atomic", didWin: true },
+          { memberId: "mem_atomic", openId: "openid_atomic", party: "LIBERAL", didWin: true },
         ]),
       },
       user_profiles: {
@@ -310,8 +310,10 @@ async function assertStatUpdateAndEventDeleteAreAtomic() {
       dump.user_profiles.openid_atomic.multiplayerGameCount,
       dump.user_profiles.openid_atomic.multiplayerWinCount,
       dump.user_profiles.openid_atomic.multiplayerLossCount,
+      dump.user_profiles.openid_atomic.liberalWinCount,
+      dump.user_profiles.openid_atomic.fascistWinCount,
     ],
-    [4, 2, 2],
+    [4, 2, 2, undefined, undefined],
     "a failed event delete must roll back profile updates",
   );
   assert.strictEqual(dump.multiplayer_stat_events.game_atomic.failureCount, 1);
@@ -328,8 +330,10 @@ async function assertStatUpdateAndEventDeleteAreAtomic() {
       dump.user_profiles.openid_atomic.multiplayerGameCount,
       dump.user_profiles.openid_atomic.multiplayerWinCount,
       dump.user_profiles.openid_atomic.multiplayerLossCount,
+      dump.user_profiles.openid_atomic.liberalWinCount,
+      dump.user_profiles.openid_atomic.fascistWinCount,
     ],
-    [5, 3, 2],
+    [5, 3, 2, 1, 0],
   );
   assert.strictEqual(dump.multiplayer_stat_events.game_atomic, undefined);
 }
@@ -369,12 +373,41 @@ async function assertStatEventIsDroppedAfterThreeFailedAttempts() {
   }
 }
 
+async function assertLegacyStatEventRemainsProcessable() {
+  const db = createMemoryDb({
+    multiplayer_stat_events: {
+      game_legacy: createStatEvent("game_legacy", [
+        { memberId: "mem_legacy", openId: "openid_legacy", didWin: true },
+      ]),
+    },
+    user_profiles: {
+      openid_legacy: {
+        openid: "openid_legacy",
+        liberalWinCount: 4,
+        fascistWinCount: 2,
+      },
+    },
+  });
+  const service = loadMaintenanceService({ db, deleteFile: async () => ({ fileList: [] }) });
+  const result = await service.__testHooks.processMultiplayerStatEvent(
+    db.dump().multiplayer_stat_events.game_legacy,
+    new Date("2026-08-04T09:00:00.000Z"),
+  );
+  assert.strictEqual(result.status, "processed");
+  const profile = db.dump().user_profiles.openid_legacy;
+  assert.strictEqual(profile.multiplayerGameCount, 1);
+  assert.strictEqual(profile.multiplayerWinCount, 1);
+  assert.strictEqual(profile.multiplayerLossCount, 0);
+  assert.strictEqual(profile.liberalWinCount, 4, "legacy events cannot infer the winning faction");
+  assert.strictEqual(profile.fascistWinCount, 2, "legacy events cannot infer the winning faction");
+}
+
 async function assertStatEventBatchIsIsolatedAndIdempotent() {
   const db = createMemoryDb({
     multiplayer_stat_events: {
       game_valid: createStatEvent("game_valid", [
-        { memberId: "mem_valid", openId: "openid_valid", didWin: false },
-        { memberId: "mem_missing", openId: "openid_missing", didWin: true },
+        { memberId: "mem_valid", openId: "openid_valid", party: "FASCIST", didWin: false },
+        { memberId: "mem_missing", openId: "openid_missing", party: "LIBERAL", didWin: true },
       ]),
       game_invalid: createStatEvent("game_invalid", []),
     },
@@ -410,8 +443,10 @@ async function assertStatEventBatchIsIsolatedAndIdempotent() {
       dump.user_profiles.openid_valid.multiplayerGameCount,
       dump.user_profiles.openid_valid.multiplayerWinCount,
       dump.user_profiles.openid_valid.multiplayerLossCount,
+      dump.user_profiles.openid_valid.liberalWinCount,
+      dump.user_profiles.openid_valid.fascistWinCount,
     ],
-    [1, 0, 1],
+    [1, 0, 1, 0, 0],
   );
   assert.strictEqual(dump.multiplayer_stat_events.game_valid, undefined);
   assert.strictEqual(dump.multiplayer_stat_events.game_invalid.failureCount, 1);
@@ -419,7 +454,7 @@ async function assertStatEventBatchIsIsolatedAndIdempotent() {
   const concurrentDb = createMemoryDb({
     multiplayer_stat_events: {
       game_concurrent: createStatEvent("game_concurrent", [
-        { memberId: "mem_concurrent", openId: "openid_concurrent", didWin: true },
+        { memberId: "mem_concurrent", openId: "openid_concurrent", party: "FASCIST", didWin: true },
       ]),
     },
     user_profiles: {
@@ -443,6 +478,8 @@ async function assertStatEventBatchIsIsolatedAndIdempotent() {
   assert.strictEqual(dump.user_profiles.openid_concurrent.multiplayerGameCount, 1);
   assert.strictEqual(dump.user_profiles.openid_concurrent.multiplayerWinCount, 1);
   assert.strictEqual(dump.user_profiles.openid_concurrent.multiplayerLossCount, 0);
+  assert.strictEqual(dump.user_profiles.openid_concurrent.liberalWinCount, 0);
+  assert.strictEqual(dump.user_profiles.openid_concurrent.fascistWinCount, 1);
   assert.strictEqual(dump.multiplayer_stat_events.game_concurrent, undefined);
 }
 
@@ -455,6 +492,7 @@ async function assertStatEventBatchIsIsolatedAndIdempotent() {
   await assertCommandRecordCleanupIsBoundedAndOrdered();
   await assertStatUpdateAndEventDeleteAreAtomic();
   await assertStatEventIsDroppedAfterThreeFailedAttempts();
+  await assertLegacyStatEventRemainsProcessable();
   await assertStatEventBatchIsIsolatedAndIdempotent();
   console.log("maintenance concurrency tests passed");
 })().catch((err) => {

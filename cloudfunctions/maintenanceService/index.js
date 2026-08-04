@@ -549,6 +549,7 @@ function validateMultiplayerStatEvent(event, eventId) {
       !player ||
       !player.memberId ||
       !player.openId ||
+      (player.party && !["LIBERAL", "FASCIST"].includes(player.party)) ||
       typeof player.didWin !== "boolean" ||
       seenOpenIds.has(player.openId)
     ) {
@@ -595,6 +596,10 @@ async function applyMultiplayerStatEvent(eventId, now) {
           multiplayerGameCount: getMultiplayerStatCount(profile.multiplayerGameCount) + 1,
           multiplayerWinCount: getMultiplayerStatCount(profile.multiplayerWinCount) + (player.didWin ? 1 : 0),
           multiplayerLossCount: getMultiplayerStatCount(profile.multiplayerLossCount) + (player.didWin ? 0 : 1),
+          liberalWinCount:
+            getMultiplayerStatCount(profile.liberalWinCount) + (player.party === "LIBERAL" && player.didWin ? 1 : 0),
+          fascistWinCount:
+            getMultiplayerStatCount(profile.fascistWinCount) + (player.party === "FASCIST" && player.didWin ? 1 : 0),
           updatedAt: now,
         },
       });

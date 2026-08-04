@@ -101,6 +101,8 @@ async function assertSameCommandCreatesOneRoom() {
   assert.strictEqual(dump.user_profiles.same_openid.multiplayerGameCount, 0);
   assert.strictEqual(dump.user_profiles.same_openid.multiplayerWinCount, 0);
   assert.strictEqual(dump.user_profiles.same_openid.multiplayerLossCount, 0);
+  assert.strictEqual(dump.user_profiles.same_openid.liberalWinCount, 0);
+  assert.strictEqual(dump.user_profiles.same_openid.fascistWinCount, 0);
   assert.strictEqual(Object.keys(dump.command_records).length, 1, "command result must be committed once");
 }
 

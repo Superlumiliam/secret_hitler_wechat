@@ -1496,6 +1496,7 @@ function buildCompletedMultiplayerStatEvent(room, gameCore, members, updatedAt) 
     players.push({
       memberId,
       openId: openid,
+      party,
       didWin: party === gameCore.winner,
     });
     seenOpenIds.add(openid);

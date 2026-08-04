@@ -31,6 +31,8 @@ async function assertCompletedNormalGameWritesOneEventWithoutUpdatingProfiles() 
         multiplayerGameCount: 4,
         multiplayerWinCount: 3,
         multiplayerLossCount: 1,
+        liberalWinCount: 2,
+        fascistWinCount: 1,
       },
       openid_2: {
         openid: "openid_2",
@@ -83,8 +85,10 @@ async function assertCompletedNormalGameWritesOneEventWithoutUpdatingProfiles() 
       profiles.openid_1.multiplayerGameCount,
       profiles.openid_1.multiplayerWinCount,
       profiles.openid_1.multiplayerLossCount,
+      profiles.openid_1.liberalWinCount,
+      profiles.openid_1.fascistWinCount,
     ],
-    [4, 3, 1],
+    [4, 3, 1, 2, 1],
     "terminal persistence must not update existing personal statistics",
   );
   assert.deepStrictEqual(
@@ -106,8 +110,8 @@ async function assertCompletedNormalGameWritesOneEventWithoutUpdatingProfiles() 
   assert.strictEqual(storedEvent.status, "pending");
   assert.strictEqual(storedEvent.failureCount, 0);
   assert.deepStrictEqual(storedEvent.players, [
-    { memberId: "mem_1", openId: "openid_1", didWin: true },
-    { memberId: "mem_2", openId: "openid_2", didWin: false },
+    { memberId: "mem_1", openId: "openid_1", party: "LIBERAL", didWin: true },
+    { memberId: "mem_2", openId: "openid_2", party: "FASCIST", didWin: false },
   ]);
 }
 

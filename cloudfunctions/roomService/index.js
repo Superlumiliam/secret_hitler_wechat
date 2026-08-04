@@ -562,6 +562,8 @@ async function upsertProfileInTransaction(transaction, openid, profile, data, cr
       multiplayerGameCount: 0,
       multiplayerWinCount: 0,
       multiplayerLossCount: 0,
+      liberalWinCount: 0,
+      fascistWinCount: 0,
       ...data,
       createdAt,
     },

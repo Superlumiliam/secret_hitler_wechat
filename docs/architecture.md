@@ -1,7 +1,7 @@
 ---
 status: active
 authority: architecture
-last_verified: 2026-08-02
+last_verified: 2026-08-04
 ---
 
 # 《secret dictator》当前架构
@@ -93,7 +93,7 @@ nomination
 
 前端不能根据按钮点击结果推演下一状态；视图始终以最新服务端快照为准。
 
-普通多人房间进入合法终局时，终局事务按 `gameId` 向 `multiplayer_stat_events` 写入一条 `pending` 事件，冻结真实玩家及其胜负，不读取或直接更新个人统计。观战者、虚拟席位、单人房间以及未进入终局的过期或中断房间不产生统计事件；局中离线玩家仍在事件中。维护链路对单条事件开启事务，重新读取事件和现有资料，更新 `user_profiles` 的 `multiplayerGameCount`、`multiplayerWinCount`、`multiplayerLossCount` 后在同一事务内删除事件。并发消费者以事件存在性裁决，保证同一事件最多累计一次，三个字段保持“对局数 = 胜局数 + 败局数”。
+普通多人房间进入合法终局时，终局事务按 `gameId` 向 `multiplayer_stat_events` 写入一条 `pending` 事件，冻结真实玩家、所属阵营及其胜负，不读取或直接更新个人统计。观战者、虚拟席位、单人房间以及未进入终局的过期或中断房间不产生统计事件；局中离线玩家仍在事件中。维护链路对单条事件开启事务，重新读取事件和现有资料，更新 `user_profiles` 的 `multiplayerGameCount`、`multiplayerWinCount`、`multiplayerLossCount`，并为获胜玩家递增其所属阵营的 `liberalWinCount` 或 `fascistWinCount`，最后在同一事务内删除事件。并发消费者以事件存在性裁决，保证同一事件最多累计一次，三个个人对局字段保持“对局数 = 胜局数 + 败局数”。
 
 统计消费失败时，统计写入和事件删除一并回滚；独立失败记录事务将 `failureCount` 从 `0` 递增到 `1`、`2`，第三次处理仍失败时删除事件并停止重试。整份资料缺失时跳过对应玩家并记录不含 openid 的诊断，不算处理失败。单条事件或批次查询失败不阻塞结果页、其他统计事件、房间清理和幂等记录清理；待处理事件不随房间数据删除。
 
@@ -139,7 +139,7 @@ nomination
 
 集合初始化只允许出现在维护和发布初始化链路。`ensureCollectionsDaily()` 将“集合已存在”视为成功；业务 action 不得检查缺集合后创建并重试。新增集合时必须更新维护清单、部署并触发初始化。
 
-新资料在创建时直接写入三个多人统计零值字段；已完成的历史资料补零不再由维护链路重复扫描。`maintenance_state` 仅保存维护初始化节流状态。
+新资料在创建时直接写入五个多人统计零值字段。旧资料的 `liberalWinCount` 和 `fascistWinCount` 已通过一次性迁移补齐，迁移状态文档 `user_profile_faction_stats_v1` 保留在 `maintenance_state` 中作为审计记录；常规定时维护不再读取该状态或扫描 `user_profiles`。
 
 资源优化的优先顺序是减少无变化快照读取、避免把心跳绑定到每次读取、控制维护底噪，再考虑差异化私密投影。差异化私密投影不得把 `version` 的递增本身视为席位变化；终局状态和过期时间变化时必须更新所有成员。任何优化都不能放宽鉴权、泄露真相或绕过状态机。
 
