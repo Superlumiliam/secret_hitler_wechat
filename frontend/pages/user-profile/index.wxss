@@ -97,7 +97,7 @@ button::after {
 
 .hero-subtitle,
 .field-label,
-.notice-title {
+.stats-title {
   margin-top: 20rpx;
   display: flex;
   align-items: center;
@@ -159,7 +159,7 @@ button::after {
 }
 
 .form-panel,
-.notice-panel {
+.stats-panel {
   position: relative;
   z-index: 2;
   margin-top: 48rpx;
@@ -173,7 +173,7 @@ button::after {
 }
 
 .field-label,
-.notice-title {
+.stats-title {
   margin-top: 0;
   color: #d6a464;
   font-size: 30rpx;
@@ -201,25 +201,44 @@ button::after {
   font-size: 24rpx;
 }
 
-.notice-panel {
+.stats-panel {
   margin-top: 28rpx;
-  padding-bottom: 32rpx;
+  padding: 30rpx 26rpx 34rpx;
 }
 
-.notice-row {
-  margin-top: 24rpx;
+.stats-grid {
+  margin-top: 28rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24rpx;
+}
+
+.stat-card {
+  position: relative;
+  box-sizing: border-box;
+  width: calc((100% - 24rpx) / 2);
+  height: 180rpx;
   display: flex;
   align-items: center;
-  gap: 22rpx;
-  color: #d6a464;
-  font-size: 26rpx;
+  justify-content: center;
+  border: 2rpx solid rgba(169, 111, 61, 0.48);
+  border-radius: 28rpx;
+  background: rgba(4, 16, 20, 0.58);
 }
 
-.notice-icon {
-  display: block;
-  width: 32rpx;
-  height: 32rpx;
-  flex: 0 0 32rpx;
+.stat-label {
+  position: absolute;
+  left: 22rpx;
+  top: 18rpx;
+  color: rgba(214, 164, 100, 0.9);
+  font-size: 23rpx;
+}
+
+.stat-value {
+  color: #f6dfb4;
+  font-size: 58rpx;
+  font-weight: 800;
+  transform: translateY(8rpx);
 }
 
 .save-button {

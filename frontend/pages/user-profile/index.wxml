@@ -58,23 +58,17 @@
       <view class="field-note">2-12个字符，创建后可修改</view>
     </view>
 
-    <view class="notice-panel">
-      <view class="notice-title">
+    <view class="stats-panel">
+      <view class="stats-title">
         <view class="label-line"></view>
-        <text>档案说明</text>
+        <text>个人战绩</text>
         <view class="label-line"></view>
       </view>
-      <view class="notice-row">
-        <image class="notice-icon" src="/assets/images/icons/logo-warn-clean.png" mode="aspectFit" />
-        <text>头像仅用于房间内展示</text>
-      </view>
-      <view class="notice-row">
-        <image class="notice-icon" src="/assets/images/icons/logo-warn-clean.png" mode="aspectFit" />
-        <text>用户名将显示给其他玩家</text>
-      </view>
-      <view class="notice-row">
-        <image class="notice-icon" src="/assets/images/icons/logo-warn-clean.png" mode="aspectFit" />
-        <text>请勿使用敏感信息</text>
+      <view class="stats-grid">
+        <view wx:for="{{personalStats}}" wx:key="key" class="stat-card">
+          <text class="stat-label">{{item.label}}</text>
+          <text class="stat-value">{{item.value}}</text>
+        </view>
       </view>
     </view>
 

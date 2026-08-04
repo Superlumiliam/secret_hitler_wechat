@@ -11,6 +11,39 @@ function isCloudFileId(fileId) {
   return typeof fileId === "string" && fileId.indexOf("cloud://") === 0;
 }
 
+function getStatCount(value) {
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 0 ? Math.floor(count) : 0;
+}
+
+function buildPersonalStats(profile) {
+  const totalGames = getStatCount(profile && profile.multiplayerGameCount);
+  const winCount = getStatCount(profile && profile.multiplayerWinCount);
+
+  return [
+    {
+      key: "total-games",
+      label: "总场次",
+      value: totalGames,
+    },
+    {
+      key: "win-rate",
+      label: "个人胜率",
+      value: `${totalGames ? Math.round((winCount / totalGames) * 100) : 0}%`,
+    },
+    {
+      key: "liberal-wins",
+      label: "自由派胜场数",
+      value: getStatCount(profile && profile.liberalWinCount),
+    },
+    {
+      key: "fascist-wins",
+      label: "极权派胜场数",
+      value: getStatCount(profile && profile.fascistWinCount),
+    },
+  ];
+}
+
 Page({
   data: {
     avatarUrl: "",
@@ -19,6 +52,7 @@ Page({
     backgroundSrc: "",
     backgroundVisible: true,
     displayName: "",
+    personalStats: buildPersonalStats(null),
     isSaving: false,
     defaultAvatarSrc: "",
     redirect: "",
@@ -32,6 +66,7 @@ Page({
         avatarUrl,
         avatarPreviewSrc: isCloudFileId(avatarUrl) ? "" : avatarUrl,
         displayName: cached.displayName || "",
+        personalStats: buildPersonalStats(cached),
       });
     }
 
@@ -147,10 +182,16 @@ Page({
     });
 
     try {
+      const cachedProfile = userProfileStore.getCachedProfile() || {};
       const savedProfile = {
         profileCompleted: true,
         displayName,
         avatarUrl: this.getProfileAvatarUrl(),
+        multiplayerGameCount: getStatCount(cachedProfile.multiplayerGameCount),
+        multiplayerWinCount: getStatCount(cachedProfile.multiplayerWinCount),
+        multiplayerLossCount: getStatCount(cachedProfile.multiplayerLossCount),
+        liberalWinCount: getStatCount(cachedProfile.liberalWinCount),
+        fascistWinCount: getStatCount(cachedProfile.fascistWinCount),
         updatedAt: new Date().toISOString(),
       };
 
