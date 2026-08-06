@@ -1,7 +1,7 @@
 ---
 status: active
 authority: api-contract
-last_verified: 2026-08-04
+last_verified: 2026-08-06
 ---
 
 # 《secret dictator》前后端 API
@@ -65,11 +65,14 @@ last_verified: 2026-08-04
 | --- | --- | --- |
 | `ensureSession` | `{}` | `{ user: { sessionReady }, activeRoom }` |
 | `recoverActiveRoom` | `{}` | 同上，并刷新有效真实成员的在线状态 |
+| `getPersonalStats` | `{}` | `PersonalStats` |
 | `clearActiveRoom` | `{ roomId? }` | `{ activeRoom: null }` |
 
 `activeRoom` 为 `null` 或包含 `roomId`、`roomCode`、`roomStatus`、`memberId`、`routeHint`、`version` 和时间字段。`routeHint` 为 `lobby`、`board` 或 `result`。
 
 `clearActiveRoom` 传入 `roomId` 时仅在资料中的恢复锚点仍指向该房间时清除；若已切换到其他房间则成功返回但不修改。成功清除会抑制成员扫描重新写回同一锚点，直到创建或加入新的有效房间。保留空 payload 的无条件清除语义以兼容旧客户端。
+
+`getPersonalStats` 只读取云函数上下文中当前 openid 对应的资料，不接受目标用户标识。资料或旧统计字段缺失时按 `0` 返回。
 
 ### `roomService`
 
@@ -108,9 +111,23 @@ last_verified: 2026-08-04
 
 ### `maintenanceService`
 
-该函数不对客户端开放。定时或维护调用默认执行集合初始化、多人统计待处理事件消费、过期房间清理和幂等记录清理。阵营胜场字段的旧资料迁移已完成，迁移状态文档仅作为历史审计保留，不再由定时任务读取或扫描资料集合。维护 action `prepareRoomSyncSignals` 只用于显式准备同步信号集合。默认结果中的 `multiplayerStatEventResult` 返回 `scanned`、`processed`、`retryScheduled` 和 `dropped` 计数；结果不包含玩家标识，个人统计字段不进入当前客户端 DTO。
+该函数不对客户端开放。定时或维护调用默认执行集合初始化、多人统计待处理事件消费、过期房间清理和幂等记录清理。阵营胜场字段的旧资料迁移已完成，迁移状态文档仅作为历史审计保留，不再由定时任务读取或扫描资料集合。维护 action `prepareRoomSyncSignals` 只用于显式准备同步信号集合。默认结果中的 `multiplayerStatEventResult` 返回 `scanned`、`processed`、`retryScheduled` 和 `dropped` 计数；结果不包含玩家标识，个人统计只通过 `bootstrapService.getPersonalStats` 返回给本人。
 
 ## 主要 DTO
+
+### `PersonalStats`
+
+```json
+{
+  "multiplayerGameCount": 8,
+  "multiplayerWinCount": 5,
+  "multiplayerLossCount": 3,
+  "liberalWinCount": 2,
+  "fascistWinCount": 3
+}
+```
+
+五个字段均为非负整数，只读且由服务端统计链路维护。客户端不能提交这些字段。
 
 ### `LobbyView`
 

@@ -5,6 +5,7 @@ const DEFAULT_AVATAR_FILE_ID = `${CLOUD_ASSET_ROOT}man-in-black.webp`;
 const DISPLAY_NAME_MIN_LENGTH = 2;
 const DISPLAY_NAME_MAX_LENGTH = 12;
 const { resolveTempFileUrls } = require("../../utils/tempFileUrlCache");
+const bootstrapService = require("../../services/bootstrapService");
 const userProfileStore = require("../../utils/userProfileStore");
 
 function isCloudFileId(fileId) {
@@ -66,7 +67,6 @@ Page({
         avatarUrl,
         avatarPreviewSrc: isCloudFileId(avatarUrl) ? "" : avatarUrl,
         displayName: cached.displayName || "",
-        personalStats: buildPersonalStats(cached),
       });
     }
 
@@ -75,6 +75,17 @@ Page({
     });
 
     this.loadCloudAssets();
+  },
+
+  async onShow() {
+    try {
+      const stats = await bootstrapService.getPersonalStats();
+      this.setData({
+        personalStats: buildPersonalStats(stats),
+      });
+    } catch (err) {
+      console.error("获取个人战绩失败", err);
+    }
   },
 
   loadCloudAssets() {
@@ -182,16 +193,10 @@ Page({
     });
 
     try {
-      const cachedProfile = userProfileStore.getCachedProfile() || {};
       const savedProfile = {
         profileCompleted: true,
         displayName,
         avatarUrl: this.getProfileAvatarUrl(),
-        multiplayerGameCount: getStatCount(cachedProfile.multiplayerGameCount),
-        multiplayerWinCount: getStatCount(cachedProfile.multiplayerWinCount),
-        multiplayerLossCount: getStatCount(cachedProfile.multiplayerLossCount),
-        liberalWinCount: getStatCount(cachedProfile.liberalWinCount),
-        fascistWinCount: getStatCount(cachedProfile.fascistWinCount),
         updatedAt: new Date().toISOString(),
       };
 

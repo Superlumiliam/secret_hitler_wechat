@@ -87,6 +87,20 @@ async function getProfile(openid) {
   }
 }
 
+function getPersonalStatCount(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+function buildPersonalStats(profile) {
+  return {
+    multiplayerGameCount: getPersonalStatCount(profile && profile.multiplayerGameCount),
+    multiplayerWinCount: getPersonalStatCount(profile && profile.multiplayerWinCount),
+    multiplayerLossCount: getPersonalStatCount(profile && profile.multiplayerLossCount),
+    liberalWinCount: getPersonalStatCount(profile && profile.liberalWinCount),
+    fascistWinCount: getPersonalStatCount(profile && profile.fascistWinCount),
+  };
+}
+
 async function getTransactionDocument(documentRef) {
   try {
     return (await documentRef.get()).data || null;
@@ -418,6 +432,10 @@ async function recoverActiveRoom(openid) {
   });
 }
 
+async function getPersonalStats(openid) {
+  return ok(buildPersonalStats(await getProfile(openid)));
+}
+
 async function clearActiveRoom(payload, openid) {
   if (
     Object.prototype.hasOwnProperty.call(payload, "roomId") &&
@@ -450,6 +468,8 @@ async function dispatchAction(action, payload, openid) {
       return await ensureSession(openid);
     case "recoverActiveRoom":
       return await recoverActiveRoom(openid);
+    case "getPersonalStats":
+      return await getPersonalStats(openid);
     case "clearActiveRoom":
       return await clearActiveRoom(payload, openid);
     default:

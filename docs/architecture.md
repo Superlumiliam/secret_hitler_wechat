@@ -1,7 +1,7 @@
 ---
 status: active
 authority: architecture
-last_verified: 2026-08-04
+last_verified: 2026-08-06
 ---
 
 # 《secret dictator》当前架构
@@ -39,7 +39,7 @@ flowchart LR
     MAINT --> STORE
 ```
 
-- `bootstrapService` 只负责会话初始化、活跃房间恢复和清除恢复锚点。
+- `bootstrapService` 负责会话初始化、活跃房间恢复、清除恢复锚点和当前用户个人战绩的只读查询。
 - `roomService` 负责大厅生命周期、席位、准备、房间设置和单人模式虚拟席位。
 - `gameService` 负责开局、游戏命令、快照读取、胜负和结果。
 - `maintenanceService` 负责集合初始化、多人统计事件消费、过期房间清理、临时资源清理和幂等记录清理，不对客户端开放。
@@ -96,6 +96,8 @@ nomination
 普通多人房间进入合法终局时，终局事务按 `gameId` 向 `multiplayer_stat_events` 写入一条 `pending` 事件，冻结真实玩家、所属阵营及其胜负，不读取或直接更新个人统计。观战者、虚拟席位、单人房间以及未进入终局的过期或中断房间不产生统计事件；局中离线玩家仍在事件中。维护链路对单条事件开启事务，重新读取事件和现有资料，更新 `user_profiles` 的 `multiplayerGameCount`、`multiplayerWinCount`、`multiplayerLossCount`，并为获胜玩家递增其所属阵营的 `liberalWinCount` 或 `fascistWinCount`，最后在同一事务内删除事件。并发消费者以事件存在性裁决，保证同一事件最多累计一次，三个个人对局字段保持“对局数 = 胜局数 + 败局数”。
 
 统计消费失败时，统计写入和事件删除一并回滚；独立失败记录事务将 `failureCount` 从 `0` 递增到 `1`、`2`，第三次处理仍失败时删除事件并停止重试。整份资料缺失时跳过对应玩家并记录不含 openid 的诊断，不算处理失败。单条事件或批次查询失败不阻塞结果页、其他统计事件、房间清理和幂等记录清理；待处理事件不随房间数据删除。
+
+个人资料页不直接读取数据库，也不把本地资料缓存作为战绩权威来源。页面显示时通过 `bootstrapService.getPersonalStats` 按当前云函数 openid 读取五个聚合统计字段；用户名和头像的本地保存不携带统计字段，客户端不能指定目标用户或写入战绩。
 
 ## 公开、私密与真相隔离
 

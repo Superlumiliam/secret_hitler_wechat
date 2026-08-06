@@ -44,6 +44,10 @@ async function recoverActiveRoom() {
   return await callBootstrapService("recoverActiveRoom", {}, "恢复房间失败");
 }
 
+async function getPersonalStats() {
+  return await callBootstrapService("getPersonalStats", {}, "获取个人战绩失败");
+}
+
 async function clearActiveRoom(roomId) {
   const payload = roomId ? { roomId } : {};
   return await callBootstrapService("clearActiveRoom", payload, "清理活跃房间失败");
@@ -52,5 +56,6 @@ async function clearActiveRoom(roomId) {
 module.exports = {
   clearActiveRoom,
   ensureSession,
+  getPersonalStats,
   recoverActiveRoom,
 };

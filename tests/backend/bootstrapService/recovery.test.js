@@ -455,6 +455,64 @@ async function assertLegacyClearRemainsSupported() {
   );
 }
 
+async function assertPersonalStatsComeFromCurrentUsersProfile() {
+  const db = createMemoryDb({
+    user_profiles: {
+      openid_1: createProfile({
+        multiplayerGameCount: 7,
+        multiplayerWinCount: 4,
+        multiplayerLossCount: 3,
+        liberalWinCount: 3,
+        fascistWinCount: 1,
+      }),
+      openid_other: {
+        _id: "openid_other",
+        openid: "openid_other",
+        multiplayerGameCount: 99,
+      },
+    },
+  });
+  const { service } = loadBootstrapService({ db, openId: "openid_1" });
+  const response = await service.main({
+    action: "getPersonalStats",
+    payload: { openid: "openid_other" },
+  });
+
+  assert.strictEqual(response.success, true);
+  assert.deepStrictEqual(response.data, {
+    multiplayerGameCount: 7,
+    multiplayerWinCount: 4,
+    multiplayerLossCount: 3,
+    liberalWinCount: 3,
+    fascistWinCount: 1,
+  });
+}
+
+async function assertMissingAndInvalidPersonalStatsDefaultToZero() {
+  const db = createMemoryDb({
+    user_profiles: {
+      openid_1: createProfile({
+        multiplayerGameCount: -1,
+        multiplayerWinCount: "2",
+        multiplayerLossCount: 1.5,
+      }),
+    },
+  });
+  const { service, setOpenId } = loadBootstrapService({ db, openId: "openid_1" });
+  const invalidResponse = await service.main({ action: "getPersonalStats", payload: {} });
+  assert.deepStrictEqual(invalidResponse.data, {
+    multiplayerGameCount: 0,
+    multiplayerWinCount: 0,
+    multiplayerLossCount: 0,
+    liberalWinCount: 0,
+    fascistWinCount: 0,
+  });
+
+  setOpenId("openid_missing");
+  const missingResponse = await service.main({ action: "getPersonalStats", payload: {} });
+  assert.deepStrictEqual(missingResponse.data, invalidResponse.data);
+}
+
 (async () => {
   await assertEmptyRecovery();
   await assertExistingEndedAnchorStillRecovers();
@@ -469,6 +527,8 @@ async function assertLegacyClearRemainsSupported() {
   await assertTouchTransactionFailureIsRetryable();
   await assertConditionalClearOnlyClearsMatchingRoom();
   await assertLegacyClearRemainsSupported();
+  await assertPersonalStatsComeFromCurrentUsersProfile();
+  await assertMissingAndInvalidPersonalStatsDefaultToZero();
   console.log("bootstrap recovery tests passed");
 })().catch((err) => {
   console.error(err);
