@@ -85,6 +85,7 @@ Page({
     board: null,
     seats: [],
     seatSectionCollapsed: false,
+    hideTeammates: false,
     avatarTempUrlByFileId: {},
     policyAssets: {},
     activePowerTipSlot: 0,
@@ -170,6 +171,7 @@ Page({
     this.setData({
       roomId: options.roomId || "",
       controlledMemberId: options.controlledMemberId || "",
+      hideTeammates: false,
     });
     setupPageTimeout(this, {
       timeoutMs: GAME_PAGE_TIMEOUT_MS,
@@ -736,11 +738,18 @@ Page({
     return gameMapper.createBoard(snapshot, assets);
   },
 
-  createSeats(snapshot, avatarUrlByFileId, identityJudgmentByMemberId = {}, assets = {}) {
+  createSeats(
+    snapshot,
+    avatarUrlByFileId,
+    identityJudgmentByMemberId = {},
+    assets = {},
+    hideTeammates = this.data.hideTeammates,
+  ) {
     return gameMapper.createSeats(snapshot, {
       avatarUrlByFileId,
       identityJudgmentByMemberId,
       assets,
+      hideTeammates,
       selectedNominationTargetId: this.data.selectedNominationTargetId || "",
       selectedExecutiveTargetId: this.data.selectedExecutiveTargetId || "",
     });
@@ -1229,6 +1238,14 @@ Page({
     });
   },
 
+  onToggleTeammateDisplay() {
+    const hideTeammates = !this.data.hideTeammates;
+    this.setData({
+      hideTeammates,
+    });
+    this.refreshSeatViews(this.data.identityJudgmentByMemberId || {}, hideTeammates);
+  },
+
   async onTapSeat(event) {
     const memberId = (event.detail && event.detail.memberId) || event.currentTarget.dataset.memberId;
     if (!memberId) {
@@ -1298,6 +1315,7 @@ Page({
       Boolean(previousControlledMemberId) !== Boolean(nextControlledMemberId);
     this.setData({
       controlledMemberId: nextControlledMemberId,
+      hideTeammates: false,
       errorText: "",
     });
     await this.loadGameSnapshot();
@@ -1496,7 +1514,10 @@ Page({
     this.refreshSeatViews(nextJudgments);
   },
 
-  refreshSeatViews(identityJudgmentByMemberId = this.data.identityJudgmentByMemberId || {}) {
+  refreshSeatViews(
+    identityJudgmentByMemberId = this.data.identityJudgmentByMemberId || {},
+    hideTeammates = this.data.hideTeammates,
+  ) {
     const snapshot = this.data.snapshot;
     if (!snapshot) {
       return;
@@ -1507,6 +1528,7 @@ Page({
         this.data.avatarTempUrlByFileId || {},
         identityJudgmentByMemberId,
         this.data.policyAssets || {},
+        hideTeammates,
       ),
       selectedNominationTargetId: this.resolveSelectedNominationTargetId(snapshot),
       selectedNominationTargetLabel: this.createSelectedNominationTargetLabel(snapshot),

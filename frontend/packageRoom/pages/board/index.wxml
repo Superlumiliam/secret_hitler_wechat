@@ -79,6 +79,13 @@
           aria-label="{{seatSectionCollapsed ? '展开玩家席位' : '收起玩家席位'}}"
         >
           <view class="seat-section-toggle-label">玩家席位</view>
+          <view
+            class="seat-section-toggle-action seat-section-teammate-toggle {{hideTeammates ? 'is-active' : ''}}"
+            catchtap="onToggleTeammateDisplay"
+            hover-class="seat-section-toggle-hover"
+            role="button"
+            aria-label="{{hideTeammates ? '显示队友' : '隐藏队友'}}"
+          >{{hideTeammates ? '显示队友' : '隐藏队友'}}</view>
           <view class="seat-section-toggle-action">{{seatSectionCollapsed ? '展开' : '收起'}}</view>
           <view class="seat-section-toggle-arrow" aria-hidden="true">{{seatSectionCollapsed ? '⌄' : '⌃'}}</view>
         </view>

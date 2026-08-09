@@ -302,6 +302,15 @@
   letter-spacing: 4rpx;
 }
 
+.seat-section-teammate-toggle {
+  margin-right: 20rpx;
+}
+
+.seat-section-teammate-toggle.is-active {
+  color: #f0c184;
+  text-shadow: 0 0 8rpx rgba(240, 193, 132, 0.42);
+}
+
 .seat-section-toggle-arrow {
   width: 34rpx;
   margin-left: 8rpx;

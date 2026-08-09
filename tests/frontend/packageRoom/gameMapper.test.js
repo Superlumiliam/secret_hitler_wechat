@@ -47,6 +47,12 @@ function seatFrameByMemberId(snapshot, customAssets = assets) {
   );
 }
 
+function seatViewsByMemberId(snapshot, options = {}) {
+  return Object.fromEntries(
+    gameMapper.createSeats(snapshot, { assets, ...options }).map((seat) => [seat.memberId, seat]),
+  );
+}
+
 function assertFascistViewerSeesDictatorSeat() {
   const frames = seatFrameByMemberId(
     makeSnapshot({
@@ -73,6 +79,51 @@ function assertDictatorViewerSeesOwnSeat() {
   assert.strictEqual(frames.viewer, assets.playerSeatHitler);
   assert.strictEqual(frames.dictator, assets.playerSeat);
   assert.strictEqual(frames.other, assets.playerSeat);
+}
+
+function assertFascistViewerCanHideFactionMarkers() {
+  const snapshot = makeSnapshot({
+    role: "FASCIST",
+    party: "FASCIST",
+    knownMembers: [{ memberId: "dictator", role: "HITLER", party: "FASCIST" }],
+  });
+  const seats = seatViewsByMemberId(snapshot, { hideTeammates: true });
+
+  assert.deepStrictEqual(
+    Object.values(seats).map((seat) => seat.seatFrameSrc),
+    [assets.playerSeat, assets.playerSeat, assets.playerSeat],
+  );
+  assert.deepStrictEqual(
+    Object.values(seats).map((seat) => seat.nameClass),
+    ["seat-name", "seat-name", "seat-name"],
+  );
+}
+
+function assertNonFascistViewerIsUnaffectedByTeammateDisplay() {
+  const snapshot = makeSnapshot({
+    role: "LIBERAL",
+    party: "LIBERAL",
+    knownMembers: [],
+  });
+  const visibleMarkers = seatViewsByMemberId(snapshot, { hideTeammates: false });
+  const hiddenMarkers = seatViewsByMemberId(snapshot, { hideTeammates: true });
+
+  assert.deepStrictEqual(
+    Object.values(hiddenMarkers).map((seat) => [seat.seatFrameSrc, seat.nameClass]),
+    Object.values(visibleMarkers).map((seat) => [seat.seatFrameSrc, seat.nameClass]),
+  );
+
+  const spectatorSnapshot = makeSnapshot({});
+  spectatorSnapshot.viewerState = {
+    isSpectatorView: true,
+    hasPrivateView: false,
+  };
+  const spectatorVisibleMarkers = seatViewsByMemberId(spectatorSnapshot, { hideTeammates: false });
+  const spectatorHiddenMarkers = seatViewsByMemberId(spectatorSnapshot, { hideTeammates: true });
+  assert.deepStrictEqual(
+    Object.values(spectatorHiddenMarkers).map((seat) => [seat.seatFrameSrc, seat.nameClass]),
+    Object.values(spectatorVisibleMarkers).map((seat) => [seat.seatFrameSrc, seat.nameClass]),
+  );
 }
 
 function assertLiberalViewerSeesOnlyNormalSeats() {
@@ -178,6 +229,8 @@ function assertVoteResultExpandsForWrappedVoteGroups() {
 
 assertFascistViewerSeesDictatorSeat();
 assertDictatorViewerSeesOwnSeat();
+assertFascistViewerCanHideFactionMarkers();
+assertNonFascistViewerIsUnaffectedByTeammateDisplay();
 assertLiberalViewerSeesOnlyNormalSeats();
 assertMissingSpecialAssetFallsBackToNormalSeat();
 assertSubmittedVoteSeatHasArchivedState();

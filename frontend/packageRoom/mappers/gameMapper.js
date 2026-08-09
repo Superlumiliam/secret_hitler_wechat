@@ -144,6 +144,7 @@ function createSeats(snapshot, options = {}) {
   const assets = options.assets || {};
   const selectedNominationTargetId = options.selectedNominationTargetId || "";
   const selectedExecutiveTargetId = options.selectedExecutiveTargetId || "";
+  const hideTeammates = Boolean(options.hideTeammates);
   const publicState = (snapshot && snapshot.publicState) || {};
   const presidentCandidateId = publicState.currentPresidentCandidateId;
   const chancellorCandidateId = publicState.currentChancellorCandidateId;
@@ -156,8 +157,13 @@ function createSeats(snapshot, options = {}) {
   const executiveTargetByMemberId = taskMapper.createExecutiveTargetMap(snapshot);
   const investigationMarkByMemberId = createInvestigationMarkMap(snapshot);
   const privateIdentity = ((snapshot && snapshot.privateState) || {}).identity || {};
-  const visibleFascistNameMemberIds = createVisibleFascistNameMemberIdSet(snapshot);
-  const visibleHitlerSeatMemberIds = createVisibleHitlerSeatMemberIdSet(snapshot);
+  const hideFactionMarkers = hideTeammates && privateIdentity.party === "FASCIST";
+  const visibleFascistNameMemberIds = hideFactionMarkers
+    ? new Set()
+    : createVisibleFascistNameMemberIdSet(snapshot);
+  const visibleHitlerSeatMemberIds = hideFactionMarkers
+    ? new Set()
+    : createVisibleHitlerSeatMemberIdSet(snapshot);
   const resolvedSelectedNominationTargetId = taskMapper.resolveSelectedNominationTargetId(
     snapshot,
     selectedNominationTargetId,
