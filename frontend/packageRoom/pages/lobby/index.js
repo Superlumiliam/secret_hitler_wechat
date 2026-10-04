@@ -23,7 +23,7 @@ const {
   syncPageTimeoutDeadline,
 } = require("../../../utils/pageTimeout");
 const { clearGameSnapshotCache } = require("../../../utils/gameSnapshotCache");
-const { reLaunchPage } = require("../../../utils/protectedPageRoute");
+const { buildPageUrl, reLaunchIfPageStacked, reLaunchPage } = require("../../../utils/protectedPageRoute");
 const { buildRoomShare, enableShareMenu } = require("../../../utils/share");
 const { resolveTempFileUrls } = require("../../../utils/tempFileUrlCache");
 const { createRoomSyncSignalWatcher } = require("../../utils/roomSyncSignal");
@@ -186,6 +186,10 @@ Page({
   },
 
   onLoad(options = {}) {
+    if (reLaunchIfPageStacked(buildPageUrl("/packageRoom/pages/lobby/index", options), this)) {
+      return;
+    }
+
     this.initialSnapshotSettled = false;
     this.shouldStartRefreshAfterInitial = false;
     this.isPageVisible = false;
@@ -844,7 +848,7 @@ Page({
 
       this.cacheInitialLobbySnapshot(room);
       const joinedAsSpectator = room.memberType === "spectator" ? "&joinedAs=spectator" : "";
-      wx.redirectTo({
+      wx.reLaunch({
         url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}${joinedAsSpectator}`,
       });
     } catch (err) {

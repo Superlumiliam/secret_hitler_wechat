@@ -463,13 +463,13 @@ Page({
 
       const room = result.data || {};
       cacheInitialLobbySnapshot(room);
-      wx.redirectTo({
+      wx.reLaunch({
         url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}`,
       });
     } catch (err) {
       console.error("创建房间失败", err);
       wx.showToast({
-        title: err.message || "创建房间失败",
+        title: err.code === "ACTION_NOT_ALLOWED" ? "已有房间，请先退出再创建" : err.message || "创建房间失败",
         icon: "none",
       });
       this.setData({

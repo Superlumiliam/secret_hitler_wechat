@@ -130,14 +130,6 @@ App({
       return;
     }
 
-    if (activeRoom.routeHint === "board" || activeRoom.routeHint === "result") {
-      reLaunchPage(url);
-      return;
-    }
-
-    const routeMethod = current.route ? "redirectTo" : "reLaunch";
-    wx[routeMethod]({
-      url,
-    });
+    reLaunchPage(url);
   },
 });

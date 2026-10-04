@@ -406,7 +406,7 @@ Page({
 
       cacheInitialLobbySnapshot(room);
       const joinedAsSpectator = room.memberType === "spectator" ? "&joinedAs=spectator" : "";
-      wx.redirectTo({
+      wx.reLaunch({
         url: `/packageRoom/pages/lobby/index?roomId=${encodeURIComponent(room.roomId)}&memberId=${encodeURIComponent(room.memberId || "")}${joinedAsSpectator}`,
       });
     } catch (err) {

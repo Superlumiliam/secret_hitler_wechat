@@ -472,7 +472,7 @@ function assertAppCanonicalizesLobbyShareRecovery() {
       routeHint: "lobby",
     };
     appDefinition.routeByActiveRoom(activeLobby);
-    assert.deepStrictEqual(redirects, [
+    assert.deepStrictEqual(relaunches, [
       "/packageRoom/pages/lobby/index?roomId=room_shared&memberId=mem_shared",
     ]);
 
@@ -484,7 +484,8 @@ function assertAppCanonicalizesLobbyShareRecovery() {
       },
     };
     appDefinition.routeByActiveRoom(activeLobby);
-    assert.strictEqual(redirects.length, 1, "canonical lobby recovery must not navigate again");
+    assert.strictEqual(relaunches.length, 1, "canonical lobby recovery must not navigate again");
+    assert.strictEqual(redirects.length, 0, "lobby recovery must clear the old page stack");
 
     currentPage = {
       route: "packageResult/pages/result/index",
@@ -499,7 +500,7 @@ function assertAppCanonicalizesLobbyShareRecovery() {
       memberId: "mem_result",
       routeHint: "result",
     });
-    assert.strictEqual(relaunches.length, 0, "result roomCode must not be treated as a lobby share entry");
+    assert.strictEqual(relaunches.length, 1, "result roomCode must not be treated as a lobby share entry");
   } finally {
     global.wx = originalWx;
     global.App = originalApp;

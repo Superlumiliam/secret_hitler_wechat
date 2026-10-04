@@ -96,9 +96,10 @@ async function assertRoomCodeJoinRoutesByServerHint() {
   };
   await home.onJoinRoom.call(createContext(home));
   assert.strictEqual(
-    redirects[0],
+    reLaunches[1],
     "/packageRoom/pages/lobby/index?roomId=room_lobby&memberId=mem_spectator&joinedAs=spectator",
   );
+  assert.strictEqual(redirects.length, 0, "lobby joins must clear the old page stack");
 }
 
 assertRoomCodeJoinRoutesByServerHint()

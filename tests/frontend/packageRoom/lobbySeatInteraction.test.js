@@ -465,7 +465,7 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
     await lobby.joinSharedRoom.call(fallbackContext, "654321", "room_fallback");
     assert.strictEqual(joinAttempts, 2, "recovery failure must fall back to joinRoom");
     assert.strictEqual(
-      redirects[redirects.length - 1],
+      reLaunches[reLaunches.length - 1],
       "/packageRoom/pages/lobby/index?roomId=room_fallback&memberId=mem_fallback",
     );
 
@@ -485,7 +485,7 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
     });
     await lobby.joinSharedRoom.call(spectatorLobbyContext, "654321", "room_spectator");
     assert.strictEqual(
-      redirects[redirects.length - 1],
+      reLaunches[reLaunches.length - 1],
       "/packageRoom/pages/lobby/index?roomId=room_spectator&memberId=mem_spectator&joinedAs=spectator",
     );
 
@@ -508,6 +508,7 @@ async function assertSharedEntryRecoversMatchingActiveRoomBeforeJoin() {
       reLaunches[reLaunches.length - 1],
       "/packageRoom/pages/board/index?roomId=room_in_game",
     );
+    assert.strictEqual(redirects.length, 0, "shared lobby joins must clear the old page stack");
   } finally {
     global.wx = originalWx;
     global.getApp = originalGetApp;
@@ -522,7 +523,7 @@ async function assertSharedLobbyRecoveryUsesCanonicalRoute() {
   const originalGetApp = global.getApp;
   const originalGetCurrentPages = global.getCurrentPages;
   let appDefinition;
-  const redirects = [];
+  const reLaunches = [];
   let joinAttempts = 0;
   const activeRoom = {
     roomId: "room_shared",
@@ -558,11 +559,11 @@ async function assertSharedLobbyRecoveryUsesCanonicalRoute() {
         };
       },
     },
-    redirectTo({ url }) {
-      redirects.push(url);
+    redirectTo() {
+      throw new Error("lobby share recovery must clear the old page stack");
     },
-    reLaunch() {
-      throw new Error("lobby share recovery must replace the share entry with redirectTo");
+    reLaunch({ url }) {
+      reLaunches.push(url);
     },
   };
   delete require.cache[appPath];
@@ -584,7 +585,7 @@ async function assertSharedLobbyRecoveryUsesCanonicalRoute() {
 
     await lobby.joinSharedRoom.call(context, "654321", "room_shared");
     assert.strictEqual(joinAttempts, 0);
-    assert.deepStrictEqual(redirects, [
+    assert.deepStrictEqual(reLaunches, [
       "/packageRoom/pages/lobby/index?roomId=room_shared&memberId=mem_shared",
     ]);
   } finally {
