@@ -154,6 +154,11 @@
           <view class="dock-button-text">投票</view>
         </view>
 
+        <view wx:if="{{voteSubmissionState}}" class="vote-reopen-action {{voteSubmissionState !== 'confirming' || isSubmittingCommand ? 'is-disabled' : ''}}" bindtap="onRetryVoteConfirmation" role="button" aria-label="{{voteSubmissionText}}">
+          <image wx:if="{{policyAssets.buttonBlue}}" class="dock-button-frame" src="{{policyAssets.buttonBlue}}" mode="scaleToFill" webp="{{true}}"></image>
+          <view class="dock-button-text">{{voteSubmissionState === 'confirming' && !isSubmittingCommand ? '确认投票结果' : voteSubmissionText}}</view>
+        </view>
+
         <view class="secondary-actions">
           <view class="secondary-action" bindtap="onTapIdentity" hover-class="secondary-hover" role="button" aria-label="我的身份">
             <image wx:if="{{policyAssets.buttonNormal}}" class="dock-button-frame" src="{{policyAssets.buttonNormal}}" mode="scaleToFill" webp="{{true}}"></image>

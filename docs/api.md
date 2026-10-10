@@ -1,7 +1,7 @@
 ---
 status: active
 authority: api-contract
-last_verified: 2026-08-06
+last_verified: 2026-10-10
 ---
 
 # 《secret dictator》前后端 API
@@ -53,7 +53,7 @@ last_verified: 2026-08-06
 
 - 服务端从微信云函数上下文取得 openid，不信任客户端传入的身份字段。
 - 所有房间/游戏业务命令都必须带 `commandId`；同一命令重试复用原值，不同命令不能复用。会话恢复、清除恢复锚点和快照在线状态刷新虽然可能写入资料或 `lastSeenAt`，但不属于业务命令，不要求 `commandId`。
-- `submitCommand` 必须带 `expectedVersion`；版本不一致返回 `VERSION_CONFLICT`。
+- `submitCommand` 必须带 `expectedVersion`。除携带正确当前 `taskId` 的 `SUBMIT_VOTE` 可接受正数旧版本外，版本不一致返回 `VERSION_CONFLICT`；未来版本不接受。成功命令的原样重放优先返回已保存的回执。
 - 前端以 `error.code` 做分支，`message` 只用于日志和兜底提示。
 - 当前请求中没有显式 `apiVersion` 字段。不兼容变更必须通过新 action、新云函数或明确迁移方案处理。
 
@@ -300,7 +300,9 @@ last_verified: 2026-08-06
 | `EXEC_POLICY_PEEK_ACK` | `{ acknowledged: true }` |
 | `EXECUTE_PLAYER` | `{ targetMemberId }` |
 
-除投票允许兼容无 `taskId` 的当前调用外，其余需要玩家待办的命令必须回传快照给出的 `taskId`。任务 ID 由 `gameId:round:phase:taskType:memberId` 组成，在同一阶段和轮次内不随 `version` 变化；后端仍会独立校验阶段、行动人、目标、版本和房间模式。旧的包含游戏版本的任务 ID 不再接受，客户端应刷新快照获取新任务 ID。
+除投票允许兼容无 `taskId` 的当前调用外，其余需要玩家待办的命令必须回传快照给出的 `taskId`。任务 ID 由 `gameId:round:phase:taskType:memberId` 组成，在同一阶段和轮次内不随 `version` 变化。投票携带正确的当前任务标识时，其他玩家收票造成的版本递增不使该票失效；无任务标识的旧客户端继续严格校验版本。后端独立校验阶段、行动人、存活状态、合法票型和房间模式，每人每轮只能提交一票，旧轮或伪造任务不能进入当前轮。旧的包含游戏版本的任务 ID 不再接受。
+
+投票与成功幂等回执在同一事务内提交；重发必须保留完整原请求（包括 `expectedVersion`、`taskId` 和票型）与 `commandId`。相同 ID 对应不同请求返回 `DUPLICATE_COMMAND`，不表示投票成功。投票已提交后的在线时间刷新失败只记录诊断，不改变成功回执；其他命令的收尾行为不变。
 
 ## 实时同步信号
 

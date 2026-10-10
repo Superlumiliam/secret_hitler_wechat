@@ -377,9 +377,9 @@ function shouldQueryLegacyCommandRecord(commandId) {
   return commandTimestamp === null || commandTimestamp <= COMMAND_RECORD_DIRECT_ID_ENABLED_AT;
 }
 
-async function getCommandRecord(scopeKey, commandId) {
+async function getCommandRecord(scopeKey, commandId, target = db) {
   try {
-    const directRes = await db.collection("command_records").doc(getCommandRecordId(scopeKey, commandId)).get();
+    const directRes = await target.collection("command_records").doc(getCommandRecordId(scopeKey, commandId)).get();
     if (directRes.data) {
       return directRes.data;
     }
@@ -392,12 +392,12 @@ async function getCommandRecord(scopeKey, commandId) {
   if (!shouldQueryLegacyCommandRecord(commandId)) {
     return null;
   }
-  const legacyRes = await db.collection("command_records").where({ scopeKey, commandId }).limit(1).get();
+  const legacyRes = await target.collection("command_records").where({ scopeKey, commandId }).limit(1).get();
   return legacyRes.data[0] || null;
 }
 
-async function saveCommandRecord(scopeKey, commandId, hash, response, requesterOpenId) {
-  await db.collection("command_records").doc(getCommandRecordId(scopeKey, commandId)).set({
+async function saveCommandRecord(scopeKey, commandId, hash, response, requesterOpenId, target = db) {
+  await target.collection("command_records").doc(getCommandRecordId(scopeKey, commandId)).set({
     data: {
       scopeKey,
       commandId,
@@ -410,7 +410,7 @@ async function saveCommandRecord(scopeKey, commandId, hash, response, requesterO
   });
 }
 
-async function withRoomCommandIdempotency(openid, roomId, payload, handler) {
+async function withRoomCommandIdempotency(openid, roomId, payload, handler, transactional = false) {
   const commandId = payload && payload.commandId;
   if (!commandId || typeof commandId !== "string") {
     return fail("INVALID_PAYLOAD", "缺少 commandId");
@@ -418,23 +418,26 @@ async function withRoomCommandIdempotency(openid, roomId, payload, handler) {
 
   const scopeKey = `room:${roomId}`;
   const hash = payloadHash(payload);
-  const existing = await getCommandRecord(scopeKey, commandId);
-
-  if (existing) {
-    if (existing.requesterOpenId && existing.requesterOpenId !== openid) {
-      return fail("ACTION_NOT_ALLOWED", "commandId 已被其他用户使用");
+  const execute = async (target) => {
+    const existing = await getCommandRecord(scopeKey, commandId, target);
+    if (existing) {
+      if (existing.requesterOpenId && existing.requesterOpenId !== openid) {
+        return fail("ACTION_NOT_ALLOWED", "commandId 已被其他用户使用");
+      }
+      if (existing.payloadHash !== hash) {
+        return fail("DUPLICATE_COMMAND", "commandId 已被不同请求使用");
+      }
+      return existing.response;
     }
-    if (existing.payloadHash !== hash) {
-      return fail("DUPLICATE_COMMAND", "commandId 已被不同请求使用");
-    }
-    return existing.response;
-  }
 
-  const response = await handler();
-  if (response.success) {
-    await saveCommandRecord(scopeKey, commandId, hash, response, openid);
-  }
-  return response;
+    const response = await handler(transactional ? target : null);
+    if (response.success) {
+      await saveCommandRecord(scopeKey, commandId, hash, response, openid, target);
+    }
+    return response;
+  };
+  // Voting and its receipt commit together, including the final vote's transition.
+  return transactional ? db.runTransaction(execute) : execute(db);
 }
 
 async function getRoomMember(roomId, openid) {
@@ -2155,8 +2158,8 @@ async function submitCommand(payload, openid) {
     return fail("INVALID_PAYLOAD", "缺少 expectedVersion");
   }
 
-  return withRoomCommandIdempotency(openid, roomId, payload, async () => {
-    return await db.runTransaction(async (transaction) => {
+  return withRoomCommandIdempotency(openid, roomId, payload, async (voteTransaction) => {
+    const execute = async (transaction) => {
       const roomRes = await transaction.collection("rooms").doc(roomId).get();
       const room = roomRes.data;
       if (!room) {
@@ -2238,7 +2241,13 @@ async function submitCommand(payload, openid) {
       if (isGameEndedCore(gameCore)) {
         return fail("GAME_ALREADY_ENDED", "对局已经结束");
       }
-      if (gameCore.version !== expectedVersion) {
+      const isCurrentVoteTask =
+        type === "SUBMIT_VOTE" &&
+        gameCore.phase === "voting" &&
+        expectedVersion > 0 &&
+        expectedVersion < gameCore.version &&
+        payload.taskId === buildTaskId(gameCore, type, actorMemberId);
+      if (gameCore.version !== expectedVersion && !isCurrentVoteTask) {
         if (type === "SUBMIT_VOTE") {
           const existingBallot =
             gameCore.phase === "voting" && gameCore.phaseData && gameCore.phaseData.votesByMemberId
@@ -3762,8 +3771,9 @@ async function submitCommand(payload, openid) {
       });
 
       return buildCommandAccepted(roomId, previousVersion, nextGameCore, previousPhase);
-    });
-  });
+    };
+    return voteTransaction ? execute(voteTransaction) : db.runTransaction(execute);
+  }, type === "SUBMIT_VOTE");
 }
 
 async function getResultSnapshot(payload, openid) {
@@ -3895,9 +3905,19 @@ exports.main = async (event) => {
     const response = await dispatchAction(action, payload, openid, wxContext);
     const touchedRoomId = (payload && payload.roomId) || (response && response.data && response.data.roomId);
     if (response && response.success && touchedRoomId && !["getGameSnapshot", "getResultSnapshot"].includes(action)) {
-      await touchRoomMemberLastSeen(openid, touchedRoomId, {
-        throttle: false,
-      });
+      try {
+        await touchRoomMemberLastSeen(openid, touchedRoomId, { throttle: false });
+      } catch (err) {
+        if (action !== "submitCommand" || payload.type !== "SUBMIT_VOTE") {
+          throw err;
+        }
+        // A committed ballot must not be reported as failed by ancillary presence.
+        console.warn("vote presence refresh failed", {
+          roomId: touchedRoomId,
+          commandId: payload.commandId,
+          code: err.errCode || err.code || "UNKNOWN",
+        });
+      }
     }
     return response;
   } catch (err) {

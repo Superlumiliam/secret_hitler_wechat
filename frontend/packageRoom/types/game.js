@@ -28,7 +28,7 @@ const ERROR_MESSAGE_MAP = {
   GAME_NOT_STARTED: "房间尚未开局",
   GAME_ALREADY_ENDED: "对局已结束",
   INVALID_PAYLOAD: "请求参数有误",
-  DUPLICATE_COMMAND: "该操作已提交，请勿重复操作",
+  DUPLICATE_COMMAND: "请求不一致，请刷新后重试",
   NOT_CURRENT_ACTOR: "当前不是你的操作阶段",
   INVALID_TARGET: "目标不符合当前规则",
   TARGET_ALREADY_DEAD: "目标已出局",

@@ -75,6 +75,8 @@ Page({
   isLeaveConfirming: false,
   lastPresenceTouchAt: 0,
   boardShareMenuEnabled: false,
+  pendingVoteCommand: null,
+  minimumSnapshotVersion: 0,
 
   data: {
     roomId: "",
@@ -95,6 +97,8 @@ Page({
     statusText: "",
     phaseHintText: "",
     canVote: false,
+    voteSubmissionState: "",
+    voteSubmissionText: "",
     voteModalVisible: false,
     voteModalTaskKey: "",
     voteProgressText: "",
@@ -163,6 +167,8 @@ Page({
     this.policyPeekRevealShownByKey = {};
     this.policyPeekAckConfirming = false;
     this.boardShareMenuEnabled = false;
+    this.pendingVoteCommand = null;
+    this.minimumSnapshotVersion = 0;
     if (wx.hideShareMenu) {
       wx.hideShareMenu({
         menus: ["shareAppMessage", "shareTimeline"],
@@ -515,6 +521,14 @@ Page({
       if (touchPresence) {
         this.lastPresenceTouchAt = Date.now();
       }
+      if (!this.isSnapshotCurrentEnough(result.data)) {
+        return true;
+      }
+      this.reconcileVoteSubmission(result.data);
+      // Private vote confirmation may establish a newer minimum public version.
+      if (!this.isSnapshotCurrentEnough(result.data)) {
+        return true;
+      }
       setGameSnapshotCache(requestContext.roomId, requestContext.controlledMemberId, result.data);
       if (this.redirectToResultIfNeeded(result.data)) {
         return false;
@@ -564,9 +578,15 @@ Page({
     }
   },
 
+  isSnapshotCurrentEnough(snapshot) {
+    const current = this.data.snapshot || {};
+    const minimumVersion = Math.max(Number(current.version) || 0, this.minimumSnapshotVersion || 0);
+    return Number(snapshot && snapshot.version) >= minimumVersion;
+  },
+
   shouldHydrateSnapshot(snapshot, options = {}) {
     const current = this.data.snapshot;
-    return !(
+    return this.isSnapshotCurrentEnough(snapshot) && !(
       options.silent &&
       current &&
       snapshot &&
@@ -579,7 +599,7 @@ Page({
   },
 
   async hydrateSnapshot(snapshot) {
-    if (this.redirectToResultIfNeeded(snapshot)) {
+    if (!this.isSnapshotCurrentEnough(snapshot) || this.redirectToResultIfNeeded(snapshot)) {
       return;
     }
 
@@ -609,6 +629,13 @@ Page({
       }
     }
 
+    if (!this.isSnapshotCurrentEnough(snapshot)) {
+      return;
+    }
+    this.reconcileVoteSubmission(snapshot);
+    if (!this.isSnapshotCurrentEnough(snapshot)) {
+      return;
+    }
     const board = this.createBoard(snapshot, policyAssetUrlByKey);
     const identityJudgmentByMemberId = this.readIdentityJudgments(snapshot);
     const seats = this.createSeats(snapshot, avatarUrlByFileId, identityJudgmentByMemberId, policyAssetUrlByKey);
@@ -642,7 +669,11 @@ Page({
       voteResult && currentVoteResultKey && currentVoteResultKey !== confirmedVoteResultKey,
     );
     const pendingTask = snapshot.pendingTask || {};
-    const canVote = pendingTask.taskType === "SUBMIT_VOTE";
+    const canVote = pendingTask.taskType === "SUBMIT_VOTE" && !this.pendingVoteCommand;
+    if (!this.pendingVoteCommand) {
+      const voting = (snapshot.privateState || {}).voting || {};
+      this.setVoteSubmissionState(snapshot.currentPhase === "voting" && voting.submitted ? "submitted" : "");
+    }
     const voteModalTaskKey = canVote
       ? [
           snapshot.roomId || this.data.roomId || "",
@@ -1129,6 +1160,9 @@ Page({
       const backoffIndex = Math.min(this.consecutiveSnapshotFailures, GAME_POLL_FAILURE_BACKOFF_MS.length) - 1;
       return GAME_POLL_FAILURE_BACKOFF_MS[backoffIndex];
     }
+    if (this.pendingVoteCommand && Date.now() - this.lastCommandSettledAt <= COMMAND_REFRESH_WINDOW_MS) {
+      return GAME_POLL_AFTER_COMMAND_INTERVAL_MS;
+    }
     if (this.isRealtimeSyncHealthy()) {
       return GAME_RECONCILE_INTERVAL_MS;
     }
@@ -1285,7 +1319,7 @@ Page({
       this.refreshSeatViews();
     }
 
-    if (!this.data.isSoloRoom) {
+    if (!this.data.isSoloRoom || this.data.isSubmittingCommand || this.pendingVoteCommand) {
       return;
     }
 
@@ -1653,86 +1687,179 @@ Page({
   async submitVote(vote) {
     const snapshot = this.data.snapshot || {};
     const pendingTask = snapshot.pendingTask || {};
-    if (!this.data.canVote || this.data.isSubmittingCommand) {
+    if (!this.data.canVote || this.data.isSubmittingCommand || this.pendingVoteCommand) {
       return;
     }
 
-    const voteText = vote === "JA" ? "赞同 JA" : "反对 NEIN";
-    const confirmRes = await new Promise((resolve) => {
-      wx.showModal({
-        title: "确认投票",
-        content: `确定提交${voteText}？投票提交后不能修改。`,
-        confirmText: "提交",
-        cancelText: "取消",
-        success: resolve,
-        fail: () => resolve({ confirm: false }),
+    const requestContext = this.getSnapshotRequestContext();
+    this.setData({ isSubmittingCommand: true });
+    try {
+      const voteText = vote === "JA" ? "赞同 JA" : "反对 NEIN";
+      const confirmRes = await new Promise((resolve) => {
+        wx.showModal({
+          title: "确认投票",
+          content: `确定提交${voteText}？投票提交后不能修改。`,
+          confirmText: "提交",
+          cancelText: "取消",
+          success: resolve,
+          fail: () => resolve({ confirm: false }),
+        });
       });
+      if (!confirmRes.confirm || this.isPageUnloaded) {
+        return;
+      }
+      const latest = this.data.snapshot || {};
+      if (!this.isCurrentSnapshotRequestContext(requestContext) ||
+          !latest.pendingTask || latest.pendingTask.taskId !== pendingTask.taskId ||
+          latest.myMemberId !== snapshot.myMemberId) {
+        wx.showToast({ title: "投票任务已更新，请查看当前局势", icon: "none" });
+        return;
+      }
+
+      this.pendingVoteCommand = {
+        memberId: latest.myMemberId,
+        round: latest.round,
+        acceptedVersion: 0,
+        payload: {
+          roomId: requestContext.roomId,
+          controlledMemberId: requestContext.controlledMemberId,
+          commandId: this.createCommandId("submit_vote"),
+          expectedVersion: latest.version,
+          taskId: latest.pendingTask.taskId,
+          type: "SUBMIT_VOTE",
+          body: { vote },
+        },
+      };
+      await this.sendPendingVote();
+    } finally {
+      this.setData({ isSubmittingCommand: false });
+    }
+  },
+
+  setVoteSubmissionState(state) {
+    const text = {
+      submitting: "正在提交投票",
+      confirming: "正在确认投票结果",
+      submitted: "投票已提交，等待其他玩家",
+    }[state] || "";
+    this.setData({
+      voteSubmissionState: state,
+      voteSubmissionText: text,
+      ...(state
+        ? { canVote: false, voteModalVisible: false }
+        : { canVote: ((this.data.snapshot || {}).pendingTask || {}).taskType === "SUBMIT_VOTE" }),
     });
-    if (!confirmRes.confirm) {
+  },
+
+  reconcileVoteSubmission(snapshot) {
+    const command = this.pendingVoteCommand;
+    if (!command || snapshot.myMemberId !== command.memberId ||
+        snapshot.roomId !== command.payload.roomId) {
       return;
     }
+    const voting = (snapshot.privateState || {}).voting || {};
+    const sameTask = (snapshot.pendingTask || {}).taskId === command.payload.taskId;
+    if (snapshot.round === command.round && voting.submitted) {
+      // Public and private documents are read separately. Our recorded ballot
+      // must have advanced the version beyond the snapshot used to submit it.
+      command.acceptedVersion = Math.max(
+        command.acceptedVersion, snapshot.version, command.payload.expectedVersion + 1,
+      );
+      this.minimumSnapshotVersion = Math.max(this.minimumSnapshotVersion || 0, command.acceptedVersion);
+      if (snapshot.version >= command.acceptedVersion) {
+        this.pendingVoteCommand = null;
+      }
+      this.setVoteSubmissionState("submitted");
+    } else if (!sameTask && snapshot.version > command.payload.expectedVersion) {
+      // A new task is never an invitation to resend the old ballot.
+      this.pendingVoteCommand = null;
+      this.setVoteSubmissionState("");
+    } else {
+      command.canRetry = !command.acceptedVersion && sameTask;
+    }
+  },
 
-    this.setData({
-      isSubmittingCommand: true,
-    });
+  async refreshVoteSnapshot(command) {
+    await this.loadGameSnapshot({ silent: true });
+    // The first refresh may have joined a read started before the commit.
+    if (this.pendingVoteCommand === command && command.acceptedVersion &&
+        Number((this.data.snapshot || {}).version) < command.acceptedVersion) {
+      await this.loadGameSnapshot({ silent: true });
+    }
+  },
 
+  async sendPendingVote(allowRetry = true) {
+    const command = this.pendingVoteCommand;
+    if (!command) {
+      return;
+    }
+    this.setVoteSubmissionState("submitting");
     try {
       const res = await wx.cloud.callFunction({
         name: "gameService",
-        data: {
-          action: "submitCommand",
-          payload: {
-            roomId: this.data.roomId,
-            controlledMemberId: this.data.controlledMemberId || "",
-            commandId: this.createCommandId("submit_vote"),
-            expectedVersion: snapshot.version,
-            taskId: pendingTask.taskId || "",
-            type: "SUBMIT_VOTE",
-            body: {
-              vote,
-            },
-          },
-        },
+        data: { action: "submitCommand", payload: command.payload },
       });
       const result = res.result || {};
       if (!result.success) {
         throw this.createServiceError(result, "提交投票失败");
       }
-      wx.showToast({
-        title: "投票已提交，等待局势更新",
-        icon: "none",
-      });
-      if (this.redirectToResultIfNeeded(result.data)) {
+      command.acceptedVersion = result.data.newVersion;
+      this.minimumSnapshotVersion = Math.max(this.minimumSnapshotVersion || 0, command.acceptedVersion);
+      if (this.redirectToResultIfNeeded(result.data) || this.pendingVoteCommand !== command) {
         return;
       }
+      this.setVoteSubmissionState("submitted");
       this.markCommandSettled();
-      this.setData({
-        canVote: false,
-        voteModalVisible: false,
-        voteModalTaskKey: "",
-        statusText: "投票已提交，等待局势更新",
-      });
+      await this.refreshVoteSnapshot(command);
     } catch (err) {
       console.error("提交投票失败", err);
       if (this.handleRoomUnavailable(err)) {
+        this.pendingVoteCommand = null;
         return;
       }
       if (err.code === "GAME_ALREADY_ENDED") {
+        this.pendingVoteCommand = null;
         this.redirectToResult();
         return;
       }
-      if (this.shouldRefreshAfterCommandError(err) || err.code === "DUPLICATE_COMMAND") {
-        this.markCommandSettled();
-        this.loadGameSnapshot({ silent: true });
+      if (this.pendingVoteCommand !== command) {
+        return; // A realtime snapshot already resolved this command.
       }
-      wx.showToast({
-        title: err.code === "DUPLICATE_COMMAND" ? "投票已提交" : this.createCommandFailureToast(err, "提交投票失败"),
-        icon: "none",
-      });
+      const uncertain = !err.isBusinessFailure || err.code === "INTERNAL_ERROR";
+      if (uncertain) {
+        command.canRetry = false;
+        this.setVoteSubmissionState("confirming");
+        this.markCommandSettled();
+        await this.refreshVoteSnapshot(command);
+        if (allowRetry && this.pendingVoteCommand === command && command.canRetry && !this.isPageUnloaded) {
+          // Replay exactly the same request; do not change its vote, task or hash.
+          await this.sendPendingVote(false);
+        }
+        return;
+      }
+
+      this.pendingVoteCommand = null;
+      this.setVoteSubmissionState("");
+      this.markCommandSettled();
+      await this.loadGameSnapshot({ silent: true });
+      wx.showToast({ title: this.createCommandFailureToast(err, "提交投票失败"), icon: "none" });
+    }
+  },
+
+  async onRetryVoteConfirmation() {
+    if (!this.pendingVoteCommand || this.data.isSubmittingCommand || this.data.voteSubmissionState !== "confirming") {
+      return;
+    }
+    this.setData({ isSubmittingCommand: true });
+    try {
+      const command = this.pendingVoteCommand;
+      command.canRetry = false;
+      await this.refreshVoteSnapshot(command);
+      if (this.pendingVoteCommand === command && command.canRetry) {
+        await this.sendPendingVote(false);
+      }
     } finally {
-      this.setData({
-        isSubmittingCommand: false,
-      });
+      this.setData({ isSubmittingCommand: false });
     }
   },
 
