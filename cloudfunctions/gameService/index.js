@@ -802,7 +802,7 @@ function createVoteResult(gameCore, members, passed) {
     neinCount,
     passed,
     electionTrackerBefore: gameCore.electionTracker || 0,
-    electionTrackerAfter: passed ? 0 : (gameCore.electionTracker || 0) + 1,
+    electionTrackerAfter: (gameCore.electionTracker || 0) + (passed ? 0 : 1),
     chaosPolicy: null,
     hitlerCheck: null,
     commandIdsByMemberId: Object.fromEntries(
@@ -957,7 +957,7 @@ function applyPublicHistoryEventToRound(roundItem, historyItem, members) {
       revealed: true,
       passed: Boolean(historyItem.passed),
       electionTrackerCount: historyItem.passed
-        ? 0
+        ? historyItem.electionTrackerBefore || 0
         : Math.min(3, (historyItem.electionTrackerBefore || 0) + 1),
     };
     roundItem.voteGroups = voteGroups;
@@ -2410,7 +2410,7 @@ async function submitCommand(payload, openid) {
               currentChancellorId: gameCore.currentChancellorCandidateId,
               previousElectedPresidentId: gameCore.currentPresidentCandidateId,
               previousElectedChancellorId: gameCore.currentChancellorCandidateId,
-              electionTracker: 0,
+              electionTracker: gameCore.electionTracker || 0,
               confirmedNotHitlerMemberIds,
               policyState,
               phaseData:
@@ -2494,6 +2494,7 @@ async function submitCommand(payload, openid) {
               electionTracker,
               liberalPolicyCount,
               fascistPolicyCount,
+              vetoUnlocked: Boolean(gameCore.vetoUnlocked || fascistPolicyCount >= 5),
               policyState,
               phaseData:
                 phase === "nomination"
@@ -2545,6 +2546,7 @@ async function submitCommand(payload, openid) {
             electionTracker: nextGameCore.electionTracker,
             liberalPolicyCount: nextGameCore.liberalPolicyCount,
             fascistPolicyCount: nextGameCore.fascistPolicyCount,
+            vetoUnlocked: nextGameCore.vetoUnlocked,
             confirmedNotHitlerMemberIds: replaceFieldValue(nextGameCore.confirmedNotHitlerMemberIds),
             policyState: replaceFieldValue(nextGameCore.policyState),
             phaseData: replaceFieldValue(nextGameCore.phaseData),

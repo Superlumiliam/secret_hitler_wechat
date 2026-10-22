@@ -8,6 +8,7 @@ const testFiles = [
   "tests/backend/gameService/startGameInit.test.js",
   "tests/backend/gameService/legislativeHistory.test.js",
   "tests/backend/gameService/ruleScenarios.test.js",
+  "tests/backend/gameService/vetoRules.regression.test.js",
   "tests/backend/gameService/resultSnapshot.integration.test.js",
   "tests/backend/gameService/privateSnapshotOptimization.test.js",
   "tests/backend/gameService/votingConcurrency.regression.test.js",

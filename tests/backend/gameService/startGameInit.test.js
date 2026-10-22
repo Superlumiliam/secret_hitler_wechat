@@ -1204,7 +1204,11 @@ function assertHistoryGovernmentResultSummary() {
   );
 
   assert.strictEqual(history.rounds[0].voteSummary.passed, true);
-  assert.strictEqual(history.rounds[0].voteSummary.electionTrackerCount, 0);
+  assert.strictEqual(
+    history.rounds[0].voteSummary.electionTrackerCount,
+    1,
+    "a passed election retains its tracker until a policy is enacted",
+  );
   assert.strictEqual(history.rounds[1].voteSummary.passed, false);
   assert.strictEqual(history.rounds[1].voteSummary.electionTrackerCount, 1);
   assert.strictEqual(
